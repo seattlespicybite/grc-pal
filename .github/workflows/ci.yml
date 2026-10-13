@@ -55,7 +55,7 @@ jobs:
           tags: grc-pal:ci
       - name: Smoke test the image
         run: |
-          docker run -d --name g -p 8000:8000 -e GRCPAL_ENV=development -e GRCPAL_AUTH_MODE=dev -e GRCPAL_DEMO=1 grc-pal:ci
+          docker run -d --name grcpal-smoke -p 8000:8000 -e GRCPAL_ENV=development -e GRCPAL_AUTH_MODE=dev -e GRCPAL_DEMO=1 grc-pal:ci
           for i in $(seq 1 30); do curl -fs http://localhost:8000/healthz && break; sleep 1; done
           curl -fs http://localhost:8000/dev/login | grep -q "Choose a user"
-          docker rm -f g
+          docker rm -f grcpal-smoke
