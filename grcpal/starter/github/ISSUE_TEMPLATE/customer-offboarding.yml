@@ -1,0 +1,19 @@
+name: Customer data deletion
+description: Record deletion of customer data at contract end or on request (DAT-02)
+title: "[Deletion] <customer>"
+labels: [grc, data-deletion, "control:DAT-02"]
+body:
+  - type: input
+    id: customer
+    attributes: {label: Customer}
+    validations: {required: true}
+  - type: input
+    id: requested
+    attributes: {label: Contract end or request date}
+    validations: {required: true}
+  - type: textarea
+    id: stores
+    attributes: {label: Data stores and backups covered}
+  - type: textarea
+    id: verification
+    attributes: {label: "Deletion verification (queries, screenshots, backup expiry date)"}

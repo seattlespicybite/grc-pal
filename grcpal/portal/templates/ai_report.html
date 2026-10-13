@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>{{ a.framework_name }} mock audit · {{ org }}</title>
+<style>body{font-family:Segoe UI,Arial,sans-serif;color:#1a1f24;max-width:960px;margin:32px auto;padding:0 16px;line-height:1.5}
+h1{font-size:24px;margin:0}h2{font-size:17px;margin-top:28px;border-bottom:1px solid #dde5e8;padding-bottom:4px}
+.sub{color:#5c6f78;font-size:13px}.note{background:#fff4e5;border:1px solid #e0a84a;border-radius:8px;padding:10px 12px;font-size:13px;margin:16px 0}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #dde5e8;vertical-align:top}
+th{color:#5c6f78;font-size:12px;text-transform:uppercase}.v-effective{color:#1b7f5b}.v-partially_effective{color:#b7791f}.v-not_effective,.v-insufficient_evidence,.v-error{color:#c8553d}</style></head>
+<body>{% set s = a.summary or {} %}
+<h1>{{ a.framework_name }} mock audit</h1>
+<div class="sub">{{ org }} · started {{ a.started_at[:16]|replace('T', ' ') }} UTC by {{ a.requested_by }} · model {{ a.model }} · cycle {{ a.cycle }} · GRC-pal record {{ a.RowKey }}</div>
+<div class="note">AI-generated assessment for audit preparation. It may contain errors and is not an audit opinion. Each control's review, the exact data sent and the model's full answer are kept in the GRC-pal evidence store ({{ a.evidence_run }}).</div>
+{% if s.summary %}<h2>Summary: {{ (s.overall_readiness or '')|replace('_', ' ') }}</h2><p>{{ s.summary }}</p>
+<p>{% for k, v in (s.counts or {}).items() %}{{ verdict_labels.get(k, k) }}: <b>{{ v }}</b>{{ ' · ' if not loop.last }}{% endfor %}</p>
+<h2>Top risks</h2><ul>{% for r in s.top_risks or [] %}<li>{{ r }}</li>{% endfor %}</ul>
+<h2>Likely exceptions</h2><p>{{ (s.likely_exceptions or [])|join(', ') or 'None identified' }}</p>
+<h2>Next steps</h2><ol>{% for r in s.next_steps or [] %}<li>{{ r }}</li>{% endfor %}</ol>
+{% if s.by_group %}<h2>By area</h2><table>{% for g in s.by_group %}<tr><td><b>{{ g.group }}</b></td><td>{{ g.assessment }}</td></tr>{% endfor %}</table>{% endif %}{% endif %}
+<h2>Controls</h2><table><thead><tr><th>Control</th><th>Area</th><th>Verdict</th><th>Gaps</th><th>Summary</th></tr></thead><tbody>
+{% for i in a['items'] %}<tr><td>{{ i.control }}<div class="sub">{{ i.title }}</div></td><td>{{ i.group }}</td><td class="v-{{ i.verdict }}">{{ verdict_labels.get(i.verdict, i.verdict) }}</td><td>{{ i.gaps }}</td><td>{{ i.summary }}</td></tr>{% endfor %}
+</tbody></table></body></html>

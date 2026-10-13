@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% from "_macros.html" import pill, when %}{% block title %}Audit log{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Audit log</h1><div class="sub">Every change in GRC-pal, newest first. Records are hash-chained (tamper-evident) and exported daily to write-once evidence storage.</div></div>
+<a class="btn ghost small" href="/audit?verify=1">Verify integrity</a></div>
+{% if verify %}<div class="flash {{ 'ok' if verify.ok else 'err' }}" role="status">{% if verify.ok %}Chain verified: {{ verify.records }} records, head {{ verify.head[:16] }}…{% else %}Integrity problems found: {{ verify.problems|join('; ') }}{% endif %}</div>{% endif %}
+<form class="filters" method="get" action="/audit" role="search">
+<input name="actor" value="{{ actor }}" placeholder="Who (email)" aria-label="Actor">
+<input name="action" value="{{ action }}" placeholder="Action, e.g. evidence. or user." aria-label="Action">
+<input name="target" value="{{ target }}" placeholder="Target or control ID" aria-label="Target">
+<button class="btn small" type="submit">Filter</button>{% if actor or action or target %}<a href="/audit">Clear</a>{% endif %}</form>
+<div class="card table-wrap">{% if rows %}<table><thead><tr><th>#</th><th>When (UTC)</th><th>Who</th><th>Action</th><th>Target</th><th>Detail</th><th>Request</th></tr></thead><tbody>
+{% for r in rows %}<tr><td class="mono nowrap">{{ r.seq }}</td><td class="nowrap">{{ when(r.at) }}</td><td>{{ r.actor }}</td><td class="mono">{{ r.action }}</td><td class="mono">{{ r.target[:28] }}</td>
+<td class="sub detail-cell">{% for k, v in (r.detail or {}).items() if v %}{{ k }}: {% if v is string %}{{ v if v|length < 48 or ' ' in v else v[:16] ~ '…' }}{% elif v is iterable and v is not mapping %}{{ v|join(', ') }}{% else %}{{ v }}{% endif %}{{ '; ' if not loop.last }}{% endfor %}</td>
+<td class="mono sub">{{ r.request_id }}</td></tr>{% endfor %}</tbody></table>
+{% else %}<div class="empty">No activity matches.</div>{% endif %}</div>
+{% endblock %}

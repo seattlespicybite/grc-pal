@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% from "_macros.html" import when %}{% block title %}Logs{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Logs</h1>
+<div class="sub">Important events for troubleshooting and audits: sign-in refusals, configuration changes and tests, collector and check runs, email failures, AI requests, jobs and errors. Kept {{ 90 }} days.</div></div>
+<div><a class="btn ghost small" href="/jobs">Background jobs</a>
+<a class="btn ghost small" href="/logs.csv?q={{ q|urlencode }}&level={{ level }}&category={{ category }}&days={{ days }}{{ '&audit=1' if audit }}">Download CSV</a></div></div>
+<form class="filters" method="get" action="/logs" role="search">
+<input name="q" value="{{ q }}" placeholder="Search keyword, email, reference…" aria-label="Keyword" class="grow">
+<select name="level" data-autosubmit aria-label="Level"><option value="">All levels</option>{% for l in levels %}<option value="{{ l }}" {{ 'selected' if l == level }}>{{ l|capitalize }}</option>{% endfor %}</select>
+<select name="category" data-autosubmit aria-label="Category"><option value="">All categories</option>{% for c in categories %}<option value="{{ c }}" {{ 'selected' if c == category }}>{{ c|capitalize }}</option>{% endfor %}</select>
+<select name="days" data-autosubmit aria-label="Period">{% for d in (1, 7, 30, 90) %}<option value="{{ d }}" {{ 'selected' if d == days }}>Last {{ d }} day{{ 's' if d > 1 }}</option>{% endfor %}</select>
+<label class="check inline-check"><input type="checkbox" name="audit" value="1" {{ 'checked' if audit }} data-autosubmit> Include audit trail</label>
+<button class="btn small" type="submit">Search</button>{% if q or level or category or audit %}<a href="/logs">Clear</a>{% endif %}</form>
+<div class="card table-wrap">{% if rows %}<table class="logs"><thead><tr><th>When (UTC)</th><th>Level</th><th>Category</th><th>Event</th><th>Who</th><th>Reference</th></tr></thead><tbody>
+{% for r in rows %}<tr class="lv-{{ r.level }}"><td class="nowrap">{{ when(r.at) }}</td><td><span class="pill lvl-{{ r.level }}">{{ r.level }}</span></td><td>{{ r.category }}</td>
+<td>{{ r.message }}{% if r.detail %}<details class="mt-s"><summary class="sub">Details</summary><pre class="note mono">{{ r.detail|tojson(indent=2) }}</pre></details>{% endif %}</td>
+<td class="sub">{{ r.actor }}</td><td class="mono sub nowrap">{{ r.request_id if r.request_id != '-' else '' }}</td></tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty">No events match. Try a longer period or clear the filters.</div>{% endif %}</div>
+{% endblock %}

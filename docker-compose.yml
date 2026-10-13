@@ -1,0 +1,36 @@
+# Local GRC-pal in one command:   docker compose up --build   then open http://localhost:8000
+# Sample users and evidence are loaded (GRCPAL_DEMO=1); pick a user on the sign-in page.
+# Emails go to the in-app outbox (Email outbox page). To see real emails in a web inbox, run
+#   docker compose --profile mail up --build   and open http://localhost:8025 (Mailpit).
+# Development sign-in only: never expose this port to a network.
+services:
+  grcpal:
+    build: .
+    image: grc-pal:local
+    ports: ["127.0.0.1:8000:8000"]
+    env_file:
+      - path: .env        # optional: copy .env.example to .env to change settings
+        required: false
+    environment:
+      GRCPAL_ENV: development
+      GRCPAL_AUTH_MODE: dev
+      GRCPAL_SQLITE: /data/grcpal.db
+      GRCPAL_EVIDENCE_DIR: /data/evidence
+      GRCPAL_PUBLIC_URL: http://localhost:8000
+    volumes:
+      - grcpal-data:/data
+      # Use your own program repository instead of the starter catalog:
+      # - ../my-grc:/program:ro      and set GRCPAL_BASE=/program in .env
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    user: "10001"
+
+  mailpit:
+    profiles: [mail]
+    image: axllent/mailpit:v1.21.8   # pinned; Dependabot proposes updates
+    ports: ["127.0.0.1:8025:8025"]
+
+volumes:
+  grcpal-data:

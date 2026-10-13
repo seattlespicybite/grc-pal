@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}Cycles{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Cycles and auditor export</h1>
+<div class="sub">A cycle is one audit period (for example a Type 2 observation window or a fiscal year). Work, uploads, comments and overrides belong to a cycle. Closed cycles are read-only.</div></div></div>
+<div class="card table-wrap"><table><thead><tr><th>Cycle</th><th>Period</th><th>Status</th><th>Requests</th><th>Uploads</th><th></th></tr></thead><tbody>
+{% for c in rows %}<tr><td><b>{{ c.name }}</b><div class="sub mono">{{ c.RowKey }}</div></td><td>{{ c.start }} to {{ c.end }}</td>
+<td>{{ pill('ok', 'Active') if c.status == 'active' else pill('cancelled', 'Closed') }}{% if c.closed_at %}<div class="sub">{{ c.closed_at[:10] }} by {{ c.closed_by }}</div>{% endif %}</td>
+<td>{{ c.approved }} / {{ c.assignments }} approved</td><td>{{ c.uploads }}</td>
+<td><a class="btn small ghost" href="/cycles/{{ c.RowKey }}/export">Export (.zip)</a></td></tr>{% endfor %}</tbody></table></div>
+<p class="sub">The export contains the full populations an auditor samples from (requests, uploads with reviewer decisions, comments, overrides, users, policy acknowledgments, audit log for the period), every uploaded file, the audit-chain check, and a SHA-256 manifest.</p>
+{% if user.is_admin %}<section class="card"><h2>Start the next cycle</h2>
+<p class="sub">Starting a cycle closes <b>{{ cycle.name }}</b>. With carry-forward, every request that was not cancelled is copied to the new cycle with the same people and instructions, and each new request links to last cycle's evidence and comments so people can see what they did before.</p>
+<form method="post" action="/cycles" data-confirm="Close {{ cycle.name }} and start the new cycle?"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="form-row"><div><label for="cn">Name</label><input id="cn" name="name" required placeholder="FY{{ next_start[:4] }}"></div>
+<div><label for="cs">Start</label><input id="cs" name="start" type="date" required value="{{ next_start }}"></div>
+<div><label for="ce">End</label><input id="ce" name="end" type="date" required value="{{ next_end }}"></div></div>
+<label class="check"><input type="checkbox" name="carry_forward" value="1" checked> Carry requests forward from {{ cycle.name }}</label>
+<div class="actions"><button class="btn" type="submit">Start cycle</button></div></form></section>{% endif %}
+{% endblock %}

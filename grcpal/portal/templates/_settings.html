@@ -1,0 +1,58 @@
+{% macro field_input(f, s, form) -%}
+{% set val = (form[f.key] if form and f.key in form else (s.get(f.key) if s.source(f.key) != 'default' else f.default)) %}
+<div class="field" {% if f.show_when %}data-show-when="{{ f.show_when }}"{% endif %}>
+  {% if f.kind == 'bool' %}
+  <label class="check"><input type="checkbox" name="{{ f.key }}" value="true" {{ 'checked' if (val|string|lower) in ('true', 'on', '1') }}> {{ f.label }}</label>
+  {% else %}
+  <label for="f-{{ f.key }}">{{ f.label }}{% if f.required_when %} <span class="req" title="Required for some options">*</span>{% endif %}</label>
+  {% if f.kind == 'select' %}
+  <select id="f-{{ f.key }}" name="{{ f.key }}" data-key="{{ f.key }}">{% for o in f.options %}<option value="{{ o }}" {{ 'selected' if o == val }}>{{ option_labels.get(o, o|replace('_', ' ')) }}</option>{% endfor %}</select>
+  {% elif f.kind in ('list', 'textarea') %}
+  <textarea id="f-{{ f.key }}" name="{{ f.key }}" rows="3" placeholder="{{ f.placeholder }}">{{ val }}</textarea>
+  {% elif f.kind == 'secret' %}
+  {% set info = s.secret_info(f.key) %}
+  <input id="f-{{ f.key }}" name="{{ f.key }}" type="password" autocomplete="new-password" spellcheck="false"
+    placeholder="{% if info.set_at %}Saved {{ info.set_at[:10] }} by {{ info.set_by }}. Leave blank to keep.{% elif s.source(f.key) == 'environment' %}Set by the deployment. Enter a value to override.{% else %}Not set{% endif %}">
+  {% if info.set_at %}<label class="check small-check"><input type="checkbox" name="{{ f.key }}__clear" value="1"> Remove the saved value</label>{% endif %}
+  {% else %}
+  <input id="f-{{ f.key }}" name="{{ f.key }}" type="{{ 'number' if f.kind == 'number' else 'text' }}" value="{{ val }}" placeholder="{{ f.placeholder }}" spellcheck="false">
+  {% endif %}
+  {% endif %}
+  <div class="hint">{{ f.help }}{% if s.source(f.key) == 'environment' and f.kind != 'secret' %} <span class="src">Currently from the environment; saving here overrides it.</span>{% endif %}</div>
+</div>
+{%- endmacro %}
+
+{% macro section_form(section, s, row, csrf, action, form=None, wizard=False) -%}
+<form method="post" action="{{ action }}" class="settings-form" autocomplete="off">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+{% for f in section.fields if not f.advanced %}{{ field_input(f, s, form) }}{% endfor %}
+{% set adv = section.fields|selectattr('advanced')|list %}
+{% if adv %}<details class="mt"><summary>Advanced settings</summary>{% for f in adv %}{{ field_input(f, s, form) }}{% endfor %}</details>{% endif %}
+<div class="actions sticky-actions">
+{% if wizard %}
+  <button class="btn ghost" name="action" value="back" type="submit" formnovalidate>Back</button>
+  <button class="btn ghost" name="action" value="skip" type="submit" formnovalidate>Skip for now</button>
+  <button class="btn ghost" name="action" value="save" type="submit">Save</button>
+  {% if section.testable %}<button class="btn" name="action" value="validate" type="submit">Save and validate</button>{% endif %}
+{% else %}
+  <button class="btn" name="action" value="save" type="submit">Save and apply</button>
+  {% if section.testable %}<button class="btn ghost" name="action" value="test" type="submit">Test without saving</button>
+  <button class="btn ghost" name="action" value="save_test" type="submit">Save and test</button>{% endif %}
+{% endif %}
+</div>
+{% if row and row.updated_at %}<p class="sub mt-s">Last saved {{ row.updated_at[:16]|replace('T', ' ') }} UTC by {{ row.updated_by }}.</p>{% endif %}
+</form>
+{%- endmacro %}
+
+{% macro test_result(result) -%}
+{% if result %}<section class="card result {{ 'result-ok' if result.ok else 'result-bad' }}" aria-live="polite">
+<div class="row-between"><h2 class="m0">{{ 'Connection test passed' if result.ok else 'Connection test found problems' }}</h2>
+<span class="sub">{{ result.summary }}{% if result.ms is defined %} · {{ result.ms }} ms{% endif %}</span></div>
+<ul class="checklist">{% for c in result.checks %}<li class="{{ 'ok' if c.ok else 'bad' }}"><span class="mark" aria-hidden="true">{{ '✓' if c.ok else '✕' }}</span>
+<div><b>{{ c.name }}</b>{% if c.detail %} <span class="sub">{{ c.detail }}</span>{% endif %}
+{% if not c.ok and c.hint %}<div class="hint-box">{{ c.hint }}</div>{% endif %}</div></li>{% endfor %}</ul></section>{% endif %}
+{%- endmacro %}
+
+{% macro status_badge(st) -%}
+<span class="pill st-{{ st }}">{{ {'ok': 'Connected', 'failed': 'Test failed', 'configured': 'Not tested', 'not_configured': 'Not set up', 'disabled': 'Off'}[st] }}</span>
+{%- endmacro %}

@@ -1,0 +1,27 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Security problem? Do not open an issue. Follow SECURITY.md instead."
+  - type: textarea
+    id: what
+    attributes: {label: What happened, description: "Steps to reproduce, what you expected, what you saw"}
+    validations: {required: true}
+  - type: input
+    id: version
+    attributes: {label: GRC-pal version or image tag, placeholder: "0.1.0"}
+    validations: {required: true}
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does it run
+      options: [Local (grcpal serve), Docker Compose, Azure (deploy.sh), Other]
+    validations: {required: true}
+  - type: input
+    id: ref
+    attributes: {label: Error reference, description: "The reference shown on the error page (request ID), if any"}
+  - type: textarea
+    id: logs
+    attributes: {label: Relevant log lines, description: "Remove emails and anything confidential", render: json}

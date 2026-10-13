@@ -1,0 +1,20 @@
+name: Access request
+description: Request access to an in-scope system (IAM-03)
+title: "[Access] <system> for <person>"
+labels: [grc, access-request, "control:IAM-03"]
+body:
+  - type: input
+    id: person
+    attributes: {label: Person (UPN), placeholder: name@example.com}
+    validations: {required: true}
+  - type: input
+    id: system
+    attributes: {label: System and role or group}
+    validations: {required: true}
+  - type: textarea
+    id: justification
+    attributes: {label: Business justification}
+    validations: {required: true}
+  - type: markdown
+    attributes:
+      value: "The system owner or manager approves by commenting **Approved**. IT grants access, links the change, and closes the issue."

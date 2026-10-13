@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}{{ source }} {{ run }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="sub"><a href="/evidence?source={{ source }}">Evidence / {{ source }}</a></div><h1 class="mono mono h-run">{{ run }}</h1></div>
+<div>{{ pill('ok' if m.status == 'ok' else 'error', m.status) }}</div></div>
+<div class="grid g2"><section class="card"><h2>Run details</h2><dl class="kv">
+<dt>Controls</dt><dd class="tags">{% for c in m.controls %}<span><a href="/controls/{{ c }}">{{ c }}</a></span>{% endfor %}</dd>
+<dt>Started</dt><dd>{{ m.started }}</dd><dt>Finished</dt><dd>{{ m.finished }}</dd>
+<dt>Code version</dt><dd class="mono">{{ m.collector_version }}</dd>{% if m.run_url %}<dt>Workflow run</dt><dd><a href="{{ m.run_url }}" rel="noopener noreferrer">{{ m.run_url }}</a></dd>{% endif %}
+{% for k in ['uploaded_by', 'comment', 'reviewer', 'admin', 'description'] %}{% if m.get(k) %}<dt>{{ k|replace('_', ' ')|capitalize }}</dt><dd>{{ m[k] }}</dd>{% endif %}{% endfor %}
+{% if m.error %}<dt>Error</dt><dd>{{ m.error }}</dd>{% endif %}</dl></section>
+<section class="card"><h2>Files</h2><table><thead><tr><th>File</th><th>Size</th><th>SHA-256</th></tr></thead><tbody>
+{% for f in m.files %}<tr><td><a href="/evidence/{{ source }}/{{ run }}/{{ f.name }}">{{ f.name }}</a></td><td>{{ '{:,}'.format(f.bytes) }} B</td><td class="mono" title="{{ f.sha256 }}">{{ f.sha256[:20] }}…</td></tr>{% endfor %}
+<tr><td><a href="/evidence/{{ source }}/{{ run }}/manifest.json">manifest.json</a></td><td></td><td></td></tr></tbody></table></section></div>
+{% if m.findings %}<section class="card"><h2>Findings ({{ m.findings_count }})</h2><table><tbody>
+{% for f in m.findings[:200] %}<tr><td>{{ pill('attention' if f.severity == 'high' else 'findings', f.severity) }}</td><td>{{ f.title }}</td></tr>{% endfor %}</tbody></table></section>{% endif %}
+{% endblock %}

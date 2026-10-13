@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block title %}Framework{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="sub"><a href="/frameworks">Frameworks</a> /</div><h1>{{ 'Edit ' ~ row.name if row else 'New framework' }}</h1>
+<div class="sub">For a standard GRC-pal does not ship yet, a customer's security requirements, or an internal policy you want to track against.</div></div></div>
+<section class="card"><form method="post" action="/frameworks/new"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="form-row"><div><label for="fid">ID</label><input id="fid" name="fid" required value="{{ row.RowKey if row else '' }}" {{ 'readonly' if row }} placeholder="hipaa-security">
+<div class="hint">Short, lowercase, used in control mappings.</div></div>
+<div><label for="nm">Name</label><input id="nm" name="name" required value="{{ row.name if row else '' }}" placeholder="HIPAA Security Rule"></div>
+<div><label for="vr">Version</label><input id="vr" name="version" value="{{ row.version if row else '' }}"></div></div>
+<label for="ds">Description</label><input id="ds" name="description" value="{{ row.description if row else '' }}">
+<label for="rq">Requirements</label>
+<textarea id="rq" name="requirements" rows="12" required placeholder="164.308(a)(1) | Security management process | Administrative safeguards&#10;164.312(a)(1) | Access control | Technical safeguards">{% if row %}{% for r in row.requirements %}{{ r.id }} | {{ r.title }} | {{ r.group }}
+{% endfor %}{% endif %}</textarea>
+<div class="hint">One per line: ID | title | group (group optional). Paste from a spreadsheet by joining the columns with " | ". Use short titles; keep the official text in the standard.</div>
+<div class="actions"><button class="btn" type="submit">Save framework</button></div></form></section>
+{% endblock %}

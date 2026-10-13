@@ -1,0 +1,938 @@
+# GRC-pal starter control catalog: the single source of truth for your SOC 2 program.
+# Tailor every description to how your organization actually works before relying on it.
+#
+# One control can satisfy several criteria; `criteria` lists every TSC point it supports.
+# evidence[].via:
+#   collector:<name>  automated script in grcpal/collectors (runs on schedule)
+#   tool:<name>       external free tool run by a workflow, output stored by `grcpal store`
+#   task:<name>       recurring GitHub issue created by `grcpal tasks`; closing it with
+#                     attachments and an approver is the evidence (exported by issues_export)
+#   git:<path>        version history of a file in this repo (PR approvals = review evidence)
+#   event             produced when the event happens (ticket per joiner, incident, change)
+# frequency: continuous | daily | weekly | monthly | quarterly | annual | event
+# type: automated | hybrid | manual
+# iso27001: ISO/IEC 27001:2022 Annex A references, for later multi-framework reuse.
+
+controls:
+
+  # ===================== Governance =====================
+  - id: GOV-01
+    title: Information security policy set approved and published
+    description: >
+      The policy set in /policies is reviewed at least annually and approved by the
+      executive sponsor through a pull request, then published to all staff.
+    criteria: [CC1.1, CC1.3, CC2.2, CC5.3]
+    owner: security-lead
+    frequency: annual
+    type: hybrid
+    evidence:
+      - {artifact: Policy approval history (PR, approver, date), via: "git:policies/"}
+      - {artifact: Annual policy review issue, via: "task:policy-review"}
+    iso27001: [A.5.1, A.5.37]
+
+  - id: GOV-02
+    title: Security roles, responsibilities and org chart maintained
+    description: Security responsibilities are defined in roles.yaml and job descriptions; the org chart is exported quarterly.
+    criteria: [CC1.3, CC1.5, CC2.2, CC5.3]
+    owner: hr-lead
+    frequency: quarterly
+    type: hybrid
+    evidence:
+      - {artifact: Org chart export (managers from Entra ID), via: "collector:entra_users"}
+      - {artifact: Role assignments, via: "git:catalog/roles.yaml"}
+    iso27001: [A.5.2, A.5.4]
+
+  - id: GOV-03
+    title: Leadership oversight of the security program
+    description: >
+      The executive sponsor reviews program KPIs, deficiencies and risk changes monthly;
+      leadership or the board receives a security update at least quarterly. Minutes are kept.
+    criteria: [CC1.1, CC1.2, CC2.2, CC2.3, CC3.1, CC4.2, CC7.4, P8.1]
+    owner: executive-sponsor
+    frequency: quarterly
+    type: manual
+    evidence:
+      - {artifact: Meeting minutes and KPI report, via: "task:leadership-review"}
+    iso27001: [A.5.4, "Clause 9.3"]
+
+  - id: GOV-04
+    title: Code of Conduct and Acceptable Use acknowledged
+    description: Staff acknowledge the Code of Conduct and Acceptable Use Policy at hire and annually.
+    criteria: [CC1.1, CC1.5, CC2.2]
+    owner: hr-lead
+    frequency: annual
+    type: hybrid
+    evidence:
+      - {artifact: Acknowledgment export (e-sign or Microsoft Forms), via: "task:policy-acknowledgment"}
+    iso27001: [A.5.10, A.6.2]
+
+  - id: GOV-05
+    title: Sanctions process for policy violations
+    description: Violations of security policy are handled through the documented HR disciplinary process.
+    criteria: [CC1.1, CC1.5]
+    owner: hr-lead
+    frequency: event
+    type: manual
+    evidence:
+      - {artifact: Disciplinary procedure, via: "git:policies/hr-security.md"}
+      - {artifact: Case log (sampled, confidential), via: event}
+    iso27001: [A.6.4]
+
+  - id: GOV-06
+    title: Security objectives defined
+    description: Security objectives tied to customer commitments are documented in the Information Security Policy and reviewed annually.
+    criteria: [CC2.2, CC3.1]
+    owner: security-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: Objectives section with approval history, via: "git:policies/information-security-policy.md"}
+    iso27001: [A.5.1, "Clause 6.2"]
+
+  - id: GOV-07
+    title: External security communication
+    description: >
+      Customers can see the company's security commitments (contracts, SLAs, trust page) and have a
+      published channel to report incidents; notification duties are documented.
+    criteria: [CC2.3, CC3.1, PI1.1]
+    owner: legal-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: Contract security terms and SLA templates, trust page, reporting channel, via: "task:external-comms-review"}
+    iso27001: [A.5.14, A.5.24]
+
+  - id: GOV-08
+    title: Internal channel to report security concerns
+    description: A monitored channel (security@ mailbox and Teams channel) exists for staff to report incidents and concerns.
+    criteria: [CC2.2]
+    owner: security-lead
+    frequency: continuous
+    type: manual
+    evidence:
+      - {artifact: Channel configuration and sample reports, via: "task:leadership-review"}
+    iso27001: [A.6.8]
+
+  - id: GOV-09
+    title: Control catalog maintained and validated
+    description: >
+      This catalog maps risks to controls and controls to criteria. `grcpal validate` runs on
+      every change and daily; gaps fail the pipeline.
+    criteria: [CC2.1, CC4.1, CC5.1, CC5.2]
+    owner: security-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: Catalog validation and coverage report, via: "collector:catalog_validate"}
+    iso27001: ["Clause 6.1.3"]
+
+  - id: GOV-10
+    title: System description maintained
+    description: The SOC 2 system description (boundaries, components, data flows, subservice orgs) is reviewed annually and on major change.
+    criteria: [CC1.3, CC2.1, CC2.2, CC2.3, CC5.1]
+    owner: security-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: System description with review history, via: "git:docs/system-description.md"}
+    iso27001: [A.5.9]
+
+  # ===================== Risk =====================
+  - id: RSK-01
+    title: Annual risk assessment including fraud risk
+    description: >
+      Risks are identified and rated (likelihood, impact), including fraud scenarios, with owner
+      and treatment, and approved by the executive sponsor. Each risk maps to controls.
+    criteria: [CC1.5, CC3.1, CC3.2, CC3.3, CC3.4, CC5.1, CC9.1, A1.2]
+    owner: security-lead
+    frequency: annual
+    type: hybrid
+    evidence:
+      - {artifact: Risk register history, via: "git:registers/risks.yaml"}
+      - {artifact: Risk assessment approval, via: "task:risk-assessment"}
+    iso27001: ["Clause 6.1.2", "Clause 8.2"]
+
+  - id: RSK-02
+    title: Risk review on significant change
+    description: >
+      New products, vendors, architecture changes and acquisitions use the architecture review
+      issue template, which requires a risk entry before approval.
+    criteria: [CC3.4, CC6.1, CC8.1]
+    owner: engineering-lead
+    frequency: event
+    type: hybrid
+    evidence:
+      - {artifact: Architecture review issues with risk field, via: "collector:issues_export"}
+    iso27001: [A.5.8]
+
+  # ===================== Monitoring =====================
+  - id: MON-01
+    title: Continuous control monitoring
+    description: >
+      Configuration tests run daily: Prowler (Azure, Microsoft 365), Maester (Entra ID, M365),
+      and the Azure Policy SOC 2 Type 2 initiative. Results are stored as evidence.
+    criteria: [CC4.1, CC5.2, CC6.8, CC7.1]
+    owner: security-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: AWS GuardDuty, Config and Security Hub status per region, via: "collector:aws_security_services"}
+      - {artifact: Prowler results, via: "tool:prowler"}
+      - {artifact: Maester report, via: "tool:maester"}
+      - {artifact: Azure Policy compliance summary, via: "collector:azure_policy_compliance"}
+    iso27001: [A.5.36, A.8.9]
+
+  - id: MON-02
+    title: Deficiency tracking and reporting
+    description: >
+      Failed checks and audit findings are logged in registers/exceptions.yaml (or as labeled
+      issues) with owner, due date and status, and summarized monthly to leadership.
+    criteria: [CC1.2, CC4.2, CC5.3, CC9.2, P8.1]
+    owner: security-lead
+    frequency: monthly
+    type: hybrid
+    evidence:
+      - {artifact: Exceptions register history, via: "git:registers/exceptions.yaml"}
+      - {artifact: Deficiency issues, via: "collector:issues_export"}
+    iso27001: ["Clause 10.2"]
+
+  - id: MON-03
+    title: Annual internal control review
+    description: Security walks through every control as an auditor would (sample, inspect evidence) and records results.
+    criteria: [CC4.1]
+    owner: security-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: Internal review workpapers, via: "task:internal-control-review"}
+    iso27001: ["Clause 9.2", A.5.35]
+
+  - id: MON-04
+    title: Annual external penetration test
+    description: An independent tester assesses external surface and the application; criticals and highs are remediated and retested.
+    criteria: [CC4.1, CC7.1]
+    owner: security-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: Pentest report and remediation retest, via: "task:penetration-test"}
+    iso27001: [A.8.8, A.5.35]
+
+  # ===================== People =====================
+  - id: HR-01
+    title: Background checks before start
+    description: Background checks are completed for new hires before access is granted, as permitted by law.
+    criteria: [CC1.4]
+    owner: hr-lead
+    frequency: event
+    type: manual
+    evidence:
+      - {artifact: Hire list reconciled with check completion dates, via: "task:hr-quarterly-attestation"}
+    iso27001: [A.6.1]
+
+  - id: HR-02
+    title: Security awareness training
+    description: Staff complete training within 30 days of hire and annually, plus phishing simulations.
+    criteria: [CC1.4, CC2.2]
+    owner: hr-lead
+    frequency: annual
+    type: hybrid
+    evidence:
+      - {artifact: Training completion export, via: "task:training-completion"}
+    iso27001: [A.6.3]
+
+  - id: HR-03
+    title: Security responsibilities in job roles and reviews
+    description: Job descriptions include security duties; annual performance reviews cover policy adherence.
+    criteria: [CC1.1, CC1.3, CC1.4, CC1.5, CC2.2, CC5.3]
+    owner: hr-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: Job description template and review sample, via: "task:hr-quarterly-attestation"}
+    iso27001: [A.6.2]
+
+  - id: HR-04
+    title: Confidentiality agreements
+    description: Employees and contractors sign confidentiality agreements before access.
+    criteria: [CC1.1, C1.1]
+    owner: hr-lead
+    frequency: event
+    type: manual
+    evidence:
+      - {artifact: Signed agreements (sampled by hire list), via: "task:hr-quarterly-attestation"}
+    iso27001: [A.6.6]
+
+  # ===================== Assets and data =====================
+  - id: AST-01
+    title: Cloud resource inventory
+    description: All Azure resources are inventoried daily via Azure Resource Graph, with tags for owner, environment and data class.
+    criteria: [CC2.1, CC6.1, CC7.1]
+    owner: engineering-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: Azure resource inventory, via: "collector:azure_inventory"}
+    iso27001: [A.5.9]
+
+  - id: AST-02
+    title: Endpoint inventory
+    description: All company laptops are enrolled in Intune; unmanaged devices cannot reach company data (Conditional Access device compliance).
+    criteria: [CC2.1, CC6.1, CC7.1]
+    owner: it-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: Intune managed device export, via: "collector:intune_devices"}
+    iso27001: [A.5.9, A.8.1]
+
+  - id: AST-03
+    title: Application and SaaS inventory
+    description: Applications integrated with Entra ID are inventoried daily, including SSO mode and credential expiry.
+    criteria: [CC2.1, CC6.1, CC9.2]
+    owner: it-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: Enterprise applications and app registrations, via: "collector:entra_apps"}
+    iso27001: [A.5.9, A.5.23]
+
+  - id: DAT-01
+    title: Data classification and labeling
+    description: Data is classified (Public, Internal, Confidential, Customer Confidential); Azure resources holding customer data carry a data-class tag enforced by Azure Policy.
+    criteria: [CC2.1, CC3.2, CC6.1, C1.1]
+    owner: security-lead
+    frequency: continuous
+    type: hybrid
+    evidence:
+      - {artifact: AWS S3 public access configuration, via: "collector:aws_s3"}
+      - {artifact: Google Cloud Storage public access, via: "collector:gcp_storage"}
+      - {artifact: Classification policy, via: "git:policies/data-classification.md"}
+      - {artifact: Tag coverage in inventory, via: "collector:azure_inventory"}
+    iso27001: [A.5.12, A.5.13]
+
+  - id: DAT-02
+    title: Retention and secure disposal of confidential data
+    description: Retention schedule is enforced with storage lifecycle rules; customer data is deleted on contract end per the offboarding runbook.
+    criteria: [C1.2, CC6.5, P4.2, P4.3]
+    owner: legal-lead
+    frequency: event
+    type: hybrid
+    evidence:
+      - {artifact: Retention schedule, via: "git:policies/data-retention.md"}
+      - {artifact: Customer offboarding deletion issues, via: "collector:issues_export"}
+    iso27001: [A.8.10, A.5.33]
+
+  - id: DAT-03
+    title: Device and media disposal
+    description: Devices are wiped through Intune or destroyed with a certificate before disposal or reissue.
+    criteria: [CC6.4, CC6.5]
+    owner: it-lead
+    frequency: event
+    type: manual
+    evidence:
+      - {artifact: Wipe or destruction records, via: "task:hr-quarterly-attestation"}
+    iso27001: [A.7.14]
+
+  - id: DAT-04
+    title: Data flow and data inventory
+    description: A data flow diagram and inventory of customer and personal data stores is maintained.
+    criteria: [CC2.1, A1.2, C1.1, PI1.1, P1.1, P3.1, P6.7]
+    owner: security-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: Data flow diagram and inventory, via: "git:docs/data-inventory.md"}
+    iso27001: [A.5.9, A.5.34]
+
+  # ===================== Identity and access =====================
+  - id: IAM-01
+    title: Single sign-on through Entra ID
+    description: In-scope applications authenticate through Entra ID SSO; local accounts are exceptions documented in the exceptions register.
+    criteria: [CC6.1]
+    owner: it-lead
+    frequency: continuous
+    type: automated
+    evidence:
+      - {artifact: SSO configuration per application, via: "collector:entra_apps"}
+    iso27001: [A.5.16, A.8.5]
+
+  - id: IAM-02
+    title: MFA enforced by Conditional Access
+    description: >
+      Conditional Access requires MFA for all users and phishing-resistant MFA for privileged
+      roles; legacy authentication is blocked; two break-glass accounts are excluded and monitored.
+    criteria: [CC5.2, CC6.1, CC6.6]
+    owner: it-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: AWS console users and root account MFA (credential report), via: "collector:aws_iam"}
+      - {artifact: Conditional Access policies, via: "collector:conditional_access"}
+      - {artifact: MFA registration report, via: "collector:entra_mfa"}
+    iso27001: [A.8.5, A.5.17]
+
+  - id: IAM-03
+    title: Access provisioning on approved request
+    description: Access is granted by role-based groups after an approved request issue; new accounts are reconciled to requests weekly.
+    criteria: [CC6.2, CC6.3]
+    owner: it-lead
+    frequency: event
+    type: hybrid
+    evidence:
+      - {artifact: User population with creation dates, via: "collector:entra_users"}
+      - {artifact: Access request issues, via: "collector:issues_export"}
+    iso27001: [A.5.16, A.5.18]
+
+  - id: IAM-04
+    title: Access removed within 24 hours of termination
+    description: HR terminations are reconciled daily against Entra ID; any enabled account of a leaver opens a deficiency issue.
+    criteria: [CC6.2, CC6.3, CC6.4]
+    owner: it-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: Leaver reconciliation result, via: "collector:leaver_reconcile"}
+    iso27001: [A.5.18, A.6.5]
+
+  - id: IAM-05
+    title: Quarterly user access reviews
+    description: >
+      System owners review user and role lists exported by the collectors; removals are made and
+      recorded on the review issue, which an owner approves.
+    criteria: [CC6.2, CC6.3]
+    owner: system-owners
+    frequency: quarterly
+    type: hybrid
+    evidence:
+      - {artifact: AWS IAM credential report, via: "collector:aws_iam"}
+      - {artifact: Google Cloud IAM bindings, via: "collector:gcp_iam"}
+      - {artifact: Users and role populations at review date, via: "collector:entra_users"}
+      - {artifact: Signed review issues with removals, via: "task:access-review"}
+    iso27001: [A.5.18]
+
+  - id: IAM-06
+    title: Privileged role management
+    description: Directory admin roles are limited, assigned to separate admin accounts, and monitored daily; PIM is used where licensed.
+    criteria: [CC3.3, CC5.1, CC5.2, CC6.1, CC6.3]
+    owner: security-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: AWS access key age and use, via: "collector:aws_iam"}
+      - {artifact: Google Cloud basic roles and service account keys, via: "collector:gcp_iam"}
+      - {artifact: Directory role assignments, via: "collector:entra_roles"}
+    iso27001: [A.8.2]
+
+  - id: IAM-07
+    title: Service principals and application credentials
+    description: App registrations and service principals are inventoried with owners; credentials expire within 12 months; managed identities preferred.
+    criteria: [CC6.1, CC6.3]
+    owner: engineering-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: App credentials and expiry, via: "collector:entra_apps"}
+    iso27001: [A.5.17, A.8.2]
+
+  - id: IAM-08
+    title: Guest and external user governance
+    description: Guest accounts require a sponsor and are reviewed quarterly; inactive guests over 90 days are disabled.
+    criteria: [CC6.2, CC6.3]
+    owner: it-lead
+    frequency: quarterly
+    type: hybrid
+    evidence:
+      - {artifact: Guest population and last sign-in, via: "collector:entra_users"}
+    iso27001: [A.5.19, A.5.18]
+
+  - id: IAM-09
+    title: Production access restricted
+    description: Azure RBAC on production subscriptions is limited to approved groups; standing Owner rights are minimized and reviewed.
+    criteria: [CC3.3, CC5.1, CC6.1, CC6.3, CC8.1]
+    owner: engineering-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: Azure role assignments, via: "collector:azure_rbac"}
+    iso27001: [A.8.2, A.8.31]
+
+  # ===================== Endpoint, network, cryptography =====================
+  - id: END-01
+    title: Endpoint protection baseline
+    description: Laptops are Intune-compliant - disk encrypted, OS supported and patched, Defender antivirus active, firewall on.
+    criteria: [CC6.1, CC6.7, CC6.8, CC7.1]
+    owner: it-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: Device compliance and encryption state, via: "collector:intune_devices"}
+    iso27001: [A.8.1, A.8.7]
+
+  - id: END-02
+    title: Removable media and data movement restrictions
+    description: Intune configuration restricts removable storage and enforces DLP basics on managed devices.
+    criteria: [CC6.7]
+    owner: it-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: Intune configuration profile export, via: "task:endpoint-config-review"}
+    iso27001: [A.7.10, A.8.12]
+
+  - id: NET-01
+    title: Network perimeter protection
+    description: Network security groups deny by default; no management ports open to the internet; public web endpoints sit behind a WAF.
+    criteria: [CC6.1, CC6.6]
+    owner: engineering-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: Google Cloud firewall rules open to the internet, via: "collector:gcp_firewall"}
+      - {artifact: Prowler network checks, via: "tool:prowler"}
+      - {artifact: Azure Policy network findings, via: "collector:azure_policy_compliance"}
+    iso27001: [A.8.20, A.8.22]
+
+  - id: NET-02
+    title: Secure administrative access paths
+    description: Administrative access to production uses Entra-authenticated paths (Bastion, JIT or private endpoints), never shared credentials.
+    criteria: [CC6.1, CC6.6]
+    owner: engineering-lead
+    frequency: continuous
+    type: hybrid
+    evidence:
+      - {artifact: Prowler access checks, via: "tool:prowler"}
+    iso27001: [A.8.2, A.8.20]
+
+  - id: CRY-01
+    title: Encryption at rest
+    description: Customer data stores are encrypted at rest; keys are managed in Azure Key Vault with purge protection.
+    criteria: [CC6.1, CC6.7, C1.1, PI1.4, PI1.5, P4.2]
+    owner: engineering-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: AWS S3 bucket encryption and EBS encryption by default, via: "collector:aws_s3"}
+      - {artifact: Google Cloud Storage bucket configuration, via: "collector:gcp_storage"}
+      - {artifact: Encryption checks, via: "tool:prowler"}
+      - {artifact: Azure Policy encryption findings, via: "collector:azure_policy_compliance"}
+    iso27001: [A.8.24]
+
+  - id: CRY-02
+    title: Encryption in transit
+    description: Public endpoints accept TLS 1.2 or higher only; checked weekly with testssl.sh.
+    criteria: [CC6.7]
+    owner: engineering-lead
+    frequency: weekly
+    type: automated
+    evidence:
+      - {artifact: TLS scan results, via: "tool:testssl"}
+    iso27001: [A.8.24, A.5.14]
+
+  - id: CRY-03
+    title: Secrets management and secret scanning
+    description: Secrets live in Key Vault; Gitleaks scans every pull request and blocks merges on findings.
+    criteria: [CC6.1, CC6.6, CC8.1]
+    owner: engineering-lead
+    frequency: event
+    type: automated
+    evidence:
+      - {artifact: Required status checks on protected branches, via: "collector:github_branch_protection"}
+    iso27001: [A.5.17, A.8.24]
+
+  # ===================== Logging, detection, incidents =====================
+  - id: LOG-01
+    title: Centralized logging with 1-year retention
+    description: >
+      Entra sign-in and audit logs, Azure Activity, Microsoft 365 unified audit log and
+      application logs flow to Log Analytics; retention is at least 365 days (archive tier for cost).
+    criteria: [CC7.1, CC7.2]
+    owner: security-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: AWS CloudTrail multi-region trail status, via: "collector:aws_cloudtrail"}
+      - {artifact: Google Cloud audit log configuration and sinks, via: "collector:gcp_logging"}
+      - {artifact: Diagnostic settings and workspace retention, via: "collector:azure_inventory"}
+      - {artifact: Logging checks, via: "tool:prowler"}
+    iso27001: [A.8.15]
+
+  - id: LOG-02
+    title: Alerting on high-risk events
+    description: >
+      Azure Monitor alert rules (rules as code in /detections) cover new global admin,
+      Conditional Access changes, MFA disablement, mass deletion and risky sign-ins; alerts open issues.
+    criteria: [CC3.3, CC5.2, CC7.1, CC7.2, CC7.3]
+    owner: security-lead
+    frequency: continuous
+    type: automated
+    evidence:
+      - {artifact: Alert rule definitions, via: "git:detections/"}
+      - {artifact: Alert-generated issues, via: "collector:issues_export"}
+    iso27001: [A.8.16]
+
+  - id: IR-01
+    title: Incident response plan
+    description: The incident response plan defines severity, roles, communication templates and escalation; reviewed annually.
+    criteria: [CC2.2, CC2.3, CC7.3, CC7.4]
+    owner: security-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: IR plan with review history, via: "git:policies/incident-response.md"}
+    iso27001: [A.5.24, A.5.26]
+
+  - id: IR-02
+    title: Incident handling records
+    description: Each incident is tracked in an incident issue with classification, timeline, containment, root cause and actions.
+    criteria: [CC7.3, CC7.4, CC7.5, CC8.1, P6.3, P6.4, P6.5]
+    owner: security-lead
+    frequency: event
+    type: hybrid
+    evidence:
+      - {artifact: Incident issues and postmortems, via: "collector:issues_export"}
+    iso27001: [A.5.25, A.5.26, A.5.27]
+
+  - id: IR-03
+    title: Annual incident response tabletop
+    description: A tabletop exercise is run annually; an after-action report and actions are recorded.
+    criteria: [CC7.4, CC7.5]
+    owner: security-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: Tabletop after-action report, via: "task:ir-tabletop"}
+    iso27001: [A.5.24, A.5.27]
+
+  - id: IR-04
+    title: Breach notification procedure
+    description: Legal maintains customer, regulator and data-subject notification steps and timelines.
+    criteria: [CC2.3, CC7.4, CC7.5, P6.5, P6.6]
+    owner: legal-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: Notification procedure, via: "git:policies/incident-response.md"}
+    iso27001: [A.5.26, A.5.34]
+
+  # ===================== Vulnerability and configuration =====================
+  - id: VUL-01
+    title: Vulnerability management with SLAs
+    description: >
+      Defender for Cloud recommendations (free tier), Trivy and Dependabot find vulnerabilities;
+      remediation SLAs are critical 15 days, high 30, medium 90; breaches open deficiency issues.
+    criteria: [CC3.2, CC6.8, CC7.1, CC7.4, CC8.1]
+    owner: engineering-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: Dependabot alerts with age, via: "collector:github_vulns"}
+      - {artifact: Container and IaC scan results, via: "tool:trivy"}
+    iso27001: [A.8.8]
+
+  - id: VUL-02
+    title: Secure configuration baselines
+    description: CIS and Microsoft baselines are tested daily (Prowler, Maester, Azure Policy); drift opens issues.
+    criteria: [CC3.2, CC4.1, CC5.2, CC6.8, CC7.1, CC8.1]
+    owner: security-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: Baseline results, via: "tool:maester"}
+    iso27001: [A.8.9]
+
+  - id: VUL-03
+    title: Endpoint patching
+    description: Windows Update for Business and macOS update policies apply OS patches within 30 days.
+    criteria: [CC6.8, CC7.1, CC8.1]
+    owner: it-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: OS versions and last sync, via: "collector:intune_devices"}
+    iso27001: [A.8.8]
+
+  # ===================== Change management =====================
+  - id: CHG-01
+    title: Peer-reviewed, tested production changes
+    description: >
+      Production code and infrastructure change only through pull requests with at least one
+      non-author approval and passing required checks; direct pushes to main are blocked.
+    criteria: [CC5.1, CC5.2, CC6.8, CC8.1]
+    owner: engineering-lead
+    frequency: event
+    type: automated
+    evidence:
+      - {artifact: Merged PR population with approvers and checks, via: "collector:github_changes"}
+      - {artifact: Branch protection settings, via: "collector:github_branch_protection"}
+    iso27001: [A.8.32, A.8.25]
+
+  - id: CHG-02
+    title: Infrastructure as code with scanning
+    description: Azure infrastructure is defined in Bicep or Terraform and scanned in CI (Checkov or PSRule for Azure).
+    criteria: [CC8.1, CC7.1]
+    owner: engineering-lead
+    frequency: event
+    type: automated
+    evidence:
+      - {artifact: IaC scan results in PR checks, via: "collector:github_changes"}
+    iso27001: [A.8.9, A.8.32]
+
+  - id: CHG-03
+    title: Emergency change procedure
+    description: Emergency changes are labeled, deployed by an authorized engineer, and reviewed retroactively within 2 business days.
+    criteria: [CC8.1]
+    owner: engineering-lead
+    frequency: event
+    type: hybrid
+    evidence:
+      - {artifact: Emergency-labeled PRs with retro review, via: "collector:github_changes"}
+    iso27001: [A.8.32]
+
+  - id: CHG-04
+    title: Environment separation
+    description: Development, test and production are separate subscriptions; production customer data is not copied to lower environments.
+    criteria: [CC6.1, CC8.1, C1.1]
+    owner: engineering-lead
+    frequency: continuous
+    type: hybrid
+    evidence:
+      - {artifact: Subscription and resource inventory by environment tag, via: "collector:azure_inventory"}
+    iso27001: [A.8.31, A.8.33]
+
+  - id: CHG-05
+    title: Secure development lifecycle
+    description: Secure coding standards, code review and SAST (Semgrep Community Edition) run on every pull request.
+    criteria: [CC5.2, CC7.1, CC8.1]
+    owner: engineering-lead
+    frequency: event
+    type: automated
+    evidence:
+      - {artifact: Required checks list, via: "collector:github_branch_protection"}
+    iso27001: [A.8.25, A.8.28, A.8.29]
+
+  # ===================== Continuity and availability =====================
+  - id: BCP-01
+    title: Business continuity and disaster recovery plan
+    description: BC/DR plan defines RTO and RPO per service and is tested annually.
+    criteria: [CC7.4, CC7.5, CC9.1, A1.2, A1.3]
+    owner: engineering-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: BC/DR plan, via: "git:policies/business-continuity.md"}
+      - {artifact: Annual DR test report, via: "task:dr-test"}
+    iso27001: [A.5.29, A.5.30]
+
+  - id: BCP-02
+    title: Automated, protected backups
+    description: Production data is backed up automatically with geo-redundancy and soft delete; job health is checked daily.
+    criteria: [CC9.1, A1.2, C1.1, PI1.5]
+    owner: engineering-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: Backup items and last job status, via: "collector:azure_backup"}
+    iso27001: [A.8.13, A.8.14]
+
+  - id: BCP-03
+    title: Quarterly restore test
+    description: A restore from backup is performed quarterly into an isolated environment and timed against RTO/RPO.
+    criteria: [A1.3, A1.2]
+    owner: engineering-lead
+    frequency: quarterly
+    type: manual
+    evidence:
+      - {artifact: Restore test record, via: "task:restore-test"}
+    iso27001: [A.8.13]
+
+  - id: BCP-04
+    title: Capacity and performance monitoring
+    description: Azure Monitor alerts on capacity thresholds; capacity is reviewed quarterly.
+    criteria: [A1.1, A1.2]
+    owner: engineering-lead
+    frequency: quarterly
+    type: hybrid
+    evidence:
+      - {artifact: Alert rules, via: "git:detections/"}
+      - {artifact: Capacity review, via: "task:capacity-review"}
+    iso27001: [A.8.6]
+
+  - id: BCP-05
+    title: Cyber insurance reviewed
+    description: Cyber insurance coverage is reviewed annually against the risk register.
+    criteria: [CC9.1]
+    owner: finance-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: Policy summary and review note, via: "task:insurance-review"}
+    iso27001: [A.5.29]
+
+  # ===================== Vendors =====================
+  - id: VEN-01
+    title: Vendor register and due diligence
+    description: Every vendor with access to company or customer data is in the register with a risk tier; new vendors get a security review before onboarding.
+    criteria: [CC1.3, CC3.2, CC3.4, CC5.2, CC9.2, P6.4]
+    owner: security-lead
+    frequency: event
+    type: hybrid
+    evidence:
+      - {artifact: Vendor register history, via: "git:registers/vendors.yaml"}
+    iso27001: [A.5.19, A.5.21]
+
+  - id: VEN-02
+    title: Annual review of critical vendors
+    description: Critical vendors' SOC 2 reports are reviewed annually; their CUECs are mapped to the company's controls.
+    criteria: [CC4.1, CC9.2, P6.1, P6.4]
+    owner: security-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: Vendor review issues with report and CUEC mapping, via: "task:vendor-review"}
+    iso27001: [A.5.22]
+
+  - id: VEN-03
+    title: Contractual security terms
+    description: Vendor and customer contracts include confidentiality, data protection, breach notification and sub-processor terms.
+    criteria: [CC1.1, CC2.3, CC9.2, C1.1, P6.1, P6.4, P6.5]
+    owner: legal-lead
+    frequency: event
+    type: manual
+    evidence:
+      - {artifact: Contract templates and sampled executed contracts, via: "task:external-comms-review"}
+    iso27001: [A.5.20]
+
+  - id: VEN-04
+    title: Physical security inherited and office controls
+    description: Data center physical security is inherited from Microsoft (reviewed via its SOC 2 report); office access controls are reviewed annually.
+    criteria: [CC6.4, A1.2]
+    owner: it-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: Microsoft SOC 2 review and office access review, via: "task:vendor-review"}
+    iso27001: [A.7.1, A.7.2]
+
+  # ===================== Processing integrity (deferred) =====================
+  - id: PI-01
+    title: Processing specifications documented
+    description: Product and API specifications (OpenAPI) are versioned with the code.
+    criteria: [PI1.1]
+    owner: engineering-lead
+    frequency: event
+    type: hybrid
+    evidence:
+      - {artifact: API specification history, via: event}
+    iso27001: [A.8.25]
+
+  - id: PI-02
+    title: Input validation
+    description: Inputs are validated and rejected inputs are logged; covered by automated tests.
+    criteria: [PI1.2]
+    owner: engineering-lead
+    frequency: event
+    type: automated
+    evidence:
+      - {artifact: Test results in PR checks, via: "collector:github_changes"}
+    iso27001: [A.8.28]
+
+  - id: PI-03
+    title: Processing monitoring and reconciliation
+    description: Jobs are monitored and reconciled; mismatches alert and open issues.
+    criteria: [PI1.3]
+    owner: engineering-lead
+    frequency: daily
+    type: automated
+    evidence:
+      - {artifact: Reconciliation alerts and issues, via: "collector:issues_export"}
+    iso27001: [A.8.16]
+
+  - id: PI-04
+    title: Output validation and distribution
+    description: Outputs are validated and delivered only to authorized recipients.
+    criteria: [PI1.4]
+    owner: engineering-lead
+    frequency: event
+    type: hybrid
+    evidence:
+      - {artifact: Output checks and delivery logs, via: event}
+    iso27001: [A.8.3]
+
+  - id: PI-05
+    title: Stored data integrity
+    description: Database constraints, checksums and backups protect stored inputs and outputs.
+    criteria: [PI1.5]
+    owner: engineering-lead
+    frequency: continuous
+    type: hybrid
+    evidence:
+      - {artifact: Backup and integrity configuration, via: "collector:azure_backup"}
+    iso27001: [A.8.13]
+
+  # ===================== Privacy (deferred) =====================
+  - id: PRV-01
+    title: Privacy notice
+    description: A privacy notice describes collection, use, retention and disclosure; reviewed annually.
+    criteria: [P1.1, P2.1, P3.1, P8.1]
+    owner: legal-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: Published notice and review history, via: "task:privacy-review"}
+    iso27001: [A.5.34]
+
+  - id: PRV-02
+    title: Consent capture and records
+    description: Consent is captured and recorded where required, including explicit consent for sensitive data.
+    criteria: [P2.1, P3.2, P6.1]
+    owner: legal-lead
+    frequency: event
+    type: hybrid
+    evidence:
+      - {artifact: Consent records sample, via: event}
+    iso27001: [A.5.34]
+
+  - id: PRV-03
+    title: Data minimization and purpose limitation
+    description: Personal data collected and used is limited to purposes in the notice, checked against the data inventory.
+    criteria: [P3.1, P4.1, P7.1]
+    owner: legal-lead
+    frequency: annual
+    type: manual
+    evidence:
+      - {artifact: Data inventory versus purposes review, via: "task:privacy-review"}
+    iso27001: [A.5.34]
+
+  - id: PRV-04
+    title: Data subject access and correction
+    description: Access and correction requests are handled within a defined SLA and logged.
+    criteria: [P4.3, P5.1, P5.2, P7.1]
+    owner: legal-lead
+    frequency: event
+    type: hybrid
+    evidence:
+      - {artifact: Request issues with response times, via: "collector:issues_export"}
+    iso27001: [A.5.34]
+
+  - id: PRV-05
+    title: Third-party disclosure management
+    description: Disclosures to third parties require a basis; authorized and unauthorized disclosures are logged; a sub-processor list is published.
+    criteria: [P5.2, P6.1, P6.2, P6.3, P6.7]
+    owner: legal-lead
+    frequency: event
+    type: manual
+    evidence:
+      - {artifact: Disclosure log and sub-processor list, via: "task:privacy-review"}
+    iso27001: [A.5.34, A.5.14]
+
+  - id: PRV-06
+    title: Privacy inquiries and complaints
+    description: Privacy inquiries and complaints are tracked to resolution; privacy compliance is reviewed annually.
+    criteria: [P8.1]
+    owner: legal-lead
+    frequency: event
+    type: hybrid
+    evidence:
+      - {artifact: Complaint issues and annual review, via: "task:privacy-review"}
+    iso27001: [A.5.34]

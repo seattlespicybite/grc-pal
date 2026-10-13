@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}Overrides{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Status overrides</h1>
+<div class="sub">Admins can accept a control when valid evidence exists that automation cannot recognize. Every override needs a justification, expires within a year, and is kept as locked evidence.</div></div></div>
+{% if user.is_admin %}<section class="card"><details><summary>New override</summary>
+<form method="post" action="/overrides" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="form-row"><div><label for="ctl">Control</label><select id="ctl" name="control" required>{% for c in controls %}<option>{{ c }}</option>{% endfor %}</select></div>
+<div><label for="exp">Expires</label><input id="exp" name="expires" type="date" required min="{{ today }}" max="{{ max_expiry }}"></div>
+<div><label for="ref">Evidence reference</label><input id="ref" name="evidence_ref" placeholder="Run, upload or ticket"></div></div>
+<label for="just">Justification (at least 30 characters)</label><textarea id="just" name="justification" required minlength="30"></textarea>
+<div class="actions"><button class="btn" type="submit">Record override</button></div></form></details></section>{% endif %}
+<div class="card table-wrap">{% if rows %}<table><thead><tr><th>Control</th><th>Justification</th><th>By</th><th>Expires</th><th>State</th><th></th></tr></thead><tbody>
+{% for o in rows %}<tr><td><a href="/controls/{{ o.control }}"><b>{{ o.control }}</b></a></td><td>{{ o.justification }}{% if o.evidence_ref %}<div class="sub">Evidence: {{ o.evidence_ref }}</div>{% endif %}</td>
+<td>{{ o.created_by }}<div class="sub">{{ o.created_at[:10] }}</div></td><td>{{ o.expires }}</td>
+<td>{% if o.active %}{{ pill('accepted', 'Active') }}{% elif o.revoked %}{{ pill('cancelled', 'Revoked') }}<div class="sub">{{ o.revoked_by }}</div>{% else %}{{ pill('stale', 'Expired') }}{% endif %}</td>
+<td>{% if o.active and user.is_admin %}<form method="post" action="/overrides/{{ o.RowKey }}/revoke" data-confirm="Revoke this override?">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input name="reason" placeholder="Reason" required class="w-140"> <button class="btn danger small" type="submit">Revoke</button></form>{% endif %}</td></tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty">No overrides recorded.</div>{% endif %}</div>
+{% endblock %}

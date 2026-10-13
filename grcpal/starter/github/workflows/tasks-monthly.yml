@@ -1,0 +1,32 @@
+name: Open recurring control tasks
+# With the portal deployed (GRCPAL_TABLES_URL set), tasks open as portal assignments so
+# people without GitHub accounts can complete them. Without it, they open as GitHub issues.
+on:
+  schedule:
+    - cron: "7 12 1 * *"   # 1st of each month
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+env:
+  GRCPAL_TABLES_URL: ${{ vars.GRCPAL_TABLES_URL }}
+  GRCPAL_TENANT: ${{ vars.GRCPAL_TENANT || 'default' }}
+  GRCPAL_EVIDENCE_ACCOUNT_URL: ${{ vars.GRCPAL_EVIDENCE_ACCOUNT_URL }}
+jobs:
+  tasks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install "grc-pal[portal] @ git+https://github.com/seattlespicybite/grc-pal@${{ vars.GRCPAL_VERSION || 'main' }}"
+      - uses: azure/login@v2
+        if: vars.GRCPAL_TABLES_URL != ''
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - run: grcpal tasks
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

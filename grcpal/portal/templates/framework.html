@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}{{ fw.name }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="sub"><a href="/frameworks">Frameworks</a> /</div><h1>{{ fw.name }}</h1>
+<div class="sub">{{ fw.description }}{% if fw.version %} · version {{ fw.version }}{% endif %} · source: {{ fw.source }}</div></div>
+<div>{% if user.is_admin and fw.source == 'custom' %}<a class="btn ghost small" href="/frameworks/new?fid={{ fw.id }}">Edit</a>{% endif %}
+<a class="btn ghost small" href="/controls?framework={{ fw.id }}">Controls mapped</a></div></div>
+{% for group, ids in fw.groups().items() %}<section class="card"><h2>{{ group }}</h2><div class="table-wrap"><table><tbody>
+{% for rid in ids %}<tr><td class="nowrap mono">{{ rid }}</td><td>{{ fw.requirements[rid].title }}</td>
+<td>{% for c in cov.get(rid, []) %}<a href="/controls/{{ c }}">{{ c }}</a> {{ pill(stat.get(c, 'not_started')) }} {% else %}<span class="pill gap">No control</span>{% endfor %}</td></tr>{% endfor %}
+</tbody></table></div></section>{% endfor %}
+{% endblock %}

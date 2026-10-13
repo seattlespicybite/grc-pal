@@ -1,0 +1,142 @@
+{% extends "base.html" %}{% from "_macros.html" import assign_form, pill, upload_form, uploads_table, thread, file_link, when %}{% block title %}{{ ctl.id }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="sub"><a href="/controls">{{ 'My controls' if user.is_contributor else 'Controls' }}</a> /</div><h1>{{ ctl.id }} · {{ ctl.title }}</h1>
+<div class="sub">{% if ctl.custom %}<span class="pill custom">Custom control</span> {% if user.is_admin %}<a href="/controls/{{ ctl.id }}/edit">Edit</a> · {% endif %}{% endif %}Owner: {{ ctl.owner }}{% if owner_emails %} ({{ owner_emails|join(', ') }}){% endif %} · {{ ctl.frequency }} · {{ ctl.type }} · cycle {{ cycle.name }}</div></div>
+<div class="head-actions">{{ pill(status.status) }}{% if status.override %} <span class="sub">computed: {{ status_labels.get(status.computed_status, status.computed_status) }}</span>{% endif %}
+{% if user.is_admin %}<form method="post" action="/controls/{{ ctl.id }}/remind" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}">
+<button class="btn small" type="submit" title="Email the people responsible for this control with a link back here">Send reminder</button></form>{% endif %}</div></div>
+
+{% if status.override %}<div class="card card-info"><h2>Accepted by admin until {{ status.override.expires }}</h2>
+<div class="note">{{ status.override.justification }}</div>
+<p class="sub mt">By {{ status.override.created_by }} on {{ status.override.created_at[:10] }}{% if status.override.evidence_ref %} · evidence: {{ status.override.evidence_ref }}{% endif %}{% if user.sees_everything %} · <a href="/overrides">manage overrides</a>{% endif %}</p></div>{% endif %}
+
+<div class="grid g2">
+<section class="card"><h2>What this control does</h2><p>{{ ctl.description }}</p>
+<h3>Evidence we are looking for</h3><ul class="list">{% for w in wanted %}<li>{{ w }}</li>{% endfor %}
+{% for a in assignments if a.instructions and a.status not in ('approved', 'cancelled') %}<li class="note-li">{{ a.instructions }}</li>{% endfor %}</ul>
+{% for fw, reqs in mappings %}<h3 class="mt">{{ fw.name }}</h3><div class="tags">{% for rid, title in reqs %}<span>{% if user.sees_everything %}<a href="{{ '/criteria/' ~ rid if fw.id == 'soc2' else '/frameworks/' ~ fw.id }}">{{ rid }}</a>{% else %}{{ rid }}{% endif %} {{ title }}</span>{% endfor %}</div>{% endfor %}
+{% if ctl.links %}<h3 class="mt">Reference documents</h3><ul class="list">{% for l in ctl.links %}<li><a href="{{ l.url }}" rel="noopener noreferrer" target="_blank">{{ l.name }}</a></li>{% endfor %}</ul>{% endif %}</section>
+
+<section class="card" id="upload"><h2>Upload evidence</h2>
+{% if can_upload %}{{ upload_form('/controls/' ~ ctl.id ~ '/upload', csrf, max_mb) }}
+{% else %}<div class="empty">{% if user.is_auditor %}Auditors have read-only access.{% else %}You are not assigned to this control.{% endif %}</div>{% endif %}
+</section>
+</div>
+
+<section class="card" id="submissions"><div class="row-between"><h2>Submitted this cycle</h2><span class="sub">{{ cycle.name }}</span></div>
+{{ uploads_table(uploads, user, csrf, '/controls/' ~ ctl.id ~ '#submissions', review=True) }}</section>
+
+{% if prev %}<section class="card"><div class="row-between"><h2>Last cycle: {{ prev.name }}</h2><span class="sub">read-only, for reference</span></div>
+{% if prev_uploads %}<div class="table-wrap"><table><thead><tr><th>File</th><th>What it shows</th><th>Uploaded</th><th>Review</th></tr></thead><tbody>
+{% for u in prev_uploads %}<tr><td>{{ file_link(u, user) }}</td><td>{{ u.comment }}</td><td>{{ u.uploaded_by }}<div class="sub">{{ when(u.uploaded_at) }}</div></td><td>{{ pill(u.status) }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<div class="empty">No evidence was uploaded in the portal for this control last cycle.</div>{% endif %}
+{% for a in prev_assignments if a.instructions %}<details class="mt-s"><summary>Last cycle's request: {{ a.label.splitlines()[0] }}</summary><div class="note mt-s">{{ a.instructions }}</div></details>{% endfor %}
+</section>{% endif %}
+
+<section class="card" id="comments"><h2>Discussion</h2>
+<p class="sub">Comments for this control in the current cycle, including those on its requests. Everyone involved is emailed.</p>
+{{ thread(comments, can_comment, csrf, '/controls/' ~ ctl.id, control_id=ctl.id, uploads=uploads) }}</section>
+
+<div class="grid g2">
+<section class="card"><h2>Automated evidence</h2><table><tbody>
+{% for e in status.evidence %}<tr><td>{{ e.artifact }}<div class="sub mono">{{ e.via }}</div></td>
+<td>{{ pill(e.status) }}<div class="sub">{{ e.last or '' }}{% if e.findings %} · {{ e.findings }} findings{% endif %}</div></td></tr>
+{% else %}<tr><td class="empty">No automated evidence for this control.</td></tr>{% endfor %}
+</tbody></table></section>
+
+<section class="card"><h2>Requests</h2>
+{% if assignments %}<table><tbody>
+{% for a in assignments %}<tr><td><a href="/assignments/{{ a.RowKey }}">{{ a.label.splitlines()[0] }}</a><div class="sub">{{ a.assignee }} · due {{ a.due }}</div></td>
+<td>{{ pill('overdue', 'Overdue') if a.overdue else pill(a.status) }}</td></tr>{% endfor %}</tbody></table>
+{% else %}<div class="empty">No requests this cycle.</div>{% endif %}
+{% if user.is_admin %}<details class="mt"><summary>Assign evidence collection</summary>
+{{ assign_form('control', ctl.id, '/controls/' ~ ctl.id, csrf, owner_emails[0] if owner_emails else '', today) }}</details>
+<details class="mt"><summary>Send a reminder</summary>
+<p class="sub mt-s">Emails {% if assignments|selectattr('status', 'in', ['open', 'returned', 'submitted'])|list %}the people on this control's open requests{% else %}the control owner ({{ owner_emails|join(', ') or 'no email in roles.yaml' }}){% endif %} with a link here, the control description, the evidence we need, what was submitted this cycle and last cycle's evidence. Each person gets at most one reminder per control every 12 hours.</p>
+<form method="post" action="/controls/{{ ctl.id }}/remind"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label>Personal note (optional)<textarea name="note" maxlength="1000" placeholder="For example: the auditor needs this by Friday"></textarea></label>
+<div class="actions"><button class="btn" type="submit">Send reminder</button></div></form></details>{% endif %}
+</section>
+</div>
+
+{% if user.sees_everything %}
+<section class="card" id="checks"><div class="row-between"><h2 class="m0">Automated checks</h2><span class="sub">Results are stored as write-once evidence; failures become findings</span></div>
+{% if checks %}<div class="table-wrap mt"><table><thead><tr><th>Check</th><th>Target</th><th>Schedule</th><th>Last result</th><th></th></tr></thead><tbody>
+{% for k in checks %}{% set last = k.last_result or {} %}<tr><td><b class="mono">{{ k.id }}</b><div class="sub">{{ k.title or '' }} · {{ k.type }}{% if k.source == 'repository' %} · from checks.yaml{% endif %}</div></td>
+<td class="sub">{{ (k.config or k).url or (k.config or k).host or k.run }}</td><td>{{ k.schedule or 'daily' }}</td>
+<td>{% if last.at %}{{ pill('ok' if last.ok else 'attention', 'Passed' if last.ok else 'Failed') }}<div class="sub">{{ last.summary }} · {{ last.at[:16]|replace('T', ' ') }}</div>
+{% for f in last.failures or [] %}<div class="sub bad-text">{{ f }}</div>{% endfor %}{% if last.run %}<a class="sub" href="/evidence/{{ last.run }}">evidence</a>{% endif %}{% else %}<span class="sub">not run yet</span>{% endif %}</td>
+<td>{% if user.is_admin and k.type != 'command' %}<form method="post" action="/checks/{{ k.id }}/run" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="return_to" value="/controls/{{ ctl.id }}#checks"><button class="btn small ghost" type="submit">Run now</button></form>{% endif %}
+{% if user.is_admin and k.source == 'portal' %}<form method="post" action="/checks/{{ k.id }}/delete" class="inline" data-confirm="Turn off this check?"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="return_to" value="/controls/{{ ctl.id }}#checks"><button class="btn small ghost" type="submit">Turn off</button></form>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<div class="empty">No automated checks for this control.</div>{% endif %}
+{% if user.is_admin %}<details class="mt"><summary>Add a check</summary>
+<form method="post" action="/controls/{{ ctl.id }}/checks" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="form-row"><div><label for="ck-type">Type</label><select id="ck-type" name="type"><option value="http">HTTP request</option><option value="tls">TLS certificate</option></select></div>
+<div><label for="ck-id">Check ID</label><input id="ck-id" name="id" required placeholder="{{ ctl.id|lower }}-status-page"></div>
+<div><label for="ck-title">What it proves</label><input id="ck-title" name="title" placeholder="Status page reports all systems operational"></div>
+<div><label for="ck-sched">Schedule</label><select id="ck-sched" name="schedule"><option>daily</option><option>weekly</option><option>manual</option></select></div></div>
+<div class="field" data-show-when="type=http"><div class="form-row"><div><label for="ck-method">Method</label><select id="ck-method" name="method"><option>GET</option><option>HEAD</option><option>POST</option><option>OPTIONS</option></select></div>
+<div class="grow2"><label for="ck-url">URL</label><input id="ck-url" name="url" placeholder="https://status.example.com/api/v2/status.json"></div>
+<div><label for="ck-exp">Expected status</label><input id="ck-exp" name="expect_status" value="200-299"></div></div>
+<label for="ck-h">Headers (one per line, Name: value)</label><textarea id="ck-h" name="headers" rows="2" placeholder="Accept: application/json"></textarea>
+<label for="ck-sh">Secret headers (stored encrypted, redacted in evidence)</label><textarea id="ck-sh" name="secret_headers" rows="2" placeholder="Authorization: Bearer …"></textarea>
+<label for="ck-b">Body (for POST)</label><textarea id="ck-b" name="body" rows="2"></textarea>
+<label for="ck-a">Assertions (one per line)</label><textarea id="ck-a" name="assertions" rows="3" placeholder="json_path | status.indicator | equals | none&#10;contains | All Systems Operational&#10;header | strict-transport-security | contains | max-age&#10;max_ms | 3000"></textarea>
+<div class="hint">Kinds: contains, not_contains, regex, json_path (path | op | value), header (name | op | value), status, max_ms. Operators: equals, exists, contains, lt, gt.</div>
+<label class="check"><input type="checkbox" name="store_response" value="on"> Save the response body as evidence (pull data from the URL)</label></div>
+<div class="field" data-show-when="type=tls"><div class="form-row"><div><label for="ck-host">Host</label><input id="ck-host" name="host" placeholder="app.example.com"></div>
+<div><label for="ck-port">Port</label><input id="ck-port" name="port" value="443"></div>
+<div><label for="ck-days">Warn when fewer days left than</label><input id="ck-days" name="min_days" value="21"></div></div></div>
+<label class="check"><input type="checkbox" name="run_now" value="1" checked> Run it once now</label>
+<p class="hint">Requests to internal addresses and cloud metadata are blocked. Commands can be checked too, but only from catalog/checks.yaml in your program repository.</p>
+<div class="actions"><button class="btn" type="submit">Add check</button></div></form></details>{% endif %}
+</section>
+
+<section class="card" id="ai"><div class="row-between"><h2 class="m0">AI review</h2>
+{% if user.is_admin and ai and ai.ready %}<form method="post" action="/controls/{{ ctl.id }}/ai-review" class="inline" data-busy="Reviewing… this can take a minute"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small" type="submit">Review with AI</button></form>
+{% elif ai and ai.provider == 'off' %}<span class="sub">Off · <a href="/settings/ai">turn on</a></span>{% elif ai %}<span class="sub"><a href="/settings/ai">Confirm data use</a> to enable</span>{% endif %}</div>
+<p class="sub">The latest evidence for this control goes to {{ ai.provider|replace('_', ' ') if ai else 'the AI provider' }} ({{ 'files and metadata' if ai and ai.send_files else 'metadata and summaries only' }}). The answer is a suggestion: accept or dismiss it with a note. What was sent and the full answer are stored as evidence.</p>
+{% if ai_reviews %}{% set r = ai_reviews[0] %}{% set res = r.result or {} %}
+<div class="ai-review">
+<div class="row-between"><div><span class="pill v-{{ r.verdict }}">{{ {'effective': 'Effective', 'partially_effective': 'Partially effective', 'not_effective': 'Not effective', 'insufficient_evidence': 'Insufficient evidence', 'error': 'Error'}[r.verdict] }}</span>
+{% if res.confidence %}<span class="sub">confidence {{ res.confidence }}</span>{% endif %}</div>
+<span class="sub">{{ r.at[:16]|replace('T', ' ') }} · {{ r.model }} · {{ r.requested_by }} · <a href="/evidence/{{ r.evidence_run }}">what was sent</a></span></div>
+{% if r.error %}<div class="flash err mt">{{ r.error }}</div>{% endif %}
+{% if res.summary %}<p class="mt">{{ res.summary }}</p>{% endif %}
+{% if res.gaps %}<h3>Gaps</h3><ul class="gaps">{% for g in res.gaps %}<li class="sev-{{ g.severity }}"><b>{{ g.title }}</b> <span class="pill sev-{{ g.severity }}">{{ g.severity }}</span>{% if g.requirement %} <span class="mono sub">{{ g.requirement }}</span>{% endif %}<div class="sub">{{ g.detail }}</div></li>{% endfor %}</ul>{% endif %}
+{% if res.recommendations %}<h3>Recommendations</h3><ul class="list">{% for x in res.recommendations %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+<details class="mt-s"><summary>Design, operation, auditor questions and evidence reviewed</summary>
+{% if res.design_assessment %}<h3 class="mt">Design</h3><p>{{ res.design_assessment }}</p>{% endif %}
+{% if res.operating_assessment %}<h3>Operating effectiveness</h3><p>{{ res.operating_assessment }}</p>{% endif %}
+{% if res.auditor_questions %}<h3>Questions an auditor may ask</h3><ul class="list">{% for x in res.auditor_questions %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+{% if res.sample_requests %}<h3>Likely sample requests</h3><ul class="list">{% for x in res.sample_requests %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+{% if res.evidence_reviewed %}<h3>Evidence reviewed</h3><table><tbody>{% for e in res.evidence_reviewed %}<tr><td>{{ e.item }}</td><td class="sub">{{ e.observation }}</td></tr>{% endfor %}</tbody></table>{% endif %}
+</details>
+{% if r.disposition == 'pending' and user.is_admin and not r.error %}<form method="post" action="/controls/{{ ctl.id }}/ai/{{ r.RowKey }}/disposition" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label>Your note<textarea name="note" rows="2" placeholder="Required when dismissing: why the findings do not apply"></textarea></label>
+<div class="actions"><button class="btn small" name="decision" value="accepted" type="submit">Accept findings</button><button class="btn ghost small" name="decision" value="dismissed" type="submit">Dismiss</button></div></form>
+{% elif r.disposition != 'pending' %}<p class="sub mt">{{ r.disposition|capitalize }} by {{ r.disposition_by }} on {{ r.disposition_at[:10] }}{% if r.disposition_note %}: {{ r.disposition_note }}{% endif %}</p>{% endif %}
+</div>
+{% if ai_reviews|length > 1 %}<details class="mt"><summary>Earlier reviews ({{ ai_reviews|length - 1 }})</summary><table class="mt"><tbody>
+{% for r2 in ai_reviews[1:] %}<tr><td class="nowrap">{{ r2.at[:16]|replace('T', ' ') }}</td><td>{{ r2.verdict|replace('_', ' ') }}</td><td class="sub">{{ r2.disposition }}{% if r2.audit %} · mock audit{% endif %}</td><td><a href="/evidence/{{ r2.evidence_run }}">evidence</a></td></tr>{% endfor %}</tbody></table></details>{% endif %}
+{% else %}<div class="empty">No AI reviews yet.</div>{% endif %}
+</section>
+{% endif %}
+
+{% if points %}<section class="card"><h2>Points of focus</h2>
+<table><thead><tr><th>Point</th><th>Status</th><th>Note</th></tr></thead><tbody>
+{% for crit, pt in points %}<tr><td>{% if user.sees_everything %}<a href="/criteria/{{ crit }}">{{ pt.id }}</a>{% else %}<span class="mono">{{ pt.id }}</span>{% endif %} {{ pt.point }}</td><td>{{ pill(pt.status) }}</td><td class="sub">{{ pt.note or '' }}</td></tr>{% endfor %}
+</tbody></table></section>{% endif %}
+
+{% if history %}<section class="card"><details><summary>History ({{ history|length }} events)</summary>
+<table class="mt"><tbody>{% for h in history %}<tr><td class="nowrap">{{ when(h.at) }}</td><td>{{ h.actor }}</td><td class="mono">{{ h.action }}</td>
+<td class="sub">{% for k, v in (h.detail or {}).items() if k not in ('controls',) and v %}{{ k }}: {{ v }}{{ '; ' if not loop.last }}{% endfor %}</td></tr>{% endfor %}</tbody></table></details></section>{% endif %}
+
+{% if user.is_admin and not status.override %}<section class="card"><details><summary>Override status (admin)</summary>
+<p class="sub mt">Use when valid evidence exists but the automated check cannot recognize it. The override, justification and expiry are stored as locked evidence and shown to auditors. Overrides apply to the current cycle only.</p>
+<form method="post" action="/overrides"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="control" value="{{ ctl.id }}">
+<label for="just">Justification (at least 30 characters)</label><textarea id="just" name="justification" required minlength="30"></textarea>
+<div class="form-row"><div><label for="exp">Expires</label><input id="exp" name="expires" type="date" required min="{{ today }}"></div>
+<div><label for="ref">Evidence reference</label><input id="ref" name="evidence_ref" placeholder="Evidence run, upload or ticket link"></div></div>
+<div class="actions"><button class="btn" type="submit">Record override</button></div></form></details></section>{% endif %}
+{% endblock %}

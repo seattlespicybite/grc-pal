@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% block title %}Frameworks{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Frameworks</h1><div class="sub">Every control can map to requirements in any number of frameworks. Add more as files in your program repository or create one here.</div></div>
+{% if user.is_admin %}<div><a class="btn ghost small" href="/controls/new">New control</a> <a class="btn small" href="/frameworks/new">New framework</a></div>{% endif %}</div>
+<div class="grid g3">{% for r in rows %}<a class="stat" href="/frameworks/{{ r.fw.id }}"><div class="strong">{{ r.fw.name }}</div>
+<div class="n-s mt-s">{{ r.covered }} / {{ r.requirements }}</div><div class="l">requirements with at least one control · {{ r.controls }} controls · {{ r.fw.source }}</div></a>{% endfor %}</div>
+<p class="sub mt">SOC 2 criteria and points of focus also have their own detailed view: <a href="/criteria">Criteria and points of focus</a>.</p>
+{% endblock %}

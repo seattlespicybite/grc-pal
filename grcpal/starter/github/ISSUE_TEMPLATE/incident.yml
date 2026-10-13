@@ -1,0 +1,25 @@
+name: Security incident
+description: Record a security event or incident (IR-02)
+title: "[Incident] <short description>"
+labels: [grc, incident, "control:IR-02"]
+body:
+  - type: dropdown
+    id: severity
+    attributes: {label: Severity, options: [SEV1 critical, SEV2 high, SEV3 medium, SEV4 low]}
+    validations: {required: true}
+  - type: textarea
+    id: summary
+    attributes: {label: What happened and when was it detected}
+    validations: {required: true}
+  - type: textarea
+    id: timeline
+    attributes: {label: Timeline (UTC), description: "Detection, triage, containment, eradication, recovery"}
+  - type: textarea
+    id: impact
+    attributes: {label: Customer and data impact, description: "Does this trigger notification duties (IR-04)?"}
+  - type: textarea
+    id: root_cause
+    attributes: {label: Root cause and lessons learned}
+  - type: textarea
+    id: actions
+    attributes: {label: Follow-up actions (link issues)}

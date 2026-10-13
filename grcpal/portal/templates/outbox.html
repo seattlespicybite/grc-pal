@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block title %}Email outbox{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Email outbox (development)</h1><div class="sub">With GRCPAL_MAIL_BACKEND=console, emails are not sent. The last 200 are shown here so you can check notifications and reminders.</div></div></div>
+{% for m in messages %}<section class="card"><div class="row-between"><div><b>{{ m.subject }}</b><div class="sub">To {{ m.to }} · {{ m.kind }}</div></div></div>
+<pre class="note mt">{{ m.text }}</pre></section>
+{% else %}<div class="card empty">No emails yet. Assign work, upload evidence, comment or send a reminder.</div>{% endfor %}
+{% endblock %}

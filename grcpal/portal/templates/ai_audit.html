@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% from "_macros.html" import when %}{% block title %}Mock audit{% endblock %}
+{% block content %}
+{% set s = a.summary or {} %}
+<div class="page-head"><div><div class="sub"><a href="/ai">AI assistant</a> / Mock audit</div><h1>{{ a.framework_name }} mock audit</h1>
+<div class="sub">Started {{ when(a.started_at) }} UTC by {{ a.requested_by }} · model {{ a.model or '…' }}{% if s.tokens %} · {{ '{:,}'.format(s.tokens) }} tokens{% endif %}</div></div>
+<div>{% if a.status != 'running' %}<a class="btn ghost small" href="/ai/audits/{{ a.RowKey }}/report.html">Download report</a>{% endif %}
+{% if a.evidence_run %}<a class="btn ghost small" href="/evidence/{{ a.evidence_run }}">Stored evidence</a>{% endif %}
+<a class="btn ghost small" href="/cycles/{{ a.cycle }}/export">Evidence package (.zip)</a></div></div>
+<div class="disclaimer">AI-generated assessment for preparation only. It can be wrong and is not an audit opinion. Review each control's findings before acting on them.</div>
+{% if s.summary %}<section class="card"><div class="row-between"><h2 class="m0">Summary</h2><span class="pill ready-{{ s.overall_readiness }}">{{ (s.overall_readiness or '')|replace('_', ' ')|capitalize }}</span></div>
+<p class="mt">{{ s.summary }}</p>
+<div class="grid g4 mini mt">{% for k in ('effective', 'partially_effective', 'not_effective', 'insufficient_evidence') %}<div><div class="n-s v-{{ k }}">{{ (s.counts or {}).get(k, 0) }}</div><div class="sub">{{ verdict_labels[k] }}</div></div>{% endfor %}</div></section>
+<div class="grid g2">
+<section class="card"><h2>Top risks</h2><ul class="list">{% for r in s.top_risks or [] %}<li>{{ r }}</li>{% else %}<li class="sub">None listed.</li>{% endfor %}</ul></section>
+<section class="card"><h2>Next steps</h2><ol class="list">{% for r in s.next_steps or [] %}<li>{{ r }}</li>{% endfor %}</ol></section></div>
+{% if s.by_group %}<section class="card"><h2>By area</h2><table><tbody>{% for g in s.by_group %}<tr><td><b>{{ g.group }}</b></td><td>{{ g.assessment }}</td></tr>{% endfor %}</tbody></table></section>{% endif %}
+{% elif s.error %}<div class="flash err">The summary could not be written: {{ s.error }}</div>{% endif %}
+<section class="card"><h2>Controls ({{ a['items']|length }} of {{ a.controls }})</h2><div class="table-wrap"><table><thead><tr><th>Control</th><th>Area</th><th>AI verdict</th><th>Gaps</th><th>Summary</th></tr></thead><tbody>
+{% for i in a['items'] %}<tr><td class="nowrap"><a href="/controls/{{ i.control }}#ai">{{ i.control }}</a></td><td class="sub">{{ i.group }}</td>
+<td><span class="pill v-{{ i.verdict }}">{{ verdict_labels.get(i.verdict, i.verdict) }}</span></td><td>{{ i.gaps }}{% if i.high_gaps %} <span class="sub">({{ i.high_gaps }} high)</span>{% endif %}</td><td class="sub">{{ i.summary }}</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

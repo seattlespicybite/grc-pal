@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% block title %}Policies{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Policies</h1><div class="sub">Approved policies from the program repository. Read each one and acknowledge it; acknowledgments are recorded per version.</div></div></div>
+<div class="card table-wrap">{% if rows %}<table><thead><tr><th>Policy</th><th>Version</th><th>Owner</th><th>Next review</th><th>{{ 'Acknowledged' if user.sees_everything else 'You' }}</th></tr></thead><tbody>
+{% for pol, st in rows %}<tr><td><a href="/policies/{{ pol.id }}"><b>{{ pol.title }}</b></a></td><td>{{ pol.version }}</td><td>{{ pol.owner }}</td><td>{{ pol.next_review }}</td>
+<td>{% if user.sees_everything %}{{ st.acked|length }} / {{ st.acked|length + st.missing|length }}{% elif not pol.acknowledge %}<span class="sub">not required</span>{% elif user.email in st.acked %}<span class="pill ok">Acknowledged</span>{% else %}<span class="pill pending">To read</span>{% endif %}</td></tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty">No policies yet. Add Markdown files to policies/ in your GRC-pal instance repository.</div>{% endif %}</div>
+{% endblock %}

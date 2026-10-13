@@ -1,0 +1,53 @@
+{% from "_macros.html" import pill %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}GRC-pal{% endblock %} · GRC-pal</title>
+<meta name="csrf-token" content="{{ csrf }}">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/app.css">
+{% if refresh %}<meta http-equiv="refresh" content="3">{% endif %}
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+  <aside class="side">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">✓</span><span>GRC-pal<small>{{ org }}</small></span></div>
+    {% set path = request.url.path %}
+    <nav class="nav" aria-label="Main">
+      {% if not user.is_contributor %}<a href="/" class="{{ 'active' if path == '/' }}">Dashboard</a>{% endif %}
+      {% if user.can_write %}<a href="/work" class="{{ 'active' if path.startswith('/work') or path.startswith('/assignments') }}">My work {% if my_open %}<span class="count">{{ my_open }}</span>{% endif %}</a>{% endif %}
+      {% if user.is_admin %}<a href="/reviews" class="{{ 'active' if path.startswith('/reviews') }}">Reviews {% if review_count %}<span class="count">{{ review_count }}</span>{% endif %}</a>{% endif %}
+      <div class="nav-sep">Program</div>
+      <a href="/controls" class="{{ 'active' if path.startswith('/controls') }}">{{ 'My controls' if user.is_contributor else 'Controls' }}</a>
+      {% if user.sees_everything %}<a href="/frameworks" class="{{ 'active' if path.startswith('/frameworks') or path.startswith('/criteria') }}">Frameworks</a>
+      <a href="/evidence" class="{{ 'active' if path.startswith('/evidence') }}">Evidence store</a>{% endif %}
+      <a href="/policies" class="{{ 'active' if path.startswith('/policies') }}">Policies</a>
+      {% if user.sees_everything %}<a href="/overrides" class="{{ 'active' if path.startswith('/overrides') }}">Overrides</a>
+      <a href="/ai" class="{{ 'active' if path.startswith('/ai') }}">AI assistant</a>
+      <div class="nav-sep">Administration</div>
+      {% if user.is_admin %}<a href="/settings" class="{{ 'active' if path.startswith('/settings') }}">Configuration</a>
+      <a href="/setup" class="{{ 'active' if path.startswith('/setup') }}">Setup guide</a>{% endif %}
+      <a href="/cycles" class="{{ 'active' if path.startswith('/cycles') }}">Cycles and export</a>
+      <a href="/logs" class="{{ 'active' if path.startswith('/logs') or path.startswith('/jobs') }}">Logs</a>
+      <a href="/audit" class="{{ 'active' if path.startswith('/audit') }}">Audit log</a>{% endif %}
+      {% if user.is_admin %}<a href="/users" class="{{ 'active' if path.startswith('/users') }}">Users and roles</a>
+      {% if auth_mode == 'dev' %}<a href="/dev/outbox" class="{{ 'active' if path.startswith('/dev') }}">Email outbox (dev)</a>{% endif %}{% endif %}
+    </nav>
+    <div class="side-user"><b>{{ user.name }}</b>{{ user.email }}
+      <div class="mt-s"><span class="role role-{{ user.role }}">{{ user.role|capitalize }}</span> <span class="sub-dark">Cycle: {{ cycle.name }}</span></div>
+      <a class="signout" href="{{ logout_url }}">{{ 'Switch user' if auth_mode == 'dev' else 'Sign out' }}</a></div>
+  </aside>
+  <main class="main" id="main">
+    {% if auth_mode == 'dev' %}<div class="devbar">Development mode: sign-in is simulated. Never expose this instance to the internet.</div>{% endif %}
+    {% if flash %}<div class="flash ok" role="status">{{ flash }}</div>{% endif %}
+    {% if error %}<div class="flash err" role="alert">{{ error }}</div>{% endif %}
+    {% if page_msg %}<div class="flash ok" role="status">{{ page_msg }}</div>{% endif %}
+    {% if page_err %}<div class="flash err" role="alert">{{ page_err }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

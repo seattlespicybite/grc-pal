@@ -1,0 +1,70 @@
+{% macro pill(status, label=None) -%}
+<span class="pill {{ status|replace('/', '') }}">{{ label or status_labels.get(status, status|replace('_', ' ')|capitalize) }}</span>
+{%- endmacro %}
+
+{% macro when(ts) -%}<span class="mono">{{ (ts or '')[:16]|replace('T', ' ') }}</span>{%- endmacro %}
+
+{% macro file_link(u, user) -%}
+{% if user.sees_everything %}<a href="/evidence/{{ u.evidence_run }}">{{ u.filename }}</a>{% else %}<a href="/uploads/{{ u.RowKey }}/download">{{ u.filename }}</a>{% endif %}
+{%- endmacro %}
+
+{% macro assign_form(target_type, target_id, return_to, csrf, default_assignee='', today='', default_instructions='') -%}
+<form method="post" action="/assignments">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="target_type" value="{{ target_type }}">
+  <input type="hidden" name="target_id" value="{{ target_id }}">
+  <input type="hidden" name="return_to" value="{{ return_to }}">
+  <div class="form-row">
+    <div><label for="as-{{ target_id }}">Assignee (email)</label>
+      <input id="as-{{ target_id }}" name="assignee" type="email" required value="{{ default_assignee }}" placeholder="name@example.com"></div>
+    <div><label for="co-{{ target_id }}">Contributors (comma separated)</label>
+      <input id="co-{{ target_id }}" name="contributors" placeholder="optional"></div>
+    <div><label for="du-{{ target_id }}">Due date</label>
+      <input id="du-{{ target_id }}" name="due" type="date" required min="{{ today }}"></div>
+  </div>
+  <label for="in-{{ target_id }}">Instructions</label>
+  <textarea id="in-{{ target_id }}" name="instructions" placeholder="What evidence is needed, from which system, for which period">{{ default_instructions }}</textarea>
+  <div class="hint">New people get contributor access automatically and an email with a link to this request.</div>
+  <div class="actions"><button class="btn" type="submit">Assign</button></div>
+</form>
+{%- endmacro %}
+
+{% macro upload_form(action, csrf, max_mb) -%}
+<form method="post" action="{{ action }}" enctype="multipart/form-data">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="drop" data-drop><input type="file" name="file" required accept="{{ accept }}" aria-label="Evidence file">
+<div data-file-label>Drop a file here or choose one · up to {{ max_mb }} MB</div>
+<div class="hint">PDF, screenshots (PNG, JPG), Office files, CSV, text, JSON, email. Stored write-once with a checksum.</div></div>
+<label>What does this file show?<textarea name="comment" placeholder="System, date range, how it was produced"></textarea></label>
+<div class="actions"><button class="btn" type="submit">Upload and send for review</button></div></form>
+{%- endmacro %}
+
+{% macro uploads_table(uploads, user, csrf, return_to, review=False) -%}
+{% if uploads %}<div class="table-wrap"><table><thead><tr><th>File</th><th>What it shows</th><th>Uploaded</th><th>Review</th></tr></thead><tbody>
+{% for u in uploads %}<tr id="u-{{ u.RowKey }}"><td>{{ file_link(u, user) }}<div class="sub mono">sha256 {{ u.sha256[:16] }}…</div></td>
+<td>{{ u.comment }}</td><td>{{ u.uploaded_by }}<div class="sub">{{ when(u.uploaded_at) }}</div></td>
+<td>{{ pill(u.status) }}{% if u.reviewed_by %}<div class="sub">{{ u.reviewed_by }}{% if u.review_note %}: {{ u.review_note }}{% endif %}</div>{% endif %}
+{% if review and user.is_admin and u.status == 'pending' and u.uploaded_by != user.email %}
+<details class="mt-s"><summary>Review</summary><form method="post" action="/uploads/{{ u.RowKey }}/review" class="mt-s">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="return_to" value="{{ return_to }}">
+<textarea name="note" aria-label="Review note" placeholder="Required when returning: what is missing"></textarea>
+<div class="actions"><button class="btn small" name="decision" value="approve" type="submit">Approve</button>
+<button class="btn ghost small" name="decision" value="return" type="submit">Return</button></div></form></details>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<div class="empty">Nothing uploaded yet.</div>{% endif %}
+{%- endmacro %}
+
+{% macro thread(comments, can_comment, csrf, return_to, assignment_id='', control_id='', uploads=[]) -%}
+<div class="thread">
+{% for c in comments %}<div class="comment"><div class="comment-head"><b>{{ c.author_name or c.author }}</b>
+<span class="sub">{{ c.author }} · {{ when(c.at) }}{% if c.upload_name %} · about <span class="mono">{{ c.upload_name }}</span>{% endif %}</span></div>
+<div class="comment-body">{{ c.body }}</div></div>
+{% else %}<div class="empty">No comments yet.</div>{% endfor %}
+</div>
+{% if can_comment %}<form method="post" action="/comments" class="mt">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="return_to" value="{{ return_to }}">
+<input type="hidden" name="assignment_id" value="{{ assignment_id }}"><input type="hidden" name="control_id" value="{{ control_id }}">
+{% if uploads %}<label>About<select name="upload_id"><option value="">The whole request</option>
+{% for u in uploads %}<option value="{{ u.RowKey }}">{{ u.filename }} ({{ u.uploaded_at[:10] }})</option>{% endfor %}</select></label>{% endif %}
+<label>Comment<textarea name="body" required maxlength="4000" placeholder="Ask a question, explain the evidence, or say what is missing. Everyone on this request is emailed."></textarea></label>
+<div class="actions"><button class="btn" type="submit">Post comment</button></div></form>{% endif %}
+{%- endmacro %}

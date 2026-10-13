@@ -1,0 +1,14 @@
+.git
+.github
+evidence
+inbox
+tests
+infra
+docs
+*.db
+__pycache__
+.pytest_cache
+.venv
+control-health.*
+deploy
+*.zip

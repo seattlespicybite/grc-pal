@@ -1,0 +1,30 @@
+name: Publish program configuration to the portal
+# Every merge to main that changes the catalog, registers or policies is validated and sent to
+# the portal's storage account. The pull request approval is the change-management record.
+on:
+  push:
+    branches: [main]
+    paths: ["catalog/**", "registers/**", "policies/**"]
+  workflow_dispatch:
+permissions:
+  id-token: write   # OIDC login to Azure, no stored secrets
+  contents: read
+env:
+  GRCPAL_EVIDENCE_ACCOUNT_URL: ${{ vars.GRCPAL_EVIDENCE_ACCOUNT_URL }}
+  GRCPAL_TENANT: ${{ vars.GRCPAL_TENANT || 'default' }}
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: vars.GRCPAL_EVIDENCE_ACCOUNT_URL != ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install "grc-pal[portal] @ git+https://github.com/seattlespicybite/grc-pal@${{ vars.GRCPAL_VERSION || 'main' }}"
+      - run: grcpal validate
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - run: grcpal publish-config

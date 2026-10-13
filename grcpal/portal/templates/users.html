@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% from "_macros.html" import pill, when %}{% block title %}Users and roles{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Users and roles</h1><div class="sub">Who can sign in to GRC-pal for {{ org }}, and what they can do. Every change is in the audit log.</div></div>
+<a class="btn ghost small" href="/users.csv">Download for access review (CSV)</a></div>
+<div class="grid g3">{% for r in roles %}<div class="stat"><div class="strong"><span class="role role-{{ r }}">{{ r|capitalize }}</span></div><div class="l">{{ role_help[r] }}</div></div>{% endfor %}</div>
+<section class="card mt-l"><details><summary>Add a person</summary>
+<form method="post" action="/users" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="form-row"><div><label for="em">Work email</label><input id="em" name="email" type="email" required></div>
+<div><label for="nm">Name</label><input id="nm" name="name"></div>
+<div><label for="rl">Role</label><select id="rl" name="role">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == 'contributor' }}>{{ r|capitalize }}</option>{% endfor %}</select></div></div>
+<div class="hint">They sign in with their normal company account. People you assign work to, and owners listed in catalog/roles.yaml, get contributor access automatically.</div>
+<div class="actions"><button class="btn" type="submit">Add</button></div></form></details></section>
+<div class="card table-wrap"><table><thead><tr><th>Person</th><th>Role</th><th>Status</th><th>Added</th><th>Last seen</th><th></th></tr></thead><tbody>
+{% for u in rows %}<tr><td><b>{{ u.name }}</b><div class="sub">{{ u.RowKey }}</div></td>
+<td><form method="post" action="/users/{{ u.RowKey|urlencode }}/role" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}">
+<select name="role" data-autosubmit aria-label="Role for {{ u.RowKey }}">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == u.role }}>{{ r|capitalize }}</option>{% endfor %}</select>
+<noscript><button class="btn small ghost" type="submit">Save</button></noscript></form></td>
+<td>{{ pill('ok', 'Active') if u.active else pill('cancelled', 'Disabled') }}</td>
+<td class="sub">{{ u.source }}<br>{{ u.created_at[:10] }} by {{ u.created_by }}</td><td class="sub">{{ when(u.last_seen) if u.last_seen else 'never' }}</td>
+<td><form method="post" action="/users/{{ u.RowKey|urlencode }}/active" {% if u.active %}data-confirm="Disable {{ u.RowKey }}? They will lose access immediately."{% endif %}>
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="active" value="{{ '0' if u.active else '1' }}">
+<button class="btn small {{ 'ghost' if u.active else '' }}" type="submit">{{ 'Disable' if u.active else 'Enable' }}</button></form></td></tr>{% endfor %}
+</tbody></table></div>
+<p class="sub">Disabling is preferred over deletion so the audit trail keeps a name for every action. GRC-pal never stores passwords; sign-in is handled by your identity provider.</p>
+{% endblock %}

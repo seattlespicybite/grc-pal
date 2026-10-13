@@ -1,0 +1,71 @@
+{% extends "base.html" %}{% from "_settings.html" import section_form, test_result %}{% block title %}Setup guide{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="sub"><a href="/settings">Configuration</a> / Setup guide · step {{ index + 1 }} of {{ steps|length }}</div><h1>{{ step.title }}</h1></div></div>
+<div class="grid g-side">
+<nav class="card side-list wizard-steps" aria-label="Setup steps">
+{% for s_, title, st in steps %}<a href="/setup/{{ s_.id }}" class="{{ 'active' if s_.id == step.id }}"><span><span class="step-n">{{ loop.index }}</span>{{ title }}</span><span class="pill wz-{{ st }}">{{ {'done': 'Done', 'skipped': 'Skipped', 'failed': 'Needs attention', 'todo': 'To do'}[st] }}</span></a>{% endfor %}
+</nav>
+<div>
+<section class="card"><div class="guide">{{ step.intro }}</div>
+
+{% if step.kind == 'info' %}
+<ul class="list mt">{% for t in step.todo %}<li>{{ t }}</li>{% endfor %}</ul>
+<form method="post" action="/setup/{{ step.id }}" class="actions"><input type="hidden" name="csrf" value="{{ csrf }}">
+<button class="btn" name="action" value="next" type="submit">Start</button></form>
+
+{% elif step.kind == 'section' %}
+{{ section_form(section, s, row, csrf, '/setup/' ~ step.id, form, wizard=True) }}
+
+{% elif step.kind == 'deployment' %}
+<ul class="checklist mt">{% for c in checks %}<li class="{{ 'ok' if c.ok else 'warn' }}"><span class="mark" aria-hidden="true">{{ '✓' if c.ok else '!' }}</span>
+<div><b>{{ c.name }}</b> <span class="sub">{{ c.detail }}</span>{% if not c.ok %}<div class="hint-box">{{ c.hint }}</div>{% endif %}</div></li>{% endfor %}</ul>
+<details class="mt"><summary>Deployment command builder</summary>
+<p class="sub mt-s">Fill this in to get the exact command for a new Azure deployment. Nothing is sent anywhere; the command appears below the fields.</p>
+<div class="form-row" data-cmd-builder>
+<div><label for="b-name">Instance name</label><input id="b-name" data-arg="--name" placeholder="acme"></div>
+<div><label for="b-admins">Your work email</label><input id="b-admins" data-arg="--admins" placeholder="you@acme.example"></div>
+<div><label for="b-loc">Azure region</label><input id="b-loc" data-arg="--location" value="eastus2"></div>
+<div><label for="b-repo">Program repository (optional)</label><input id="b-repo" data-arg="--github-repo" placeholder="acme/acme-grc"></div>
+<div><label for="b-mail">Sender mailbox (optional)</label><input id="b-mail" data-arg="--mail-from" placeholder="grc@acme.example"></div>
+</div>
+<pre class="note mono mt" data-cmd-output>./deploy/azure/deploy.sh --name acme --admins you@acme.example --location eastus2</pre>
+<p class="sub">Other platforms: run the container image anywhere with a sign-in proxy in front (see docs/deploy-azure.md and docs/configuration.md).</p></details>
+<form method="post" action="/setup/{{ step.id }}" class="actions"><input type="hidden" name="csrf" value="{{ csrf }}">
+<button class="btn ghost" name="action" value="back" type="submit">Back</button>
+<button class="btn ghost" name="action" value="skip" type="submit">Skip for now</button>
+<button class="btn" name="action" value="next" type="submit">Continue</button></form>
+
+{% elif step.kind == 'access' %}
+<table class="mt"><tbody>{% for u in people %}<tr><td><b>{{ u.name }}</b><div class="sub">{{ u.RowKey }}</div></td><td><span class="role role-{{ u.role }}">{{ u.role|capitalize }}</span></td></tr>{% endfor %}</tbody></table>
+<form method="post" action="/users" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="form-row"><div><label for="em">Work email</label><input id="em" name="email" type="email" required></div>
+<div><label for="nm">Name</label><input id="nm" name="name"></div>
+<div><label for="rl">Role</label><select id="rl" name="role">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == 'admin' }}>{{ r|capitalize }}</option>{% endfor %}</select></div></div>
+<div class="hint">{{ role_help.admin }}. {{ role_help.contributor }}. {{ role_help.auditor }}.</div>
+<div class="actions"><button class="btn ghost" type="submit">Add person</button></div></form>
+<form method="post" action="/setup/{{ step.id }}" class="actions"><input type="hidden" name="csrf" value="{{ csrf }}">
+<button class="btn ghost" name="action" value="back" type="submit">Back</button>
+<button class="btn ghost" name="action" value="skip" type="submit">Skip for now</button>
+<button class="btn" name="action" value="next" type="submit">Continue</button></form>
+
+{% elif step.kind == 'collect' %}
+{% if last %}<p class="mt">Last run {{ last.at[:16]|replace('T', ' ') }} UTC: {{ last.ok|length }} collectors succeeded{% if last.failed %}, {{ last.failed|length }} failed: {{ last.failed|join(', ') }} (details on the <a href="/logs?category=collector">Logs</a> page){% endif %}.</p>{% endif %}
+{% if running %}<p><a class="btn" href="/jobs/{{ running.RowKey }}">A run is in progress: watch it</a></p>
+{% else %}<form method="post" action="/collect" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="return_to" value="/setup/collect">
+<button class="btn" type="submit">Run collection now</button></form>{% endif %}
+<form method="post" action="/setup/{{ step.id }}" class="actions"><input type="hidden" name="csrf" value="{{ csrf }}">
+<button class="btn ghost" name="action" value="back" type="submit">Back</button>
+<button class="btn ghost" name="action" value="skip" type="submit">Skip for now</button>
+<button class="btn ghost" name="action" value="next" type="submit">Continue</button></form>
+
+{% elif step.kind == 'summary' %}
+<h3 class="mt">Integrations</h3>
+<table><tbody>{% for o in overview %}<tr><td><a href="/settings/{{ o.section.id }}">{{ o.section.title }}</a></td><td><span class="pill st-{{ o.status }}">{{ {'ok': 'Connected', 'failed': 'Test failed', 'configured': 'Not tested', 'not_configured': 'Not set up', 'disabled': 'Off'}[o.status] }}</span></td></tr>{% endfor %}</tbody></table>
+<h3 class="mt">Installation</h3>
+<ul class="checklist">{% for c in checks %}<li class="{{ 'ok' if c.ok else 'warn' }}"><span class="mark" aria-hidden="true">{{ '✓' if c.ok else '!' }}</span><div><b>{{ c.name }}</b> <span class="sub">{{ c.detail }}</span></div></li>{% endfor %}</ul>
+<p class="mt"><a class="btn" href="/">Go to the dashboard</a> <a class="btn ghost" href="/settings">Configuration</a></p>
+{% endif %}
+</section>
+{{ test_result(result) }}
+</div></div>
+{% endblock %}

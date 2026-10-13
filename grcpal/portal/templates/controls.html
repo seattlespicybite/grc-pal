@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}Controls{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{{ 'My controls' if user.is_contributor else 'Controls' }}</h1><div class="sub">{{ rows|length }} controls shown</div></div>
+{% if user.is_admin %}<a class="btn small" href="/controls/new">New custom control</a>{% endif %}</div>
+<form class="filters" method="get" action="/controls" role="search">
+  <input name="q" value="{{ q }}" placeholder="Search ID or title" aria-label="Search">
+  <select name="status" data-autosubmit aria-label="Status"><option value="">All statuses</option>
+    {% for s in ['ok', 'accepted', 'findings', 'attention', 'not_started'] %}<option value="{{ s }}" {{ 'selected' if s == status }}>{{ status_labels[s] }}</option>{% endfor %}</select>
+  <select name="category" data-autosubmit aria-label="Category"><option value="">All categories</option>
+    {% for k, v in category_names.items() %}<option value="{{ k }}" {{ 'selected' if k == category }}>{{ v }}</option>{% endfor %}</select>
+  <select name="framework" data-autosubmit aria-label="Framework"><option value="">All frameworks</option>
+    {% for fid, fw in frameworks.items() %}<option value="{{ fid }}" {{ 'selected' if fid == framework }}>{{ fw.name }}</option>{% endfor %}</select>
+  <select name="owner" data-autosubmit aria-label="Owner"><option value="">All owners</option>
+    {% for o in owners %}<option value="{{ o }}" {{ 'selected' if o == owner }}>{{ o }}</option>{% endfor %}</select>
+  <input type="hidden" name="sort" value="{{ sort }}"><button class="btn small" type="submit">Filter</button>
+  {% if q or status or category or owner or framework %}<a href="/controls">Clear</a>{% endif %}
+</form>
+{% set qs = 'q=' ~ q ~ '&status=' ~ status ~ '&category=' ~ category ~ '&owner=' ~ owner ~ '&framework=' ~ framework %}
+<div class="card table-wrap"><table>
+<thead><tr><th><a href="/controls?{{ qs }}&sort=id">ID</a></th><th><a href="/controls?{{ qs }}&sort=title">Control</a></th>
+<th>Requirements</th><th><a href="/controls?{{ qs }}&sort=owner">Owner</a></th><th>Frequency</th><th><a href="/controls?{{ qs }}&sort=status">Status</a></th></tr></thead>
+<tbody>{% for c in rows %}<tr><td><a href="/controls/{{ c.id }}"><b>{{ c.id }}</b></a></td><td>{{ c.title }}</td>
+<td class="tags">{% set refs = c.criteria or (c.mappings.values()|list|sum(start=[])) or c.iso27001 %}{% for x in refs[:6] %}<span>{{ x }}</span>{% endfor %}{% if refs|length > 6 %}<span>+{{ refs|length - 6 }}</span>{% endif %}{% if c.custom %}<span class="custom-tag">custom</span>{% endif %}</td>
+<td>{{ c.owner }}</td><td>{{ c.frequency }}</td><td>{{ pill(c.status) }}</td></tr>
+{% else %}<tr><td colspan="6" class="empty">No controls match these filters.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

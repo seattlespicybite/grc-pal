@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% from "_macros.html" import pill, file_link, when %}{% block title %}Reviews{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Evidence waiting for your review</h1><div class="sub">Across all cycles. You cannot review evidence you uploaded yourself (segregation of duties). The uploader and assignee are emailed your decision.</div></div></div>
+{% for u in rows %}{% set a = assignments.get(u.assignment) %}
+<section class="card"><div class="row-between">
+<div><h2 class="m0">{% if a %}<a href="/assignments/{{ a.RowKey }}">{{ a.label.splitlines()[0] }}</a>{% else %}<a href="/controls/{{ u.controls[0] }}">Direct upload on {{ u.controls[0] }}</a>{% endif %}</h2>
+<div class="sub">{{ u.uploaded_by }} · {{ when(u.uploaded_at) }} · {{ file_link(u, user) }} · <span class="mono">{{ u.sha256[:16] }}…</span></div></div>
+<div class="tags">{% for c in u.controls %}<span>{{ c }}</span>{% endfor %}</div></div>
+{% if u.comment %}<div class="note mt">{{ u.comment }}</div>{% endif %}
+<form method="post" action="/uploads/{{ u.RowKey }}/review" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label for="n-{{ u.RowKey }}">Review note</label><textarea id="n-{{ u.RowKey }}" name="note" placeholder="Required when returning: say what is missing"></textarea>
+<div class="actions"><button class="btn" name="decision" value="approve" type="submit">Approve</button>
+<button class="btn ghost" name="decision" value="return" type="submit">Return for changes</button></div></form></section>
+{% else %}<div class="card empty">Nothing is waiting for your review.</div>{% endfor %}
+{% endblock %}

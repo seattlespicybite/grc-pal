@@ -1,0 +1,57 @@
+name: Configuration scanners
+# Free tools only: Prowler (Azure) and Maester (Entra ID / Microsoft 365). TLS scans: tls-weekly.yml.
+# Pin tool versions after the first successful run and update them deliberately.
+on:
+  schedule:
+    - cron: "41 9 * * *"    # daily
+  workflow_dispatch:
+permissions:
+  id-token: write
+  contents: read
+env:
+  GRCPAL_EVIDENCE_ACCOUNT_URL: ${{ vars.GRCPAL_EVIDENCE_ACCOUNT_URL }}
+  GRCPAL_TENANT: ${{ vars.GRCPAL_TENANT || 'default' }}   # evidence namespace; must match the portal
+jobs:
+  prowler:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install "grc-pal[portal] @ git+https://github.com/seattlespicybite/grc-pal@${{ vars.GRCPAL_VERSION || 'main' }}" prowler
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Prowler Azure with SOC 2 mapping
+        run: prowler azure --az-cli-auth --compliance soc2_azure --output-formats csv json-ocsf html --output-directory prowler-out || true
+      - name: Store evidence
+        run: grcpal store --source prowler --controls MON-01,NET-01,NET-02,CRY-01,LOG-01 prowler-out/* prowler-out/compliance/*
+
+  maester:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install "grc-pal[portal] @ git+https://github.com/seattlespicybite/grc-pal@${{ vars.GRCPAL_VERSION || 'main' }}"
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Run Maester
+        shell: pwsh
+        run: |
+          # Verify cmdlet parameters against the current Maester documentation when pinning a version.
+          Install-Module Pester -SkipPublisherCheck -Force -Scope CurrentUser
+          Install-Module Maester -Force -Scope CurrentUser
+          $token = az account get-access-token --resource-type ms-graph --query accessToken -o tsv
+          Connect-MgGraph -AccessToken (ConvertTo-SecureString $token -AsPlainText -Force) -NoWelcome
+          New-Item -ItemType Directory -Path maester-tests, maester-out | Out-Null
+          Push-Location maester-tests; Install-MaesterTests; Pop-Location
+          Invoke-Maester -Path maester-tests -OutputFolder maester-out -NonInteractive
+      - name: Store evidence
+        if: always()
+        run: grcpal store --source maester --controls MON-01,VUL-02,IAM-02 maester-out/*

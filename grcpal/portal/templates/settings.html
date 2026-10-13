@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% from "_settings.html" import section_form, test_result, status_badge %}{% block title %}Configuration{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Configuration</h1>
+<div class="sub">What GRC-pal connects to. Credentials are encrypted before they are stored and never shown again. Every change is in the audit log.</div></div>
+<a class="btn ghost small" href="/setup">Open the setup guide</a></div>
+<div class="grid g-side">
+<nav class="card side-list" aria-label="Configuration sections">
+{% for o in overview %}<a href="/settings/{{ o.section.id }}" class="{{ 'active' if section and section.id == o.section.id }}">
+<span>{{ o.section.title }}</span>{{ status_badge(o.status) }}</a>{% endfor %}
+</nav>
+<div>
+{% if section %}
+<section class="card"><h2>{{ section.title }}</h2><p class="sub">{{ section.summary }}</p>
+<div class="guide">{{ section.guide }}</div>
+{{ section_form(section, s, row, csrf, '/settings/' ~ section.id, form) }}</section>
+{{ test_result(result) }}
+{% if not result and row and row.last_test %}<p class="sub">Last test {{ row.last_test.at[:16]|replace('T', ' ') }} UTC: {{ row.last_test.summary }}.</p>{% endif %}
+{% else %}
+<section class="card"><h2>Overview</h2>
+<p>Pick a section on the left. Each one explains what it is for, where to find the values, and has a test that checks the connection and the permissions.</p>
+<table><tbody>{% for o in overview %}<tr><td><a href="/settings/{{ o.section.id }}"><b>{{ o.section.title }}</b></a><div class="sub">{{ o.section.summary }}</div></td><td>{{ status_badge(o.status) }}</td></tr>{% endfor %}</tbody></table></section>
+<section class="card"><h2>Collect evidence now</h2>
+<p class="sub">Runs every enabled collector and due check with the saved configuration. Scheduled runs happen daily in the deployed job.</p>
+{% if last_collection %}<p>Last run {{ last_collection.at[:16]|replace('T', ' ') }} UTC: {{ last_collection.ok|length }} succeeded, {{ last_collection.failed|length }} failed{% if last_collection.failed %} ({{ last_collection.failed|join(', ') }}){% endif %}.</p>{% endif %}
+<form method="post" action="/collect"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" type="submit">Run collection now</button></form></section>
+{% endif %}
+</div></div>
+{% endblock %}

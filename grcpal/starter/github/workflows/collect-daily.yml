@@ -1,0 +1,52 @@
+name: Collect evidence (daily)
+on:
+  schedule:
+    - cron: "17 10 * * *"   # 06:17 America/New_York (EDT)
+  workflow_dispatch:
+permissions:
+  id-token: write   # OIDC login to Azure, no stored secrets
+  contents: read
+  issues: write     # deficiency issues in this repo
+concurrency: {group: collect, cancel-in-progress: false}
+env:
+  GRCPAL_EVIDENCE_ACCOUNT_URL: ${{ vars.GRCPAL_EVIDENCE_ACCOUNT_URL }}
+  GRCPAL_REPOS: ${{ vars.GRCPAL_REPOS }}                  # e.g. acme/app,acme/infra
+  GRCPAL_SUBSCRIPTIONS: ${{ vars.GRCPAL_SUBSCRIPTIONS }}  # optional, comma-separated
+  GRCPAL_POLICY_ASSIGNMENT: ${{ vars.GRCPAL_POLICY_ASSIGNMENT }}
+  GRCPAL_HR_LEAVERS_CSV: inbox/hr_leavers.csv
+  GRCPAL_TABLES_URL: ${{ vars.GRCPAL_TABLES_URL }}   # set by deploy.sh once the portal is deployed
+  GRCPAL_TENANT: ${{ vars.GRCPAL_TENANT || 'default' }}
+  # Fine-grained PAT, read-only on GRCPAL_REPOS, issues write on this repo. Falls back to the
+  # workflow token, which only sees this repository.
+  GITHUB_TOKEN: ${{ secrets.GRCPAL_GITHUB_TOKEN || github.token }}
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install "grc-pal[portal] @ git+https://github.com/seattlespicybite/grc-pal@${{ vars.GRCPAL_VERSION || 'main' }}"
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Fetch HR leavers export from inbox
+        run: |
+          mkdir -p inbox
+          az storage blob download --auth-mode login --account-name "$(echo $GRCPAL_EVIDENCE_ACCOUNT_URL | cut -d/ -f3 | cut -d. -f1)" \
+            --container-name inbox --name hr_leavers.csv --file inbox/hr_leavers.csv --only-show-errors || echo "no leavers file"
+      - name: Run collectors
+        run: grcpal collect --all --open-issues
+      - name: Control health report
+        if: always()
+        run: |
+          grcpal report --out control-health.html
+          grcpal store --source control_report --controls MON-01,MON-02 control-health.html control-health.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: control-health
+          path: control-health.*
+          retention-days: 30

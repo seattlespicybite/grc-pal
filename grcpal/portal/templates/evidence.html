@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}Evidence{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Evidence</h1><div class="sub">Write-once storage · every run has a manifest with SHA-256 checksums</div></div></div>
+<div class="grid g3">{% for s in sources %}<a class="stat {{ 'stat-active' if s.name == source }}" href="/evidence?source={{ s.name }}">
+<div class="strong">{{ s.name }}</div><div class="l">{{ s.runs }} runs · last {{ s.last[:10] }}</div></a>
+{% else %}<div class="card empty">No evidence collected yet.</div>{% endfor %}</div>
+{% if source %}<section class="card mt-l"><h2>{{ source }} runs</h2><div class="table-wrap"><table><thead><tr><th>Run (UTC)</th><th></th></tr></thead><tbody>
+{% for r in runs %}<tr><td class="mono">{{ r }}</td><td><a href="/evidence/{{ source }}/{{ r }}">Open</a></td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
+{% endblock %}

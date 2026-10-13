@@ -1,0 +1,106 @@
+# Risk register. Changes only through pull requests approved by the executive sponsor.
+# likelihood and impact: 1 (low) to 5 (high); score = likelihood x impact.
+# treatment: mitigate | accept | transfer | avoid. `controls` must be control IDs from the catalog.
+# The entries below are starting points for the Phase 1 workshop. Re-rate them with
+# owners before approval; delete any that do not apply to you.
+
+risks:
+  - id: R-001
+    title: Account takeover of a privileged identity through phishing
+    category: security
+    likelihood: 4
+    impact: 5
+    owner: it-lead
+    treatment: mitigate
+    controls: [IAM-02, IAM-06, HR-02, LOG-02]
+    status: draft
+
+  - id: R-002
+    title: Former employee retains access after termination
+    category: security
+    likelihood: 3
+    impact: 4
+    owner: it-lead
+    treatment: mitigate
+    controls: [IAM-04, IAM-05]
+    status: draft
+
+  - id: R-003
+    title: Unreviewed or malicious code reaches production
+    category: security
+    likelihood: 3
+    impact: 4
+    owner: engineering-lead
+    treatment: mitigate
+    controls: [CHG-01, CHG-05, CRY-03]
+    status: draft
+
+  - id: R-004
+    title: Loss of customer data through ransomware or deletion
+    category: availability
+    likelihood: 2
+    impact: 5
+    owner: engineering-lead
+    treatment: mitigate
+    controls: [BCP-02, BCP-03, END-01, IAM-09]
+    status: draft
+
+  - id: R-005
+    title: Exposure of customer confidential data through misconfigured cloud storage
+    category: confidentiality
+    likelihood: 3
+    impact: 5
+    owner: engineering-lead
+    treatment: mitigate
+    controls: [MON-01, CRY-01, NET-01, DAT-01]
+    status: draft
+
+  - id: R-006
+    title: Critical vendor breach affects the company or its customers
+    category: security
+    likelihood: 3
+    impact: 4
+    owner: security-lead
+    treatment: mitigate
+    controls: [VEN-01, VEN-02, VEN-03]
+    status: draft
+
+  - id: R-007
+    title: Insider fraud or misuse of privileged access
+    category: fraud
+    likelihood: 2
+    impact: 4
+    owner: security-lead
+    treatment: mitigate
+    controls: [IAM-06, IAM-09, LOG-01, LOG-02, CHG-01]
+    status: draft
+
+  - id: R-008
+    title: Unpatched vulnerability exploited on an internet-facing service
+    category: security
+    likelihood: 3
+    impact: 4
+    owner: engineering-lead
+    treatment: mitigate
+    controls: [VUL-01, VUL-02, MON-04]
+    status: draft
+
+  - id: R-009
+    title: Prolonged outage of the production platform
+    category: availability
+    likelihood: 2
+    impact: 4
+    owner: engineering-lead
+    treatment: mitigate
+    controls: [BCP-01, BCP-04, BCP-02]
+    status: draft
+
+  - id: R-010
+    title: Sensitive data entered into unapproved AI tools
+    category: confidentiality
+    likelihood: 4
+    impact: 3
+    owner: security-lead
+    treatment: mitigate
+    controls: [GOV-04, HR-02, AST-03, DAT-01]
+    status: draft

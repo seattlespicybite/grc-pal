@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% from "_macros.html" import when %}{% block title %}AI assistant{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>AI assistant</h1><div class="sub">Evidence review and mock audits. Results are suggestions for people to accept or dismiss, never audit opinions.</div></div>
+{% if user.is_admin %}<a class="btn ghost small" href="/settings/ai">AI settings</a>{% endif %}</div>
+<div class="grid g3">
+<div class="stat"><div class="strong">Provider</div><div class="n-s mt-s">{{ ai.provider|replace('_', ' ') }}</div><div class="l">{{ ai.model }}</div></div>
+<div class="stat"><div class="strong">Data sent</div><div class="n-s mt-s">{{ 'Files and metadata' if ai.send_files else 'Metadata only' }}</div><div class="l">{{ 'Emails masked' if ai.redact else 'Emails not masked' }}</div></div>
+<div class="stat"><div class="strong">Requests today</div><div class="n-s mt-s">{{ ai.used_today }} / {{ ai.daily_limit }}</div><div class="l">daily limit</div></div>
+</div>
+{% if ai.provider == 'off' %}<div class="card mt-l card-info"><h2>The AI assistant is off</h2><p>An admin can turn it on under <a href="/settings/ai">Configuration > AI assistant</a>. Choose Claude, a model you host (Ollama, vLLM), or the offline demo to try it.</p></div>
+{% elif not ai.ready %}<div class="card mt-l card-info"><h2>Confirm data use first</h2><p>Before evidence goes to an external provider, an admin must confirm the provider's terms permit it. <a href="/settings/ai">Open AI settings</a>.</p></div>{% endif %}
+
+{% if user.is_admin %}<section class="card mt-l"><h2>Run a mock audit</h2>
+<p class="sub">GRC-pal reviews every control in scope for the framework as an assessor would, using the latest evidence, then writes a summary for leadership with the likely exceptions. Each control is one AI request; the summary is one more.</p>
+{% if running %}<p><a class="btn" href="/jobs/{{ running.RowKey }}">A mock audit is running: watch progress</a></p>{% else %}
+<form method="post" action="/ai/audits"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="form-row"><div><label for="fw">Framework</label><select id="fw" name="framework">{% for fid, fw in frameworks.items() if scope_sizes[fid] %}<option value="{{ fid }}">{{ fw.name }} ({{ scope_sizes[fid] }} controls)</option>{% endfor %}</select></div>
+<div><label for="lm">Limit (optional)</label><input id="lm" name="limit" type="number" min="0" value="0"><div class="hint">0 = all controls. Use a small number for a trial run.</div></div></div>
+<div class="actions"><button class="btn" type="submit" {{ 'disabled' if not ai.ready }}>Start mock audit</button></div></form>{% endif %}
+<p class="hint">For a single control, open it and press <b>Review with AI</b>.</p></section>{% endif %}
+
+<section class="card"><h2>Mock audits</h2>{% if audits %}<div class="table-wrap"><table><thead><tr><th>Started</th><th>Framework</th><th>Controls</th><th>Readiness</th><th>Status</th></tr></thead><tbody>
+{% for a in audits %}<tr><td class="nowrap"><a href="/ai/audits/{{ a.RowKey }}">{{ when(a.started_at) }}</a></td><td>{{ a.framework_name }}</td><td>{{ a['items']|length }} / {{ a.controls }}</td>
+<td>{{ (a.summary.overall_readiness or '')|replace('_', ' ') }}</td><td><span class="pill job-{{ a.status }}">{{ a.status|replace('_', ' ') }}</span></td></tr>{% endfor %}</tbody></table></div>
+{% else %}<div class="empty">No mock audits yet.</div>{% endif %}</section>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% from "_macros.html" import pill, upload_form, uploads_table, thread, file_link, when %}{% block title %}Request{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="sub"><a href="/work">My work</a> / {{ cycle_name }}</div><h1>{{ a.label.splitlines()[0] }}</h1>
+<div class="sub">Due {{ a.due }} · requested by {{ a.created_by }} on {{ a.created_at[:10] }}{% if prev %} · continues <a href="/assignments/{{ prev.RowKey }}">last cycle's request</a>{% endif %}</div></div>
+<div class="head-actions">{{ pill('overdue', 'Overdue') if a.overdue else pill(a.status) }}
+{% if user.is_admin and a.status not in ('approved', 'cancelled') %}<form method="post" action="/assignments/{{ a.RowKey }}/remind" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}">
+<button class="btn small" type="submit">Send reminder</button></form>{% endif %}</div></div>
+<div class="grid g2">
+<section class="card"><h2>Request</h2>
+<dl class="kv"><dt>Assignee</dt><dd>{{ a.assignee }}</dd><dt>Contributors</dt><dd>{{ a.contributors|join(', ') or 'None' }}</dd>
+<dt>Controls</dt><dd class="tags">{% for c in a.controls %}<span><a href="/controls/{{ c }}">{{ c }}</a></span>{% endfor %}</dd>
+<dt>Target</dt><dd>{{ a.target_type }} {{ a.target_id }}</dd></dl>
+{% if a.instructions %}<h3 class="mt">Instructions</h3><div class="note">{{ a.instructions }}</div>{% endif %}
+<h3 class="mt">Evidence we are looking for</h3><ul class="list">{% for w in wanted %}<li>{{ w }}</li>{% endfor %}</ul>
+{% if user.is_admin and a.status not in ('approved', 'cancelled') %}
+<details class="mt"><summary>Send a reminder</summary><form method="post" action="/assignments/{{ a.RowKey }}/remind" class="mt-s">
+<input type="hidden" name="csrf" value="{{ csrf }}"><label>Personal note (optional)<textarea name="note" maxlength="1000"></textarea></label>
+<div class="actions"><button class="btn small" type="submit">Email the assignee and contributors</button></div></form></details>
+<details class="mt-s"><summary>Cancel this request</summary><form method="post" action="/assignments/{{ a.RowKey }}/cancel" data-confirm="Cancel this request?" class="actions">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input name="reason" placeholder="Reason for cancelling" required minlength="5" aria-label="Reason"><button class="btn ghost small" type="submit">Cancel request</button></form></details>{% endif %}
+</section>
+<section class="card"><h2>Upload evidence</h2>
+{% if can_upload %}{{ upload_form('/assignments/' ~ a.RowKey ~ '/upload', csrf, max_mb) }}
+{% else %}<div class="empty">{% if a.status in ('approved', 'cancelled') %}This request is {{ a.status }}.{% elif a.cycle != cycle.RowKey %}This request belongs to a closed cycle.{% else %}Only the assigned people can upload here.{% endif %}</div>{% endif %}
+</section></div>
+
+<section class="card"><h2>Submissions</h2>{{ uploads_table(uploads, user, csrf, '/assignments/' ~ a.RowKey, review=True) }}</section>
+
+<section class="card" id="comments"><h2>Comments</h2>{{ thread(comments, can_comment and a.cycle == cycle.RowKey, csrf, '/assignments/' ~ a.RowKey, assignment_id=a.RowKey, uploads=uploads) }}</section>
+
+{% if prev %}<section class="card"><div class="row-between"><h2>Last cycle</h2><a href="/assignments/{{ prev.RowKey }}">Open last cycle's request</a></div>
+{% if prev.instructions %}<div class="note">{{ prev.instructions }}</div>{% endif %}
+{% if prev_uploads %}<table class="mt"><tbody>{% for u in prev_uploads %}<tr><td>{{ file_link(u, user) }}<div class="sub">{{ u.comment }}</div></td><td>{{ u.uploaded_by }}<div class="sub">{{ when(u.uploaded_at) }}</div></td><td>{{ pill(u.status) }}</td></tr>{% endfor %}</tbody></table>
+{% else %}<div class="empty">Nothing was uploaded last cycle.</div>{% endif %}
+{% if prev_comments %}<details class="mt"><summary>Last cycle's comments ({{ prev_comments|length }})</summary>{{ thread(prev_comments, False, csrf, '') }}</details>{% endif %}
+</section>{% endif %}
+{% endblock %}

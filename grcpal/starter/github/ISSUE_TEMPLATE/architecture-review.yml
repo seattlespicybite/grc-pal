@@ -1,0 +1,22 @@
+name: Architecture or change risk review
+description: Required for new products, vendors, data stores or major architecture changes (RSK-02)
+title: "[Review] <change>"
+labels: [grc, architecture-review, "control:RSK-02"]
+body:
+  - type: textarea
+    id: change
+    attributes: {label: What is changing}
+    validations: {required: true}
+  - type: dropdown
+    id: data
+    attributes: {label: Highest data classification involved, options: [Public, Internal, Confidential, Customer Confidential]}
+    validations: {required: true}
+  - type: textarea
+    id: risks
+    attributes: {label: New or changed risks, description: "Add or update entries in registers/risks.yaml and link the PR."}
+    validations: {required: true}
+  - type: textarea
+    id: controls
+    attributes: {label: Controls affected (IDs)}
+  - type: markdown
+    attributes: {value: "Security lead approves by commenting **Approved**."}

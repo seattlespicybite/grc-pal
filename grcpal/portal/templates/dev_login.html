@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in (development) · GRC-pal</title><link rel="stylesheet" href="/static/app.css"></head>
+<body><main class="main narrow">
+<div class="brand brand-light"><span class="brand-mark" aria-hidden="true">✓</span><span>GRC-pal<small>{{ org }}</small></span></div>
+<div class="devbar">Development sign-in. Anyone who can reach this page can act as any user. Use only on your own computer.</div>
+{% if request.query_params.get('err') %}<div class="flash err" role="alert">{{ request.query_params.get('err') }}</div>{% endif %}
+<div class="card">
+{% if users %}<h1>Choose a user</h1><p class="sub">See what each role can do.</p>
+{% for u in users %}<form method="post" action="/dev/login" class="user-pick"><input type="hidden" name="csrf" value="{{ csrf }}">
+<input type="hidden" name="email" value="{{ u.RowKey }}"><input type="hidden" name="next" value="{{ next }}">
+<button type="submit"><b>{{ u.name }}</b><span class="sub">{{ u.RowKey }}</span><span class="role role-{{ u.role }}">{{ u.role|capitalize }}</span></button></form>{% endfor %}
+{% else %}<h1>Create the first admin</h1><p class="sub">This instance has no users yet. The first person to sign in becomes an admin.</p>
+<form method="post" action="/dev/login"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ next }}">
+<label for="e">Email</label><input id="e" name="email" type="email" required>
+<label for="n">Name</label><input id="n" name="name">
+<div class="actions"><button class="btn" type="submit">Continue</button></div></form>
+<p class="sub mt">Tip: start with <span class="mono">grcpal serve --demo</span> to load sample users and evidence.</p>{% endif %}
+</div></main></body></html>

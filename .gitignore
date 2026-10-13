@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.env
+*.db
+evidence/
+inbox/
+control-health.*
+report.html
+report.json
+*.zip

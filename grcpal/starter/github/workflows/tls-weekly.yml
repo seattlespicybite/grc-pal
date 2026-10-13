@@ -1,0 +1,33 @@
+name: TLS scan (weekly)
+on:
+  schedule:
+    - cron: "23 11 * * 1"   # Mondays
+  workflow_dispatch:
+permissions:
+  id-token: write
+  contents: read
+env:
+  GRCPAL_EVIDENCE_ACCOUNT_URL: ${{ vars.GRCPAL_EVIDENCE_ACCOUNT_URL }}
+  GRCPAL_TENANT: ${{ vars.GRCPAL_TENANT || 'default' }}   # evidence namespace; must match the portal
+jobs:
+  testssl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install "grc-pal[portal] @ git+https://github.com/seattlespicybite/grc-pal@${{ vars.GRCPAL_VERSION || 'main' }}"
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Scan public endpoints with testssl.sh
+        env:
+          TARGETS: ${{ vars.GRCPAL_TLS_TARGETS }}   # space-separated host names
+        run: |
+          mkdir -p tls-out && chmod 777 tls-out
+          for host in $TARGETS; do
+            docker run --rm -v "$PWD/tls-out:/out" drwetter/testssl.sh --quiet --jsonfile "/out/$host.json" "https://$host" || true
+          done
+          grcpal store --source testssl --controls CRY-02 tls-out/*

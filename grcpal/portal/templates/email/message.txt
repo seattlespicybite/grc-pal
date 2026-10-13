@@ -1,0 +1,16 @@
+{{ m.title }}
+
+{{ m.intro }}
+{% if m.fields %}
+{% for k, v in m.fields %}{{ k }}: {{ v }}
+{% endfor %}{% endif %}{% for heading, lines in m.sections %}
+{{ heading }}
+{% for line in lines %}  - {{ line }}
+{% endfor %}{% endfor %}{% if m.note %}
+Message from {{ m.note_by }}:
+{{ m.note }}
+{% endif %}
+{{ m.button[0] }}: {{ m.button[1] }}
+
+--
+Sent by GRC-pal for {{ org }}. You receive this because you are assigned to, own or take part in this work.

@@ -1,0 +1,1675 @@
+# Points of focus cross-reference (all five categories in scope).
+# Each `point` is a short paraphrase for navigation, NOT the AICPA text. Verify against the
+# licensed 2017 Trust Services Criteria (revised points of focus, 2022).
+# status: covered | partial | gap | n/a. `grcpal validate` warns on gaps and partials.
+points_of_focus:
+  CC1.1:
+  - id: CC1.1-PF01
+    point: Leadership sets the tone at the top
+    controls:
+    - GOV-01
+    - GOV-03
+    status: covered
+  - id: CC1.1-PF02
+    point: Standards of conduct are established
+    controls:
+    - GOV-04
+    status: covered
+  - id: CC1.1-PF03
+    point: Adherence to standards of conduct is evaluated
+    controls:
+    - GOV-04
+    - HR-03
+    status: covered
+  - id: CC1.1-PF04
+    point: Deviations are addressed promptly
+    controls:
+    - GOV-05
+    status: covered
+  - id: CC1.1-PF05
+    point: Contractors and vendor staff are held to the same commitment
+    controls:
+    - HR-04
+    - VEN-03
+    status: partial
+    note: Confirm contractors sign the Code of Conduct and AUP, not only an NDA
+  CC1.2:
+  - id: CC1.2-PF01
+    point: Board or leadership oversight responsibilities are defined
+    controls:
+    - GOV-03
+    status: covered
+  - id: CC1.2-PF02
+    point: Overseers apply relevant expertise
+    controls:
+    - GOV-03
+    status: partial
+    note: Record who on the board or leadership brings security expertise
+  - id: CC1.2-PF03
+    point: Oversight operates independently of management
+    controls:
+    - GOV-03
+    status: partial
+    note: Depends on the board structure; document how independence is achieved
+  - id: CC1.2-PF04
+    point: Oversight of the system of internal control is provided
+    controls:
+    - GOV-03
+    - MON-02
+    status: covered
+  CC1.3:
+  - id: CC1.3-PF01
+    point: All relevant structures of the entity are considered
+    controls:
+    - GOV-02
+    - GOV-10
+    status: covered
+  - id: CC1.3-PF02
+    point: Reporting lines are established
+    controls:
+    - GOV-02
+    status: covered
+  - id: CC1.3-PF03
+    point: Authorities and responsibilities are defined, assigned and limited
+    controls:
+    - GOV-02
+    - HR-03
+    status: covered
+  - id: CC1.3-PF04
+    point: Security-specific roles and requirements are defined
+    controls:
+    - GOV-01
+    - GOV-02
+    status: covered
+  - id: CC1.3-PF05
+    point: Interactions with external parties are considered
+    controls:
+    - VEN-01
+    - GOV-10
+    status: covered
+  CC1.4:
+  - id: CC1.4-PF01
+    point: Policies and practices for competence are established
+    controls:
+    - HR-03
+    status: covered
+  - id: CC1.4-PF02
+    point: Competence is evaluated and shortfalls addressed
+    controls:
+    - HR-03
+    status: covered
+  - id: CC1.4-PF03
+    point: Individuals are attracted, developed and retained
+    controls:
+    - HR-03
+    status: partial
+    note: HR process exists outside grc-pal; reference it
+  - id: CC1.4-PF04
+    point: Succession is planned for key roles
+    controls: []
+    status: gap
+    note: 'Add a control: succession plan for security-critical roles, reviewed annually'
+  - id: CC1.4-PF05
+    point: Backgrounds of individuals are considered
+    controls:
+    - HR-01
+    status: covered
+  - id: CC1.4-PF06
+    point: Technical competency is considered
+    controls:
+    - HR-03
+    status: covered
+  - id: CC1.4-PF07
+    point: Training maintains technical competencies
+    controls:
+    - HR-02
+    status: partial
+    note: HR-02 covers awareness; add role-based training for engineers and admins
+  CC1.5:
+  - id: CC1.5-PF01
+    point: Accountability is enforced through structures and responsibilities
+    controls:
+    - GOV-02
+    - HR-03
+    status: covered
+  - id: CC1.5-PF02
+    point: Performance measures, incentives and rewards are established
+    controls:
+    - HR-03
+    status: covered
+  - id: CC1.5-PF03
+    point: Measures and incentives are evaluated for ongoing relevance
+    controls:
+    - HR-03
+    status: partial
+    note: Document annual review of performance criteria
+  - id: CC1.5-PF04
+    point: Excessive pressures are considered
+    controls:
+    - RSK-01
+    status: partial
+    note: Include pressure and incentive risks in the risk assessment
+  - id: CC1.5-PF05
+    point: Performance is evaluated and individuals rewarded or disciplined
+    controls:
+    - HR-03
+    - GOV-05
+    status: covered
+  CC2.1:
+  - id: CC2.1-PF01
+    point: Information requirements are identified
+    controls:
+    - GOV-10
+    - DAT-04
+    status: covered
+  - id: CC2.1-PF02
+    point: Internal and external data sources are captured
+    controls:
+    - AST-01
+    - AST-03
+    - DAT-04
+    status: covered
+  - id: CC2.1-PF03
+    point: Relevant data is processed into information
+    controls:
+    - GOV-09
+    status: covered
+    note: Collectors and the control health report
+  - id: CC2.1-PF04
+    point: Quality is maintained throughout processing
+    controls:
+    - GOV-09
+    status: covered
+    note: Run manifests with SHA-256 and code version
+  - id: CC2.1-PF05
+    point: Data flows are documented
+    controls:
+    - DAT-04
+    status: covered
+  - id: CC2.1-PF06
+    point: Assets are managed through inventories
+    controls:
+    - AST-01
+    - AST-02
+    - AST-03
+    status: covered
+  - id: CC2.1-PF07
+    point: Information is classified
+    controls:
+    - DAT-01
+    status: covered
+  CC2.2:
+  - id: CC2.2-PF01
+    point: Internal control information is communicated
+    controls:
+    - GOV-01
+    - GOV-04
+    status: covered
+  - id: CC2.2-PF02
+    point: Communication with the board occurs
+    controls:
+    - GOV-03
+    status: covered
+  - id: CC2.2-PF03
+    point: Separate communication lines exist (for example whistleblower)
+    controls:
+    - GOV-08
+    status: partial
+    note: Add an anonymous reporting option
+  - id: CC2.2-PF04
+    point: Communication methods are relevant to the audience
+    controls:
+    - GOV-01
+    - HR-02
+    status: covered
+  - id: CC2.2-PF05
+    point: Responsibilities are communicated
+    controls:
+    - GOV-02
+    - HR-03
+    status: covered
+  - id: CC2.2-PF06
+    point: How to report failures, incidents and concerns is communicated
+    controls:
+    - GOV-08
+    - IR-01
+    status: covered
+  - id: CC2.2-PF07
+    point: Objectives and changes to objectives are communicated
+    controls:
+    - GOV-06
+    status: covered
+  - id: CC2.2-PF08
+    point: Security awareness information is communicated
+    controls:
+    - HR-02
+    status: covered
+  - id: CC2.2-PF09
+    point: System operation, boundaries and changes are communicated internally
+    controls:
+    - GOV-10
+    status: covered
+  CC2.3:
+  - id: CC2.3-PF01
+    point: Information is communicated to external parties
+    controls:
+    - GOV-07
+    status: covered
+  - id: CC2.3-PF02
+    point: Inbound communication from external parties is enabled
+    controls:
+    - GOV-07
+    status: covered
+  - id: CC2.3-PF03
+    point: Communication with the board on external matters occurs
+    controls:
+    - GOV-03
+    status: covered
+  - id: CC2.3-PF04
+    point: Separate communication lines exist for external parties
+    controls:
+    - GOV-07
+    status: covered
+  - id: CC2.3-PF05
+    point: Communication methods are relevant
+    controls:
+    - GOV-07
+    status: covered
+  - id: CC2.3-PF06
+    point: Confidentiality commitments and changes are communicated
+    controls:
+    - GOV-07
+    - VEN-03
+    status: covered
+  - id: CC2.3-PF07
+    point: System description, boundaries and objectives are communicated
+    controls:
+    - GOV-10
+    - GOV-07
+    status: covered
+  - id: CC2.3-PF08
+    point: Customer responsibilities are communicated
+    controls:
+    - GOV-07
+    status: partial
+    note: Publish complementary user entity controls (customer responsibilities)
+  - id: CC2.3-PF09
+    point: How to report failures and incidents is communicated externally
+    controls:
+    - GOV-07
+    - IR-04
+    status: covered
+  CC3.1:
+  - id: CC3.1-PF01
+    point: Operations objectives reflect management's choices and risk tolerance
+    controls:
+    - GOV-06
+    - RSK-01
+    status: covered
+  - id: CC3.1-PF02
+    point: Objectives form a basis for committing resources
+    controls:
+    - GOV-06
+    status: partial
+    note: Link security budget decisions to objectives in leadership review
+  - id: CC3.1-PF03
+    point: External financial reporting objectives
+    controls: []
+    status: n/a
+    note: Financial reporting is out of scope for SOC 2
+  - id: CC3.1-PF04
+    point: Internal reporting objectives reflect required precision
+    controls:
+    - GOV-03
+    status: covered
+  - id: CC3.1-PF05
+    point: Compliance objectives reflect laws and external frameworks
+    controls:
+    - GOV-06
+    - GOV-07
+    status: covered
+  - id: CC3.1-PF06
+    point: Sub-objectives support entity objectives
+    controls:
+    - GOV-06
+    status: partial
+    note: Break objectives into measurable KPIs
+  CC3.2:
+  - id: CC3.2-PF01
+    point: Risk identification covers all relevant levels of the entity
+    controls:
+    - RSK-01
+    status: covered
+  - id: CC3.2-PF02
+    point: Internal and external factors are analyzed
+    controls:
+    - RSK-01
+    status: covered
+  - id: CC3.2-PF03
+    point: Appropriate management levels are involved
+    controls:
+    - RSK-01
+    status: covered
+  - id: CC3.2-PF04
+    point: Significance of risks is estimated
+    controls:
+    - RSK-01
+    status: covered
+  - id: CC3.2-PF05
+    point: Risk responses are determined
+    controls:
+    - RSK-01
+    status: covered
+  - id: CC3.2-PF06
+    point: Criticality of information assets is assessed; threats and vulnerabilities identified
+    controls:
+    - RSK-01
+    - DAT-01
+    status: covered
+  - id: CC3.2-PF07
+    point: Vendor and partner threats and vulnerabilities are analyzed
+    controls:
+    - VEN-01
+    - RSK-01
+    status: covered
+  - id: CC3.2-PF08
+    point: Vulnerabilities of system components are identified
+    controls:
+    - VUL-01
+    - VUL-02
+    status: covered
+  CC3.3:
+  - id: CC3.3-PF01
+    point: Types of fraud are considered
+    controls:
+    - RSK-01
+    status: covered
+  - id: CC3.3-PF02
+    point: Incentives and pressures are assessed
+    controls:
+    - RSK-01
+    status: partial
+    note: Add explicit fraud workshop prompts
+  - id: CC3.3-PF03
+    point: Opportunities for fraud are assessed
+    controls:
+    - RSK-01
+    - IAM-06
+    status: covered
+  - id: CC3.3-PF04
+    point: Attitudes and rationalizations are assessed
+    controls:
+    - RSK-01
+    status: partial
+    note: Add explicit fraud workshop prompts
+  - id: CC3.3-PF05
+    point: Fraud risks from IT and information access are considered
+    controls:
+    - RSK-01
+    - IAM-09
+    - LOG-02
+    status: covered
+  CC3.4:
+  - id: CC3.4-PF01
+    point: Changes in the external environment are assessed
+    controls:
+    - RSK-01
+    - RSK-02
+    status: covered
+  - id: CC3.4-PF02
+    point: Changes in the business model are assessed
+    controls:
+    - RSK-02
+    status: covered
+  - id: CC3.4-PF03
+    point: Changes in leadership are assessed
+    controls:
+    - RSK-01
+    status: partial
+    note: Trigger a risk review on leadership change
+  - id: CC3.4-PF04
+    point: Changes in systems and technology are assessed
+    controls:
+    - RSK-02
+    status: covered
+  - id: CC3.4-PF05
+    point: Changes in vendor and partner relationships are assessed
+    controls:
+    - VEN-01
+    - RSK-02
+    status: covered
+  CC4.1:
+  - id: CC4.1-PF01
+    point: A mix of ongoing and separate evaluations is used
+    controls:
+    - MON-01
+    - MON-03
+    status: covered
+  - id: CC4.1-PF02
+    point: Rate of change is considered
+    controls:
+    - MON-01
+    status: covered
+    note: Daily automated checks
+  - id: CC4.1-PF03
+    point: A baseline understanding is established
+    controls:
+    - VUL-02
+    - GOV-09
+    status: covered
+  - id: CC4.1-PF04
+    point: Knowledgeable personnel perform evaluations
+    controls:
+    - MON-03
+    status: covered
+  - id: CC4.1-PF05
+    point: Evaluations are integrated with business processes
+    controls:
+    - MON-01
+    status: covered
+  - id: CC4.1-PF06
+    point: Scope and frequency are adjusted to risk
+    controls:
+    - MON-03
+    status: partial
+    note: Document risk-based scoping of the internal review
+  - id: CC4.1-PF07
+    point: Evaluations are objective
+    controls:
+    - MON-04
+    - MON-03
+    status: covered
+  - id: CC4.1-PF08
+    point: Different evaluation types are used (pentest, internal review, certification)
+    controls:
+    - MON-04
+    - MON-03
+    - VEN-02
+    status: covered
+  CC4.2:
+  - id: CC4.2-PF01
+    point: Results of evaluations are assessed
+    controls:
+    - MON-02
+    status: covered
+  - id: CC4.2-PF02
+    point: Deficiencies are communicated to responsible parties and leadership
+    controls:
+    - MON-02
+    - GOV-03
+    status: covered
+  - id: CC4.2-PF03
+    point: Corrective actions are monitored
+    controls:
+    - MON-02
+    status: covered
+  CC5.1:
+  - id: CC5.1-PF01
+    point: Control activities are integrated with the risk assessment
+    controls:
+    - GOV-09
+    - RSK-01
+    status: covered
+  - id: CC5.1-PF02
+    point: Entity-specific factors are considered
+    controls:
+    - GOV-09
+    status: covered
+  - id: CC5.1-PF03
+    point: Relevant business processes are determined
+    controls:
+    - GOV-10
+    status: covered
+  - id: CC5.1-PF04
+    point: A mix of control activity types is used
+    controls:
+    - GOV-09
+    status: covered
+    note: Automated, hybrid and manual controls
+  - id: CC5.1-PF05
+    point: Level at which controls apply is considered
+    controls:
+    - GOV-09
+    status: covered
+  - id: CC5.1-PF06
+    point: Segregation of duties is addressed
+    controls:
+    - CHG-01
+    - IAM-09
+    - IAM-06
+    status: covered
+  CC5.2:
+  - id: CC5.2-PF01
+    point: Dependency between technology and general controls is determined
+    controls:
+    - GOV-09
+    status: covered
+  - id: CC5.2-PF02
+    point: Technology infrastructure control activities are established
+    controls:
+    - MON-01
+    - VUL-02
+    status: covered
+  - id: CC5.2-PF03
+    point: Security management control activities are established
+    controls:
+    - IAM-02
+    - IAM-06
+    - LOG-02
+    status: covered
+  - id: CC5.2-PF04
+    point: Acquisition, development and maintenance control activities are established
+    controls:
+    - CHG-01
+    - CHG-05
+    - VEN-01
+    status: covered
+  CC5.3:
+  - id: CC5.3-PF01
+    point: Policies and procedures support management's directives
+    controls:
+    - GOV-01
+    status: covered
+  - id: CC5.3-PF02
+    point: Responsibility and accountability for executing policies are established
+    controls:
+    - GOV-01
+    - GOV-02
+    status: covered
+  - id: CC5.3-PF03
+    point: Controls are performed in a timely manner
+    controls:
+    - MON-02
+    status: covered
+    note: Task due dates and overdue findings
+  - id: CC5.3-PF04
+    point: Corrective action is taken
+    controls:
+    - MON-02
+    status: covered
+  - id: CC5.3-PF05
+    point: Competent personnel perform controls
+    controls:
+    - HR-03
+    status: covered
+  - id: CC5.3-PF06
+    point: Policies and procedures are reassessed
+    controls:
+    - GOV-01
+    status: covered
+  CC6.1:
+  - id: CC6.1-PF01
+    point: Inventory of information assets is identified and managed
+    controls:
+    - AST-01
+    - AST-02
+    - AST-03
+    status: covered
+  - id: CC6.1-PF02
+    point: Logical access is restricted
+    controls:
+    - IAM-01
+    - IAM-09
+    status: covered
+  - id: CC6.1-PF03
+    point: Users are identified and authenticated
+    controls:
+    - IAM-01
+    - IAM-02
+    status: covered
+  - id: CC6.1-PF04
+    point: Network segmentation is considered
+    controls:
+    - NET-01
+    - CHG-04
+    status: covered
+  - id: CC6.1-PF05
+    point: Points of access are managed
+    controls:
+    - NET-02
+    - IAM-02
+    status: covered
+  - id: CC6.1-PF06
+    point: Access to information assets is restricted
+    controls:
+    - IAM-09
+    - DAT-01
+    status: covered
+  - id: CC6.1-PF07
+    point: Identification and authentication are managed
+    controls:
+    - IAM-02
+    status: covered
+  - id: CC6.1-PF08
+    point: Credentials for infrastructure and software are managed
+    controls:
+    - IAM-07
+    - CRY-03
+    status: covered
+  - id: CC6.1-PF09
+    point: Encryption protects data
+    controls:
+    - CRY-01
+    status: covered
+  - id: CC6.1-PF10
+    point: Encryption keys are protected
+    controls:
+    - CRY-01
+    status: covered
+    note: Key Vault with purge protection
+  - id: CC6.1-PF11
+    point: New architectures are assessed before use
+    controls:
+    - RSK-02
+    status: covered
+  CC6.2:
+  - id: CC6.2-PF01
+    point: Access credentials are controlled through registration and authorization
+    controls:
+    - IAM-03
+    status: covered
+  - id: CC6.2-PF02
+    point: Access is removed when no longer appropriate
+    controls:
+    - IAM-04
+    - IAM-08
+    status: covered
+  - id: CC6.2-PF03
+    point: Appropriateness of access credentials is reviewed
+    controls:
+    - IAM-05
+    status: covered
+  CC6.3:
+  - id: CC6.3-PF01
+    point: Access to protected assets is created or modified on authorization
+    controls:
+    - IAM-03
+    status: covered
+  - id: CC6.3-PF02
+    point: Access to protected assets is removed
+    controls:
+    - IAM-04
+    - IAM-05
+    status: covered
+  - id: CC6.3-PF03
+    point: Role-based access control is used
+    controls:
+    - IAM-03
+    - IAM-09
+    status: covered
+  - id: CC6.3-PF04
+    point: Access roles and rules are reviewed
+    controls:
+    - IAM-05
+    - IAM-06
+    status: covered
+  CC6.4:
+  - id: CC6.4-PF01
+    point: Physical access is created or modified on authorization
+    controls:
+    - VEN-04
+    status: covered
+    note: Data centers inherited from Microsoft
+  - id: CC6.4-PF02
+    point: Physical access is removed
+    controls:
+    - VEN-04
+    - IAM-04
+    status: partial
+    note: Add badge deactivation to the offboarding checklist
+  - id: CC6.4-PF03
+    point: Physical access is reviewed
+    controls:
+    - VEN-04
+    status: covered
+  - id: CC6.4-PF04
+    point: Physical devices are recovered at separation
+    controls:
+    - DAT-03
+    status: covered
+  CC6.5:
+  - id: CC6.5-PF01
+    point: Data and software for disposal are identified
+    controls:
+    - DAT-02
+    - DAT-03
+    status: covered
+  - id: CC6.5-PF02
+    point: Data and software are removed before assets leave entity control
+    controls:
+    - DAT-03
+    status: covered
+  CC6.6:
+  - id: CC6.6-PF01
+    point: Access through external boundaries is restricted
+    controls:
+    - NET-01
+    status: covered
+  - id: CC6.6-PF02
+    point: Identification and authentication credentials are protected
+    controls:
+    - IAM-02
+    - CRY-03
+    status: covered
+  - id: CC6.6-PF03
+    point: Additional authentication is required for external access
+    controls:
+    - IAM-02
+    status: covered
+  - id: CC6.6-PF04
+    point: Boundary protection systems are implemented
+    controls:
+    - NET-01
+    status: covered
+    note: NSGs and WAF
+  CC6.7:
+  - id: CC6.7-PF01
+    point: Ability to transmit data is restricted
+    controls:
+    - END-02
+    status: covered
+  - id: CC6.7-PF02
+    point: Encryption or secure channels protect data in transit
+    controls:
+    - CRY-02
+    status: covered
+  - id: CC6.7-PF03
+    point: Removable media is protected
+    controls:
+    - END-02
+    status: covered
+  - id: CC6.7-PF04
+    point: Mobile and endpoint devices are protected
+    controls:
+    - END-01
+    status: partial
+    note: Confirm phones accessing company data are enrolled or covered by app protection
+  CC6.8:
+  - id: CC6.8-PF01
+    point: Application and software installation is restricted
+    controls:
+    - END-01
+    status: partial
+    note: Add a control for Intune app control or local admin removal
+  - id: CC6.8-PF02
+    point: Unauthorized changes to software and configuration are detected
+    controls:
+    - MON-01
+    - VUL-02
+    status: covered
+  - id: CC6.8-PF03
+    point: A defined change control process is used
+    controls:
+    - CHG-01
+    status: covered
+  - id: CC6.8-PF04
+    point: Antivirus and anti-malware software is used
+    controls:
+    - END-01
+    status: covered
+  - id: CC6.8-PF05
+    point: Assets from outside the entity are scanned for malware
+    controls:
+    - END-01
+    - VUL-01
+    status: partial
+    note: Document scanning of uploads and imported files if the product accepts them
+  CC7.1:
+  - id: CC7.1-PF01
+    point: Defined configuration standards are used
+    controls:
+    - VUL-02
+    status: covered
+  - id: CC7.1-PF02
+    point: Infrastructure and software are monitored
+    controls:
+    - MON-01
+    - LOG-01
+    status: covered
+  - id: CC7.1-PF03
+    point: Change-detection mechanisms are implemented
+    controls:
+    - MON-01
+    - LOG-02
+    status: covered
+  - id: CC7.1-PF04
+    point: Unknown or unauthorized components are detected
+    controls:
+    - AST-01
+    - AST-02
+    status: partial
+    note: Add an alert for new unmanaged devices and untagged resources
+  - id: CC7.1-PF05
+    point: Vulnerability scans are conducted
+    controls:
+    - VUL-01
+    - MON-04
+    status: covered
+  CC7.2:
+  - id: CC7.2-PF01
+    point: Detection policies, procedures and tools are implemented
+    controls:
+    - LOG-01
+    - LOG-02
+    status: covered
+  - id: CC7.2-PF02
+    point: Detection measures are designed
+    controls:
+    - LOG-02
+    status: covered
+  - id: CC7.2-PF03
+    point: Filters analyze anomalies
+    controls:
+    - LOG-02
+    status: covered
+  - id: CC7.2-PF04
+    point: Detection tools are monitored for effective operation
+    controls:
+    - LOG-01
+    status: partial
+    note: Add a heartbeat check that each log source is still sending data
+  CC7.3:
+  - id: CC7.3-PF01
+    point: Security incidents are responded to
+    controls:
+    - IR-01
+    - IR-02
+    status: covered
+  - id: CC7.3-PF02
+    point: Detected security events are communicated and reviewed
+    controls:
+    - LOG-02
+    - IR-02
+    status: covered
+  - id: CC7.3-PF03
+    point: Procedures to analyze security incidents are implemented
+    controls:
+    - IR-01
+    status: covered
+  CC7.4:
+  - id: CC7.4-PF01
+    point: Roles and responsibilities are assigned
+    controls:
+    - IR-01
+    status: covered
+  - id: CC7.4-PF02
+    point: Security incidents are contained
+    controls:
+    - IR-02
+    status: covered
+  - id: CC7.4-PF03
+    point: Ongoing incidents are mitigated
+    controls:
+    - IR-02
+    status: covered
+  - id: CC7.4-PF04
+    point: Threats from incidents are ended
+    controls:
+    - IR-02
+    status: covered
+  - id: CC7.4-PF05
+    point: Operations are restored
+    controls:
+    - IR-02
+    - BCP-01
+    status: covered
+  - id: CC7.4-PF06
+    point: Communication protocols for incidents are implemented
+    controls:
+    - IR-01
+    - IR-04
+    status: covered
+  - id: CC7.4-PF07
+    point: Nature of incident is understood and containment strategy chosen
+    controls:
+    - IR-02
+    status: covered
+  - id: CC7.4-PF08
+    point: Identified vulnerabilities are remediated
+    controls:
+    - IR-02
+    - VUL-01
+    status: covered
+  - id: CC7.4-PF09
+    point: Remediation activities are communicated
+    controls:
+    - IR-02
+    status: covered
+  - id: CC7.4-PF10
+    point: Incident response effectiveness is evaluated
+    controls:
+    - IR-03
+    status: covered
+  - id: CC7.4-PF11
+    point: Incidents are periodically evaluated for trends
+    controls:
+    - GOV-03
+    status: partial
+    note: Add incident trend review to the quarterly leadership review
+  CC7.5:
+  - id: CC7.5-PF01
+    point: Affected environment is restored
+    controls:
+    - IR-02
+    - BCP-01
+    status: covered
+  - id: CC7.5-PF02
+    point: Information about the event is communicated
+    controls:
+    - IR-02
+    - IR-04
+    status: covered
+  - id: CC7.5-PF03
+    point: Root cause is determined
+    controls:
+    - IR-02
+    status: covered
+  - id: CC7.5-PF04
+    point: Changes prevent and detect recurrence
+    controls:
+    - IR-02
+    status: covered
+  - id: CC7.5-PF05
+    point: Response and recovery procedures are improved
+    controls:
+    - IR-03
+    status: covered
+  - id: CC7.5-PF06
+    point: Incident recovery plan is tested
+    controls:
+    - IR-03
+    - BCP-01
+    status: covered
+  CC8.1:
+  - id: CC8.1-PF01
+    point: Changes are managed throughout the system life cycle
+    controls:
+    - CHG-01
+    - CHG-05
+    status: covered
+  - id: CC8.1-PF02
+    point: Changes are authorized
+    controls:
+    - CHG-01
+    status: covered
+  - id: CC8.1-PF03
+    point: Changes are designed and developed
+    controls:
+    - CHG-05
+    status: covered
+  - id: CC8.1-PF04
+    point: Changes are documented
+    controls:
+    - CHG-01
+    status: covered
+  - id: CC8.1-PF05
+    point: System changes are tracked
+    controls:
+    - CHG-01
+    status: covered
+  - id: CC8.1-PF06
+    point: Software is configured
+    controls:
+    - CHG-02
+    status: covered
+  - id: CC8.1-PF07
+    point: System changes are tested
+    controls:
+    - CHG-01
+    - CHG-05
+    status: covered
+  - id: CC8.1-PF08
+    point: System changes are approved
+    controls:
+    - CHG-01
+    status: covered
+  - id: CC8.1-PF09
+    point: System changes are deployed
+    controls:
+    - CHG-01
+    status: covered
+  - id: CC8.1-PF10
+    point: System changes are identified and evaluated
+    controls:
+    - RSK-02
+    status: covered
+  - id: CC8.1-PF11
+    point: Changes needed to remediate incidents are identified
+    controls:
+    - IR-02
+    status: covered
+  - id: CC8.1-PF12
+    point: Baseline configuration is created
+    controls:
+    - CHG-02
+    - VUL-02
+    status: covered
+  - id: CC8.1-PF13
+    point: Emergency changes are provided for
+    controls:
+    - CHG-03
+    status: covered
+  - id: CC8.1-PF14
+    point: Confidential information is protected during change
+    controls:
+    - CHG-04
+    status: covered
+  - id: CC8.1-PF15
+    point: Patch changes are managed
+    controls:
+    - VUL-01
+    - VUL-03
+    status: covered
+  CC9.1:
+  - id: CC9.1-PF01
+    point: Mitigation of business disruption risk is considered
+    controls:
+    - BCP-01
+    - RSK-01
+    status: covered
+  - id: CC9.1-PF02
+    point: Insurance is considered to mitigate financial impact
+    controls:
+    - BCP-05
+    status: covered
+  CC9.2:
+  - id: CC9.2-PF01
+    point: Requirements for vendor engagements are established
+    controls:
+    - VEN-01
+    - VEN-03
+    status: covered
+  - id: CC9.2-PF02
+    point: Vendor and partner risks are assessed
+    controls:
+    - VEN-01
+    - VEN-02
+    status: covered
+  - id: CC9.2-PF03
+    point: Responsibility for managing vendors is assigned
+    controls:
+    - VEN-01
+    status: covered
+    note: Owner per vendor in the register
+  - id: CC9.2-PF04
+    point: Communication protocols with vendors are established
+    controls:
+    - VEN-03
+    status: covered
+  - id: CC9.2-PF05
+    point: Exception handling with vendors is established
+    controls:
+    - VEN-02
+    status: partial
+    note: Define how vendor SOC 2 exceptions are logged and followed up
+  - id: CC9.2-PF06
+    point: Vendor performance is assessed
+    controls:
+    - VEN-02
+    status: covered
+  - id: CC9.2-PF07
+    point: Issues found in vendor assessments are addressed
+    controls:
+    - VEN-02
+    - MON-02
+    status: covered
+  - id: CC9.2-PF08
+    point: Vendor relationships are terminated through defined procedures
+    controls: []
+    status: gap
+    note: Add a vendor offboarding procedure (access removal, data return or deletion)
+  - id: CC9.2-PF09
+    point: Confidentiality commitments are obtained from vendors
+    controls:
+    - VEN-03
+    status: covered
+  - id: CC9.2-PF10
+    point: Vendor compliance with confidentiality commitments is assessed
+    controls:
+    - VEN-02
+    status: covered
+  A1.1:
+  - id: A1.1-PF01
+    point: Current processing capacity and usage are measured
+    controls:
+    - BCP-04
+    status: covered
+  - id: A1.1-PF02
+    point: Capacity demand is forecast
+    controls:
+    - BCP-04
+    status: covered
+  - id: A1.1-PF03
+    point: Changes are made based on forecasts
+    controls:
+    - BCP-04
+    status: covered
+  A1.2:
+  - id: A1.2-PF01
+    point: Environmental threats are identified
+    controls:
+    - VEN-04
+    - RSK-01
+    status: covered
+    note: Data center threats inherited from Microsoft
+  - id: A1.2-PF02
+    point: Environmental threat detection is designed
+    controls:
+    - VEN-04
+    status: covered
+    note: Inherited
+  - id: A1.2-PF03
+    point: Environmental protection mechanisms are maintained
+    controls:
+    - VEN-04
+    status: covered
+    note: Inherited
+  - id: A1.2-PF04
+    point: Alerts analyze environmental anomalies
+    controls:
+    - VEN-04
+    - BCP-04
+    status: covered
+    note: Inherited plus Azure Service Health
+  - id: A1.2-PF05
+    point: Responses to environmental events are defined
+    controls:
+    - BCP-01
+    status: covered
+  - id: A1.2-PF06
+    point: Environmental events are communicated and reviewed
+    controls:
+    - BCP-01
+    status: partial
+    note: Subscribe to Azure Service Health alerts and log reviews
+  - id: A1.2-PF07
+    point: Data requiring backup is determined
+    controls:
+    - BCP-01
+    - DAT-04
+    status: covered
+  - id: A1.2-PF08
+    point: Data backup is performed
+    controls:
+    - BCP-02
+    status: covered
+  - id: A1.2-PF09
+    point: Offsite storage is addressed
+    controls:
+    - BCP-02
+    status: covered
+    note: Geo-redundant vaults
+  - id: A1.2-PF10
+    point: Alternate processing infrastructure is implemented
+    controls:
+    - BCP-01
+    status: partial
+    note: Document multi-zone or secondary-region design per service
+  A1.3:
+  - id: A1.3-PF01
+    point: Business continuity plan is tested
+    controls:
+    - BCP-01
+    status: covered
+  - id: A1.3-PF02
+    point: Integrity and completeness of backup data are tested
+    controls:
+    - BCP-03
+    status: covered
+  C1.1:
+  - id: C1.1-PF01
+    point: Confidential information is identified
+    controls:
+    - DAT-01
+    - DAT-04
+    status: covered
+  - id: C1.1-PF02
+    point: Confidential information is protected from destruction
+    controls:
+    - BCP-02
+    - CRY-01
+    status: covered
+  C1.2:
+  - id: C1.2-PF01
+    point: Confidential information for destruction is identified
+    controls:
+    - DAT-02
+    status: covered
+  - id: C1.2-PF02
+    point: Confidential information is destroyed
+    controls:
+    - DAT-02
+    status: covered
+  PI1.1:
+  - id: PI1.1-PF01
+    point: Functional and nonfunctional processing requirements and information specifications are identified
+    controls:
+    - PI-01
+    status: partial
+    note: Tailor to the company's product flows before the audit
+  - id: PI1.1-PF02
+    point: Data needed to support each product or service is defined
+    controls:
+    - PI-01
+    - DAT-04
+    status: partial
+    note: Tailor to the company's product flows before the audit
+  - id: PI1.1-PF03
+    point: Specifications are communicated to users and kept current
+    controls:
+    - PI-01
+    - GOV-07
+    status: partial
+    note: Publish customer-facing specifications or API documentation
+  PI1.2:
+  - id: PI1.2-PF01
+    point: Characteristics of processing inputs are defined
+    controls:
+    - PI-02
+    status: partial
+    note: Tailor to the company's product flows before the audit
+  - id: PI1.2-PF02
+    point: Inputs are evaluated for completeness and accuracy
+    controls:
+    - PI-02
+    status: covered
+    note: Validation covered by automated tests
+  - id: PI1.2-PF03
+    point: Records of system inputs are created and maintained
+    controls:
+    - PI-02
+    status: partial
+    note: Define input logging and its retention
+  PI1.3:
+  - id: PI1.3-PF01
+    point: Processing specifications are defined
+    controls:
+    - PI-03
+    status: partial
+    note: Tailor to the company's product flows before the audit
+  - id: PI1.3-PF02
+    point: Processing activities are defined
+    controls:
+    - PI-03
+    status: partial
+    note: Tailor to the company's product flows before the audit
+  - id: PI1.3-PF03
+    point: Production errors are detected and corrected
+    controls:
+    - PI-03
+    status: covered
+    note: Reconciliation alerts open issues
+  - id: PI1.3-PF04
+    point: System processing activities are recorded
+    controls:
+    - PI-03
+    status: partial
+    note: Define job run logging and retention
+  - id: PI1.3-PF05
+    point: Inputs are processed completely, accurately and on time
+    controls:
+    - PI-03
+    status: partial
+    note: Set and monitor processing SLAs
+  PI1.4:
+  - id: PI1.4-PF01
+    point: Outputs are protected
+    controls:
+    - PI-04
+    - CRY-01
+    status: covered
+  - id: PI1.4-PF02
+    point: Outputs are distributed only to intended parties
+    controls:
+    - PI-04
+    status: partial
+    note: Tailor to the company's product flows before the audit
+  - id: PI1.4-PF03
+    point: Outputs are distributed completely and accurately
+    controls:
+    - PI-04
+    status: partial
+    note: Add output reconciliation checks
+  - id: PI1.4-PF04
+    point: Records of output activities are maintained
+    controls:
+    - PI-04
+    status: partial
+    note: Define delivery logging and retention
+  PI1.5:
+  - id: PI1.5-PF01
+    point: Stored items are protected
+    controls:
+    - PI-05
+    - CRY-01
+    status: covered
+  - id: PI1.5-PF02
+    point: System records are archived and protected
+    controls:
+    - PI-05
+    - BCP-02
+    status: covered
+  - id: PI1.5-PF03
+    point: Data is stored completely, accurately and on time
+    controls:
+    - PI-05
+    status: partial
+    note: Add integrity checks on critical data stores
+  - id: PI1.5-PF04
+    point: Records of storage activities are maintained
+    controls:
+    - PI-05
+    status: partial
+    note: Define storage activity logging
+  P1.1:
+  - id: P1.1-PF01
+    point: Notice is communicated to data subjects
+    controls:
+    - PRV-01
+    status: covered
+  - id: P1.1-PF02
+    point: Notice is provided at or before collection
+    controls:
+    - PRV-01
+    status: partial
+    note: Confirm notice is shown at each collection point in the product
+  - id: P1.1-PF03
+    point: Notice covers all entities and activities that handle the data
+    controls:
+    - PRV-01
+    - DAT-04
+    status: covered
+  - id: P1.1-PF04
+    point: Notice uses clear and conspicuous language
+    controls:
+    - PRV-01
+    status: covered
+  P2.1:
+  - id: P2.1-PF01
+    point: Choices available to data subjects are communicated
+    controls:
+    - PRV-01
+    - PRV-02
+    status: covered
+  - id: P2.1-PF02
+    point: Consequences of denying or withdrawing consent are communicated
+    controls:
+    - PRV-02
+    status: partial
+    note: Add to consent screens and notice
+  - id: P2.1-PF03
+    point: Implicit or explicit consent is obtained
+    controls:
+    - PRV-02
+    status: covered
+  - id: P2.1-PF04
+    point: Consent is documented and obtained for new purposes and uses
+    controls:
+    - PRV-02
+    status: partial
+    note: Link consent changes to the architecture review (RSK-02)
+  - id: P2.1-PF05
+    point: Explicit consent is obtained for sensitive information
+    controls:
+    - PRV-02
+    status: covered
+  - id: P2.1-PF06
+    point: Consent is obtained for transfers where required
+    controls:
+    - PRV-02
+    status: partial
+    note: Define rules for cross-border transfers
+  P3.1:
+  - id: P3.1-PF01
+    point: Collection is limited to stated objectives
+    controls:
+    - PRV-03
+    status: covered
+  - id: P3.1-PF02
+    point: Collection is fair and lawful
+    controls:
+    - PRV-03
+    status: partial
+    note: Legal to document lawful basis per data category
+  - id: P3.1-PF03
+    point: Information is collected from reliable sources
+    controls:
+    - PRV-03
+    status: partial
+    note: Tailor to the company's product flows before the audit
+  - id: P3.1-PF04
+    point: Data subjects are informed when additional information is acquired
+    controls:
+    - PRV-03
+    - PRV-01
+    status: partial
+    note: Define notice for data obtained from third parties
+  P3.2:
+  - id: P3.2-PF01
+    point: Explicit consent is obtained before collecting sensitive information
+    controls:
+    - PRV-02
+    status: covered
+  - id: P3.2-PF02
+    point: Explicit consent to retain information is documented
+    controls:
+    - PRV-02
+    status: covered
+  P4.1:
+  - id: P4.1-PF01
+    point: Personal information is used only for intended purposes
+    controls:
+    - PRV-03
+    status: covered
+  P4.2:
+  - id: P4.2-PF01
+    point: Personal information is retained only as long as needed
+    controls:
+    - DAT-02
+    status: covered
+  - id: P4.2-PF02
+    point: Retained personal information is protected
+    controls:
+    - DAT-02
+    - CRY-01
+    status: covered
+  P4.3:
+  - id: P4.3-PF01
+    point: Deletion requests are captured, identified and flagged
+    controls:
+    - DAT-02
+    - PRV-04
+    status: covered
+  - id: P4.3-PF02
+    point: Personal information is disposed of, destroyed or redacted
+    controls:
+    - DAT-02
+    status: covered
+  - id: P4.3-PF03
+    point: Destruction is performed securely and verified
+    controls:
+    - DAT-02
+    status: partial
+    note: Add deletion verification step to the deletion issue template
+  P5.1:
+  - id: P5.1-PF01
+    point: Identity of data subjects is authenticated before access
+    controls:
+    - PRV-04
+    status: partial
+    note: Define identity verification for access requests
+  - id: P5.1-PF02
+    point: Data subjects can access their personal information
+    controls:
+    - PRV-04
+    status: covered
+  - id: P5.1-PF03
+    point: Information is provided in understandable form within a reasonable time
+    controls:
+    - PRV-04
+    status: covered
+    note: Request SLA tracked on issues
+  - id: P5.1-PF04
+    point: Data subjects are told when access is denied and why
+    controls:
+    - PRV-04
+    status: partial
+    note: Add denial template and reason logging
+  P5.2:
+  - id: P5.2-PF01
+    point: Denials of correction requests are communicated
+    controls:
+    - PRV-04
+    status: partial
+    note: Add denial template and reason logging
+  - id: P5.2-PF02
+    point: Data subjects can update or correct their information
+    controls:
+    - PRV-04
+    status: covered
+  - id: P5.2-PF03
+    point: Corrections are passed to third parties that received the data
+    controls:
+    - PRV-04
+    - PRV-05
+    status: partial
+    note: Define downstream correction notices
+  P6.1:
+  - id: P6.1-PF01
+    point: Privacy policies are communicated to third parties
+    controls:
+    - PRV-05
+    - VEN-03
+    status: covered
+  - id: P6.1-PF02
+    point: Personal information is disclosed only when appropriate
+    controls:
+    - PRV-05
+    status: covered
+  - id: P6.1-PF03
+    point: Disclosure for new purposes requires consent
+    controls:
+    - PRV-05
+    - PRV-02
+    status: covered
+  - id: P6.1-PF04
+    point: Third-party privacy practices are evaluated
+    controls:
+    - VEN-02
+    status: covered
+  - id: P6.1-PF05
+    point: Privacy commitments are obtained from third parties
+    controls:
+    - VEN-03
+    status: covered
+  P6.2:
+  - id: P6.2-PF01
+    point: A record of authorized disclosures is created and retained
+    controls:
+    - PRV-05
+    status: covered
+  P6.3:
+  - id: P6.3-PF01
+    point: A record of detected or reported unauthorized disclosures is created and retained
+    controls:
+    - PRV-05
+    - IR-02
+    status: covered
+  P6.4:
+  - id: P6.4-PF01
+    point: Personal information is disclosed only to third parties with adequate commitments
+    controls:
+    - VEN-03
+    - VEN-01
+    status: covered
+  - id: P6.4-PF02
+    point: Third-party compliance with privacy commitments is assessed
+    controls:
+    - VEN-02
+    status: covered
+  - id: P6.4-PF03
+    point: Misuse of personal information by third parties is remediated
+    controls:
+    - VEN-02
+    - IR-02
+    status: partial
+    note: Add third-party misuse to the incident plan
+  P6.5:
+  - id: P6.5-PF01
+    point: Third parties report actual or suspected unauthorized disclosures
+    controls:
+    - VEN-03
+    status: covered
+  - id: P6.5-PF02
+    point: Reported unauthorized disclosures are acted on
+    controls:
+    - IR-02
+    - IR-04
+    status: covered
+  P6.6:
+  - id: P6.6-PF01
+    point: Breaches are reported to affected data subjects, regulators and others as required
+    controls:
+    - IR-04
+    status: covered
+  P6.7:
+  - id: P6.7-PF01
+    point: Types of personal information and handling are identified
+    controls:
+    - DAT-04
+    - PRV-05
+    status: covered
+  - id: P6.7-PF02
+    point: Requests for an accounting of disclosures are captured and answered
+    controls:
+    - PRV-05
+    status: partial
+    note: Define the request process and SLA
+  P7.1:
+  - id: P7.1-PF01
+    point: Accuracy and completeness of personal information are maintained
+    controls:
+    - PRV-04
+    status: partial
+    note: Tailor to the company's product flows before the audit
+  - id: P7.1-PF02
+    point: Relevance of personal information is maintained
+    controls:
+    - PRV-03
+    status: covered
+  P8.1:
+  - id: P8.1-PF01
+    point: Data subjects are told how to submit inquiries and complaints
+    controls:
+    - PRV-06
+    - PRV-01
+    status: covered
+  - id: P8.1-PF02
+    point: Inquiries, complaints and disputes are addressed
+    controls:
+    - PRV-06
+    status: covered
+  - id: P8.1-PF03
+    point: Dispute resolution and recourse are documented and communicated
+    controls:
+    - PRV-06
+    status: partial
+    note: Name the recourse mechanism in the notice
+  - id: P8.1-PF04
+    point: Compliance review results are documented and reported
+    controls:
+    - PRV-06
+    - GOV-03
+    status: covered
+  - id: P8.1-PF05
+    point: Instances of noncompliance are documented and reported
+    controls:
+    - PRV-06
+    - MON-02
+    status: covered
+  - id: P8.1-PF06
+    point: Privacy compliance is monitored on an ongoing basis
+    controls:
+    - PRV-06
+    status: partial
+    note: Add privacy metrics to the leadership review

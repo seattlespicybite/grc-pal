@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ status }} · GRC-pal</title><link rel="stylesheet" href="/static/app.css"></head>
+<body><main class="main narrow">
+<div class="card"><h1>{% if status == 401 %}Sign-in required{% elif status == 403 %}Access denied{% elif status == 404 %}Not found{% else %}Something went wrong{% endif %}</h1>
+<p class="sub">{{ message }}</p>
+{% if status == 403 %}<p>GRC-pal access is managed by your organization's GRC-pal admins. Ask them to add you with the right role.</p>{% endif %}
+{% if request_id %}<p class="sub">Reference: <span class="mono">{{ request_id }}</span> (quote this if you contact support)</p>{% endif %}
+<p><a class="btn ghost" href="/">Back to GRC-pal</a></p></div></main></body></html>

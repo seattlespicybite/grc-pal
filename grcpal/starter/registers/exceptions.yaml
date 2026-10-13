@@ -1,0 +1,17 @@
+# Exceptions and deficiencies (POA&M). Every failed control test, audit finding or
+# approved policy exception is recorded here with an owner and due date.
+# status: open | in_progress | remediated | risk_accepted
+# Automated failures also open labeled GitHub issues; link them in `issue`.
+
+exceptions: []
+#  - id: E-001
+#    control: IAM-01
+#    description: Legacy payroll app does not support SSO; local accounts with MFA
+#    type: policy_exception      # policy_exception | deficiency | audit_finding
+#    owner: it-lead
+#    opened: 2026-11-01
+#    due: 2027-03-31
+#    status: risk_accepted
+#    compensating_controls: [IAM-05]
+#    approved_by: executive-sponsor
+#    issue: null

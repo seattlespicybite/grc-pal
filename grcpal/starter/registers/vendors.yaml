@@ -1,0 +1,29 @@
+# Vendor register. Add every vendor that stores, processes or can access company or
+# customer data. tier: critical | high | moderate | low.
+# soc2_report_date: period end of the latest SOC 2 report reviewed (annual for critical).
+# Entries marked confirm: true are assumptions from the scope file; verify in Phase 0.
+
+vendors:
+  - name: Microsoft (Azure, Microsoft 365, Entra ID, Intune)
+    service: Cloud hosting, identity, productivity, endpoint management
+    tier: critical
+    data_access: customer data, employee data
+    subservice_org: true
+    owner: security-lead
+    soc2_report_date: null
+    cuec_mapped: false
+    contract_security_terms: null
+    next_review: null
+    confirm: true
+
+  - name: GitHub
+    service: Source control and CI/CD
+    tier: critical
+    data_access: source code, secrets in CI
+    subservice_org: true
+    owner: engineering-lead
+    soc2_report_date: null
+    cuec_mapped: false
+    contract_security_terms: null
+    next_review: null
+    confirm: true

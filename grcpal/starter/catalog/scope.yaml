@@ -1,0 +1,35 @@
+# SOC 2 scope. Edit after your scope decision; changes go through a
+# pull request approved by the executive sponsor (this PR history is CC3/CC5 evidence).
+
+organization: Example Co   # your organization's name
+report_type: SOC 2 Type 2
+first_window_months: 3
+
+# Categories tested in the next report. Controls for all five exist in the
+# catalog; only these are required to have full coverage by `grcpal validate`.
+in_scope_categories:
+  - security
+  - availability
+  - confidentiality
+  - processing_integrity   # remove if customers do not rely on processing accuracy; tailor PI-01 to PI-05
+  - privacy                # remove if you do not collect personal data from individuals; tailor PRV-01 to PRV-06
+
+deferred_categories: []
+
+# Assumed technology stack. Collectors are enabled per platform below.
+platforms:
+  identity: entra_id          # Microsoft Entra ID
+  productivity: m365          # Microsoft 365
+  endpoints: intune           # Microsoft Intune
+  cloud: azure                # Azure subscriptions
+  source_control: github      # github; leave empty to skip GitHub collectors (Azure DevOps not supported yet)
+  hr_system: csv_export       # HRIS export dropped into evidence-inbox until an API is chosen
+
+subservice_organizations:     # carved out; relies on their SOC 2 reports and CUECs
+  - Microsoft (Azure, Microsoft 365)
+  - GitHub
+
+open_questions:
+  - Does the organization process PHI? If yes, enable the hipaa mapping and HIPAA-specific controls.
+  - Confirm Git host (GitHub or Azure DevOps).
+  - Confirm HR system and whether it exposes an API for joiner/leaver events.

@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}My work{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>My work</h1><div class="sub">Evidence requests assigned to you or where you contribute · {{ cycle.name }}</div></div>
+<div><a class="btn {{ 'ghost' if show != 'open' }} small" href="/work?show=open">Open</a> <a class="btn {{ 'ghost' if show != 'all' }} small" href="/work?show=all">All</a></div></div>
+<div class="card table-wrap">{% if rows %}<table><thead><tr><th>Request</th><th>Controls</th><th>Due</th><th>Status</th></tr></thead><tbody>
+{% for a in rows %}<tr><td><a href="/assignments/{{ a.RowKey }}"><b>{{ a.label.splitlines()[0] }}</b></a>{% if a.assignee != user.email %}<div class="sub">Contributor · assignee {{ a.assignee }}</div>{% endif %}{% if a.previous %}<div class="sub">Carried over from last cycle</div>{% endif %}</td>
+<td class="tags">{% for c in a.controls %}<span><a href="/controls/{{ c }}">{{ c }}</a></span>{% endfor %}</td><td>{{ a.due }}</td>
+<td>{{ pill('overdue', 'Overdue') if a.overdue else pill(a.status) }}</td></tr>{% endfor %}</tbody></table>
+{% else %}<div class="empty">Nothing assigned to you{{ ' right now' if show == 'open' }}.</div>{% endif %}</div>
+{% if owned %}<h2>Controls you own</h2><div class="card table-wrap"><table><tbody>
+{% for c in owned %}<tr><td><a href="/controls/{{ c.id }}"><b>{{ c.id }}</b></a> {{ c.title }}</td><td class="sub">{{ c.frequency }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% if managed %}<h2>All open requests</h2><div class="card table-wrap"><table><thead><tr><th>Request</th><th>Assignee</th><th>Due</th><th>Status</th></tr></thead><tbody>
+{% for a in managed %}<tr><td><a href="/assignments/{{ a.RowKey }}">{{ a.label.splitlines()[0] }}</a></td><td>{{ a.assignee }}</td><td>{{ a.due }}</td>
+<td>{{ pill('overdue', 'Overdue') if a.overdue else pill(a.status) }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% endblock %}

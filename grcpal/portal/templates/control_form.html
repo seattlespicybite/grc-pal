@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% block title %}{{ 'Edit ' ~ row.RowKey if row else 'New control' }}{% endblock %}
+{% block content %}
+{% set v = form if form else {} %}
+{% macro val(key, default='') -%}{{ v[key] if key in v else default }}{%- endmacro %}
+<div class="page-head"><div><div class="sub"><a href="/controls">Controls</a> /</div><h1>{{ 'Edit ' ~ row.RowKey if row else 'New custom control' }}</h1>
+<div class="sub">A control you define for any framework: evidence people upload, links to documents kept elsewhere, and automated URL or certificate checks you add after saving.</div></div></div>
+<form method="post" action="{{ '/controls/' ~ row.RowKey ~ '/edit' if row else '/controls/new' }}"><input type="hidden" name="csrf" value="{{ csrf }}">
+<section class="card"><h2>What the control is</h2>
+<div class="form-row"><div><label for="cid">Control ID</label><input id="cid" name="id" required value="{{ row.RowKey if row else val('id') }}" {{ 'readonly' if row }} placeholder="CUS-01">
+<div class="hint">Capital letters, digits, dots and hyphens. Cannot change later.</div></div>
+<div><label for="fr">How often it operates</label><select id="fr" name="frequency">{% for f in frequencies %}<option {{ 'selected' if f == (row.frequency if row else val('frequency', 'annual')) }}>{{ f }}</option>{% endfor %}</select>
+<div class="hint">Drives how old evidence may be before it shows as stale.</div></div></div>
+<label for="tt">Title</label><input id="tt" name="title" required value="{{ row.title if row else val('title') }}" placeholder="Encryption keys are rotated yearly">
+<label for="de">Description</label><textarea id="de" name="description" rows="3" placeholder="What is done, by whom, and how you know it happened">{{ row.description if row else val('description') }}</textarea>
+<div class="form-row"><div><label for="ow">Owner role</label><select id="ow" name="owner"><option value="">(none: use emails)</option>{% for r in roles_list %}<option value="{{ r }}" {{ 'selected' if r == (row.owner if row else val('owner')) }}>{{ r }}</option>{% endfor %}</select>
+<div class="hint">A role from catalog/roles.yaml, or leave empty and list people.</div></div>
+<div><label for="oe">Owner emails</label><input id="oe" name="owner_emails" value="{{ (row.owner_emails|join(', ')) if row else val('owner_emails') }}" placeholder="name@example.com">
+<div class="hint">They get contributor access to this control and its reminders.</div></div></div></section>
+
+<section class="card"><h2>Frameworks</h2><p class="sub">Enter the requirement IDs this control satisfies, separated by commas. At least one.</p>
+{% for fid, fw in frameworks.items() %}{% set current = (row.mappings.get(fid, [])|join(', ')) if row else val('map_' ~ fid) %}
+<div class="field"><label for="m-{{ fid }}">{{ fw.name }}</label><input id="m-{{ fid }}" name="map_{{ fid }}" value="{{ current }}" list="dl-{{ fid }}" placeholder="{{ (fw.requirements|list)[:2]|join(', ') }}">
+<datalist id="dl-{{ fid }}">{% for rid, r in fw.requirements.items() %}<option value="{{ rid }}">{{ r.title }}</option>{% endfor %}</datalist></div>{% endfor %}
+<p class="hint">Need a standard that is not listed? <a href="/frameworks/new">Create a framework</a> first.</p></section>
+
+<section class="card"><h2>Evidence</h2>
+<label for="ev">Evidence people upload</label><textarea id="ev" name="evidence_wanted" rows="3" placeholder="One per line, e.g. Key rotation ticket with approver and date">{{ (row.evidence|map(attribute='artifact')|join('\n')) if row else val('evidence_wanted') }}</textarea>
+<div class="hint">Shown on the control, in requests and in reminder emails, so people know exactly what to provide.</div>
+<label for="ln">Links to resources</label><textarea id="ln" name="links" rows="3" placeholder="Key management procedure | https://acme.sharepoint.com/sites/security/keys.docx">{% if row %}{% for l in row.links %}{{ l.name }} | {{ l.url }}
+{% endfor %}{% else %}{{ val('links') }}{% endif %}</textarea>
+<div class="hint">One per line as Name | URL. Documents kept in SharePoint, Confluence, a ticket system or a vendor portal.</div>
+<p class="sub">After saving you can add automated checks: request a URL and test the response, or check a certificate.</p></section>
+<div class="actions"><button class="btn" type="submit">{{ 'Save changes' if row else 'Create control' }}</button> <a class="btn ghost" href="{{ '/controls/' ~ row.RowKey if row else '/controls' }}">Cancel</a></div>
+</form>
+{% endblock %}

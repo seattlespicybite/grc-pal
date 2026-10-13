@@ -1,0 +1,36 @@
+{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>SOC 2 program health</h1>
+<div class="sub">{{ org }} · {{ cycle.name }} ({{ cycle.start }} to {{ cycle.end }}) · {{ data.controls|length }} controls · updated {{ data.generated }}</div></div>
+{% if user.sees_everything %}<a class="btn ghost small" href="/cycles/{{ cycle.RowKey }}/export">Download auditor export</a>{% endif %}</div>
+<div class="grid g5">
+{% for s in ['ok', 'accepted', 'findings', 'attention', 'not_started'] %}
+  <a class="stat" href="/controls?status={{ s }}"><div class="n {{ s }}">{{ data.counts.get(s, 0) }}</div><div class="l">{{ status_labels[s] }}</div></a>
+{% endfor %}
+</div>
+<div class="grid g2 mt-l">
+  <section class="card"><h2>By category</h2>
+  {% for cat, name in category_names.items() %}{% set c = by_cat.get(cat, {}) %}{% set total = c.values()|sum %}
+    <div class="mb"><div class="row-between"><a href="/controls?category={{ cat }}"><b>{{ name }}</b></a>
+      <span class="sub">{{ c.get('ok', 0) + c.get('accepted', 0) }} of {{ total }} operating</span></div>
+      <svg class="bar" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label="{{ name }} status">{% set ns = namespace(x=0) %}{% for s in ['ok', 'accepted', 'findings', 'attention', 'not_started'] %}{% if c.get(s) %}{% set w = 100 * c[s] / total %}<rect class="fill-{{ s }}" x="{{ ns.x|round(2) }}" y="0" width="{{ w|round(2) }}" height="10"/>{% set ns.x = ns.x + w %}{% endif %}{% endfor %}</svg></div>
+  {% endfor %}
+  <div class="sub">A control counts in every category whose criteria it supports.</div></section>
+  <section class="card"><h2>Needs attention</h2>
+  {% if attention %}<table><tbody>{% for c in attention %}<tr><td><a href="/controls/{{ c.id }}"><b>{{ c.id }}</b></a> {{ c.title }}</td><td>{{ pill(c.status) }}</td></tr>{% endfor %}</tbody></table>
+  {% else %}<div class="empty">Nothing needs attention.</div>{% endif %}</section>
+</div>
+<div class="grid g2">
+<section class="card"><h2>Evidence requests this cycle</h2>
+<div class="grid g4 mini">{% for s, label in [('open', 'Open'), ('submitted', 'Waiting for review'), ('returned', 'Returned'), ('approved', 'Approved')] %}
+<div><div class="n-s">{{ progress[s] }}</div><div class="sub">{{ label }}</div></div>{% endfor %}</div>
+{% if user.is_admin and review_count %}<p class="mt"><a class="btn small" href="/reviews">Review {{ review_count }} submission{{ 's' if review_count != 1 }}</a></p>{% endif %}</section>
+<section class="card"><h2>Policy acknowledgments</h2>
+{% if policies %}<table><tbody>{% for pol, st in policies %}{% set total = st.acked|length + st.missing|length %}
+<tr><td><a href="/policies/{{ pol.id }}">{{ pol.title }}</a> <span class="sub">v{{ pol.version }}</span></td><td class="nowrap">{{ st.acked|length }} / {{ total }}</td></tr>{% endfor %}</tbody></table>
+{% else %}<div class="empty">No policies published yet.</div>{% endif %}</section></div>
+<section class="card"><h2>Overdue requests</h2>
+{% if overdue %}<div class="table-wrap"><table><thead><tr><th>Work</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>
+{% for a in overdue %}<tr><td><a href="/assignments/{{ a.RowKey }}">{{ a.label.splitlines()[0] }}</a></td><td>{{ a.assignee }}</td><td>{{ a.due }}</td><td>{{ pill('overdue', 'Overdue') }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<div class="empty">No overdue requests.</div>{% endif %}</section>
+{% endblock %}

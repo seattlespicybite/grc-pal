@@ -1,0 +1,21 @@
+name: New vendor security review
+description: Security review before a vendor gets access to company or customer data (VEN-01)
+title: "[Vendor] <vendor name>"
+labels: [grc, vendor-review, "control:VEN-01"]
+body:
+  - type: input
+    id: vendor
+    attributes: {label: Vendor and service}
+    validations: {required: true}
+  - type: dropdown
+    id: data
+    attributes: {label: Data the vendor will access, options: [None, Internal, Confidential, Customer Confidential, Personal data]}
+    validations: {required: true}
+  - type: textarea
+    id: assurance
+    attributes: {label: Assurance received, description: "SOC 2 report period, ISO certificate, or questionnaire. Attach files."}
+  - type: textarea
+    id: contract
+    attributes: {label: "Contract security terms (DPA, breach notice, confidentiality)"}
+  - type: markdown
+    attributes: {value: "Add the vendor to registers/vendors.yaml in a PR. Security lead approves by commenting **Approved**."}

@@ -1,0 +1,42 @@
+# Checks as code. Each check runs on the collection schedule (and with `grcpal checks run`), stores its
+# request and result as write-once evidence, and opens findings when an assertion fails. Reference a
+# check from a control with `via: "check:<id>"`.
+#
+# Types:
+#   http     request a URL and test the response (status, text, regex, JSON path, header, time)
+#   tls      connect to a host and test the certificate expiry and TLS version
+#   command  run a program and test its exit code and output. Only allowed here, in the reviewed
+#            repository; the web portal never runs commands.
+#
+# Examples (remove the leading # to use):
+#
+# checks:
+#   - id: website-security-headers
+#     control: NET-02
+#     type: http
+#     title: Public site sends security headers
+#     method: GET
+#     url: https://www.example.com/
+#     expect_status: "200"
+#     assertions:
+#       - {kind: header, path: strict-transport-security, op: contains, value: "max-age"}
+#       - {kind: header, path: x-frame-options, op: exists}
+#   - id: status-api-healthy
+#     control: BCP-02
+#     type: http
+#     url: https://status.example.com/api/v2/status.json
+#     assertions:
+#       - {kind: json_path, path: status.indicator, op: equals, value: none}
+#     store_response: true
+#   - id: app-certificate
+#     control: CRY-02
+#     type: tls
+#     host: app.example.com
+#     min_days: 21
+#   - id: terraform-plan-clean
+#     control: CHG-03
+#     type: command
+#     run: terraform -chdir=infra plan -detailed-exitcode -no-color
+#     expect_exit: 0
+#     timeout: 300
+checks: []

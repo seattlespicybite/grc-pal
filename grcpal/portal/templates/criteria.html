@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}Criteria{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Criteria and points of focus</h1><div class="sub">{{ rows|length }} criteria</div></div></div>
+<form class="filters" method="get" action="/criteria"><select name="category" data-autosubmit aria-label="Category"><option value="">All categories</option>
+{% for k, v in category_names.items() %}<option value="{{ k }}" {{ 'selected' if k == category }}>{{ v }}</option>{% endfor %}</select>
+<button class="btn small" type="submit">Filter</button></form>
+<div class="card table-wrap"><table><thead><tr><th>Criterion</th><th>Title</th><th>Category</th><th>Points covered</th><th>Open items</th><th>Control status</th></tr></thead><tbody>
+{% for r in rows %}<tr><td><a href="/criteria/{{ r.id }}"><b>{{ r.id }}</b></a></td><td>{{ r.title }}</td><td>{{ category_names[r.category] }}</td>
+<td>{{ r.covered }} / {{ r.points }}</td><td>{% if r.gaps %}{{ pill('partial', r.gaps ~ ' to close') }}{% else %}<span class="sub">none</span>{% endif %}</td>
+<td>{% for s in r.statuses %}{{ pill(s) }} {% endfor %}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

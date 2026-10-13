@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% block title %}{{ pol.title }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="sub"><a href="/policies">Policies</a> /</div><h1>{{ pol.title }}</h1>
+<div class="sub">Version {{ pol.version }} · effective {{ pol.effective or 'n/a' }} · owner {{ pol.owner }} · approver {{ pol.approver }} · next review {{ pol.next_review or 'n/a' }}</div></div></div>
+<div class="grid g-main">
+<section class="card"><div class="policy-text">{{ pol.body }}</div>
+<p class="sub mono mt">sha256 {{ pol.sha256[:24] }}…</p></section>
+<aside>
+<section class="card"><h2>Acknowledgment</h2>
+{% if user.is_auditor %}<p class="sub">Auditors see who acknowledged below.</p>
+{% elif acked %}<p><span class="pill ok">Acknowledged</span> {{ st.rows[user.email].at[:10] }}</p>
+{% elif pol.acknowledge %}<form method="post" action="/policies/{{ pol.id }}/ack"><input type="hidden" name="csrf" value="{{ csrf }}">
+<p class="sub">By confirming, you state that you have read and will follow version {{ pol.version }} of this policy.</p>
+<button class="btn" type="submit">I have read and accept this policy</button></form>
+{% else %}<p class="sub">No acknowledgment required.</p>{% endif %}</section>
+{% if user.sees_everything %}<section class="card"><h2>{{ st.acked|length }} of {{ st.acked|length + st.missing|length }} acknowledged</h2>
+{% if st.missing %}<h3>Not yet</h3><ul class="list">{% for e in st.missing %}<li>{{ e }}</li>{% endfor %}</ul>
+{% if user.is_admin %}<form method="post" action="/policies/{{ pol.id }}/remind" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small" type="submit">Email a reminder to {{ st.missing|length }}</button></form>{% endif %}{% endif %}
+{% if st.acked %}<details class="mt"><summary>Acknowledged</summary><ul class="list">{% for e in st.acked %}<li>{{ e }} <span class="sub">{{ st.rows[e].at[:10] }}</span></li>{% endfor %}</ul></details>{% endif %}
+</section>{% endif %}
+</aside></div>
+{% endblock %}

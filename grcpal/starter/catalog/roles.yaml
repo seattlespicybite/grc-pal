@@ -1,0 +1,15 @@
+# Control owner roles. Assign a named person, work email (portal sign-in) and GitHub username
+# to each role in Phase 1. `email` may be a list for roles held by several people.
+# Controls reference roles, never individuals, so staffing changes need one edit here.
+# `github` is used to verify that the right approver approved a task issue.
+
+roles:
+  executive-sponsor: {title: Executive sponsor (VP of Security and Technology), person: TBD, email: TBD, github: TBD}
+  security-lead:     {title: Senior Information Security Engineer, person: TBD, email: TBD, github: TBD}
+  engineering-lead:  {title: Engineering lead / CTO delegate, person: TBD, email: TBD, github: TBD}
+  it-lead:           {title: IT lead, person: TBD, email: TBD, github: TBD}
+  hr-lead:           {title: HR lead, person: TBD, email: TBD, github: TBD}
+  legal-lead:        {title: Legal counsel, person: TBD, email: TBD, github: TBD}
+  finance-lead:      {title: Finance lead, person: TBD, email: TBD, github: TBD}
+  system-owners:     {title: Owners of each in-scope system (access reviews), person: per system, email: TBD, github: TBD}
+  ceo:               {title: Chief Executive Officer, person: TBD, email: TBD, github: TBD}
