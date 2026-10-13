@@ -43,6 +43,6 @@ jobs:
           subject-name: ghcr.io/${{ github.repository_owner }}/grc-pal
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
