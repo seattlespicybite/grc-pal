@@ -270,3 +270,4 @@ label.check, label.toggle { display: flex; gap: 8px; align-items: center; font-w
   border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 18px; }
 .nav-bar-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .role-library { background: #7c5cc4; color: #fff; }
+.def-form input:not([type=checkbox]), .def-form select, .def-form textarea { width: 100%; }

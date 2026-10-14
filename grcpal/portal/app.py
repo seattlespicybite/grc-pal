@@ -351,6 +351,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                       can_upload=portal.can_upload_control(user, control_id),
                       can_comment=portal.can_comment(user, [control_id]),
                       wanted=wanted, how=how, trail=trail, list_qs=list_qs,
+                      def_history=portal.control_definition_history(control_id) if user.sees_everything else [],
                       nav_active="framework" if trail else "",
                       owner_emails=portal.owner_emails(control_id), criteria=portal.catalog.criteria,
                       max_mb=MAX_UPLOAD_BYTES // (1024 * 1024),

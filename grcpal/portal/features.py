@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import json
 import os
 import re
 import time
@@ -57,7 +58,11 @@ class FeaturesMixin:
             for chk in self.base_catalog.checks:
                 repo_checks.setdefault(chk.get("control"), []).append(chk)
             controls = []
+            edits = {r["RowKey"]: r for r in self.store.list("controledits", "c")}
+            known = self.frameworks if edits else {}
             for c in self.base_catalog.controls:
+                if c["id"] in edits:
+                    c = self._apply_edit(c, edits[c["id"]], known)
                 extra = [{"artifact": k.get("title") or f"Check {k['RowKey']}", "via": f"check:{k['RowKey']}"}
                          for k in self._ui_checks_for(c["id"])
                          if f"check:{k['RowKey']}" not in {str(e["via"]) for e in c["evidence"]}]
@@ -67,6 +72,139 @@ class FeaturesMixin:
             cat._checks = self.base_catalog.checks
             self._catalog_cache = cat
         return self._catalog_cache
+
+    # ================================================================ control definitions (library owner)
+    EDITABLE = ("title", "description", "owner", "owner_emails", "mappings", "extra_evidence")
+
+    @staticmethod
+    def _base_fingerprint(c: dict) -> str:
+        keys = ("title", "description", "owner", "criteria", "iso27001", "mappings", "evidence")
+        return hashlib.sha256(json.dumps({k: c.get(k) for k in keys}, sort_keys=True, default=str).encode()).hexdigest()
+
+    def _apply_edit(self, base: dict, row: dict, known: dict) -> dict:
+        """The control as the library owner defined it: their fields on top of the starter catalog."""
+        e = row.get("edit") or {}
+        c = {**base, "mappings": dict(base.get("mappings") or {})}
+        for k in ("title", "description", "owner"):
+            if e.get(k) is not None:
+                c[k] = e[k]
+        if e.get("owner_emails") is not None:
+            c["owner_emails"] = list(e["owner_emails"])
+        for fid, ids in (e.get("mappings") or {}).items():
+            fw = known.get(fid)
+            if fw and fw.control_field:
+                c[fw.control_field] = list(ids)
+            c["mappings"][fid] = list(ids)
+        if e.get("extra_evidence"):
+            c["evidence"] = list(base["evidence"]) + [{"artifact": a, "via": "upload"} for a in e["extra_evidence"]]
+        c["edited"] = {"version": row.get("version", 1), "by": row.get("updated_by", ""), "at": row.get("updated_at", ""),
+                       "reason": row.get("reason", ""), "starter_changed": row.get("base_hash") != self._base_fingerprint(base)}
+        return c
+
+    def control_definition(self, control_id: str) -> dict:
+        """Current definition values for the edit form."""
+        c = self.catalog.control(control_id)
+        if not c or c.get("custom"):
+            raise self._invalid("Unknown control")
+        base = self.base_catalog.control(control_id)
+        manual = [e["artifact"] for e in c["evidence"] if e.get("via") == "upload"
+                  and e not in (base.get("evidence") or [])]
+        return {"title": c["title"].strip(), "description": (c.get("description") or "").strip(), "owner": c.get("owner", ""),
+                "owner_emails": c.get("owner_emails") or [], "extra_evidence": manual,
+                "mappings": {fid: fw_mod.requirements_of(c, fw) for fid, fw in self.frameworks_in_use.items()}}
+
+    def uncovered_by_change(self, control_id: str, new_maps: dict) -> list[str]:
+        """In-scope SOC 2 criteria that would be left with no control if this control's mappings change."""
+        if "soc2" not in new_maps:
+            return []
+        cov = self.catalog.coverage()
+        out = []
+        for crit in self.catalog.in_scope_criteria:
+            ctls = cov.get(crit, [])
+            if ctls == [control_id] and crit not in new_maps["soc2"]:
+                out.append(crit)
+        return out
+
+    def save_control_definition(self, actor, control_id: str, form: dict) -> dict:
+        """Change a built-in control's owners, wording, evidence wanted and framework mappings.
+        Library owner only; a reason is required; every version is kept for auditors."""
+        self._library(actor)
+        before = self.control_definition(control_id)
+        reason = (form.get("reason") or "").strip()
+        if len(reason) < 10:
+            raise self._invalid("Say why you are changing this control (at least 10 characters); auditors will read it")
+        title = (form.get("title") or "").strip()
+        if len(title) < 3:
+            raise self._invalid("Give the control a title")
+        owner = (form.get("owner") or "").strip()
+        if owner and owner not in self.base_catalog.roles:
+            raise self._invalid(f"Owner role '{owner}' is not in roles.yaml")
+        emails = sorted({x.strip().lower() for x in re.split(r"[,;\s]+", form.get("owner_emails", "")) if x.strip()})
+        for x in emails:
+            if not self._email_ok(x):
+                raise self._invalid(f"'{x}' is not a valid email address")
+        if not owner and not emails:
+            raise self._invalid("A control needs an owner: a role, named people, or both")
+        maps = {}
+        for fid, fw in self.frameworks_in_use.items():
+            ids = list(dict.fromkeys(x.strip() for x in re.split(r"[,\s]+", form.get(f"map_{fid}", "")) if x.strip()))
+            unknown = [x for x in ids if x not in fw.requirements]
+            if unknown:
+                raise self._invalid(f"{fw.name}: unknown requirement(s) {', '.join(unknown[:5])}")
+            maps[fid] = ids
+        if not any(maps.values()):
+            raise self._invalid("Map the control to at least one requirement")
+        gaps = self.uncovered_by_change(control_id, maps)
+        if gaps and form.get("confirm_uncovered") != "yes":
+            raise self._invalid(f"This would leave {', '.join(gaps)} with no control. Map another control there first, "
+                                "or tick the box to confirm you accept the gap.")
+        after = {"title": title[:200], "description": (form.get("description") or "").strip()[:4000], "owner": owner,
+                 "owner_emails": emails, "mappings": maps,
+                 "extra_evidence": [x.strip()[:300] for x in (form.get("extra_evidence") or "").splitlines() if x.strip()][:30]}
+        if after == before:
+            return before
+        for x in emails:
+            self._ensure_contributor(actor, x)
+        current = self.store.get("controledits", "c", control_id) or {}
+        version = int(current.get("version", 0)) + 1
+        now = _now()
+        self.store.upsert("controledits", {"PartitionKey": "c", "RowKey": control_id, "edit": after, "version": version,
+                                           "base_hash": self._base_fingerprint(self.base_catalog.control(control_id)),
+                                           "updated_by": actor.email, "updated_at": now, "reason": reason[:1000]})
+        self._history(actor, control_id, "edit", version, before, after, reason, gaps)
+        self._changed()
+        return after
+
+    def reset_control_definition(self, actor, control_id: str, reason: str) -> None:
+        self._library(actor)
+        current = self.store.get("controledits", "c", control_id)
+        if not current:
+            raise self._invalid("This control already uses the starter definition")
+        if len((reason or "").strip()) < 10:
+            raise self._invalid("Say why you are resetting this control (at least 10 characters)")
+        before = self.control_definition(control_id)
+        self.store.delete("controledits", "c", control_id)
+        self._changed()
+        self._history(actor, control_id, "reset", int(current.get("version", 0)) + 1, before,
+                      self.control_definition(control_id), reason.strip(), [])
+
+    def _history(self, actor, control_id: str, action: str, version: int, before: dict, after: dict, reason: str,
+                 gaps: list) -> None:
+        now = _now()
+        changed = sorted(k for k in after if before.get(k) != after.get(k))
+        self.store.insert("controlhistory", {"PartitionKey": "h", "RowKey": f"{control_id}~{version:05d}",
+                                             "control": control_id, "version": version, "action": action,
+                                             "by": actor.email, "at": now, "reason": reason[:1000],
+                                             "fields": ", ".join(changed), "before": before, "after": after})
+        self.audit(actor, f"control.{action}", control_id, {"controls": [control_id], "version": version,
+                                                            "fields": changed, "reason": reason[:300],
+                                                            "accepted_gaps": gaps or None})
+
+    def control_definition_history(self, control_id: str | None = None) -> list[dict]:
+        rows = self.store.list("controlhistory", "h")
+        if control_id:
+            rows = [r for r in rows if r["control"] == control_id]
+        return sorted(rows, key=lambda r: (r["control"], r["version"]), reverse=bool(control_id))
 
     @property
     def frameworks(self) -> dict:

@@ -4,7 +4,8 @@
 {% if trail %}<nav class="sub" aria-label="Breadcrumb"><a href="/criteria">SOC 2</a> / <a href="/criteria?open={{ trail.family }}#{{ trail.family }}">{{ trail.family }} {{ trail.family_name }}</a> / <a href="/criteria/{{ trail.criterion }}">{{ trail.criterion }}</a> /</nav>
 {% else %}<nav class="sub" aria-label="Breadcrumb"><a href="{{ back_list }}">{{ 'My controls' if user.is_contributor else 'Controls' }}</a> /</nav>{% endif %}
 <div class="page-head"><div><h1>{{ ctl.id }} · {{ ctl.title }}</h1>
-<div class="sub">{% if ctl.custom %}<span class="pill custom">Custom control</span> {% if user.is_admin %}<a href="/controls/{{ ctl.id }}/edit">Edit</a> · {% endif %}{% endif %}Owner: {{ ctl.owner }}{% if owner_emails %} ({{ owner_emails|join(', ') }}){% endif %} · {{ ctl.frequency }} · {{ ctl.type }} · cycle {{ cycle.name }}</div></div>
+{% set is_lib = user.is_admin and user.email == library_owner %}
+<div class="sub">{% if ctl.custom %}<span class="pill custom">Custom control</span> {% elif ctl.edited %}<span class="pill accepted">Edited · v{{ ctl.edited.version }}</span> {% endif %}{% if is_lib %}<a href="/controls/{{ ctl.id }}/{{ 'edit' if ctl.custom else 'definition' }}">Edit control</a> · {% endif %}Owner: {{ ctl.owner or 'named people' }}{% if owner_emails %} ({{ owner_emails|join(', ') }}){% endif %} · {{ ctl.frequency }} · {{ ctl.type }} · cycle {{ cycle.name }}</div></div>
 <div class="head-actions">{{ pill(status.status) }}{% if status.override %} <span class="sub">computed: {{ status_labels.get(status.computed_status, status.computed_status) }}</span>{% endif %}
 {% if user.is_admin %}<form method="post" action="/controls/{{ ctl.id }}/remind" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}">
 <button class="btn small" type="submit" title="Email the people responsible for this control with a link back here">Send reminder</button></form>{% endif %}</div></div>
@@ -139,6 +140,19 @@
 <table><thead><tr><th>Point</th><th>Status</th><th>Note</th></tr></thead><tbody>
 {% for crit, pt in points %}<tr><td>{% if user.sees_everything %}<a href="/criteria/{{ crit }}">{{ pt.id }}</a>{% else %}<span class="mono">{{ pt.id }}</span>{% endif %} {{ pt.point }}</td><td>{{ pill(pt.status) }}</td><td class="sub">{{ pt.note or '' }}</td></tr>{% endfor %}
 </tbody></table></section>{% endif %}
+
+{% if ctl.edited and ctl.edited.starter_changed and user.sees_everything %}<div class="flash err" role="status">The starter definition of {{ ctl.id }} changed in a GRC-pal update after it was edited here. Your version is still in use; compare it with the starter text {% if is_lib %}and edit or reset it{% endif %} below.</div>{% endif %}
+{% if user.sees_everything and (def_history or ctl.edited) %}<section class="card" id="definition-history"><h2>Definition history</h2>
+<p class="sub">Every change to this control's owners, wording, evidence wanted or mappings, with the reason given. Included in the auditor export.</p>
+<div class="table-wrap"><table><thead><tr><th>Version</th><th>When</th><th>By</th><th>Changed</th><th>Reason</th></tr></thead><tbody>
+{% for h in def_history %}<tr><td>v{{ h.version }}{% if h.action == 'reset' %} <span class="pill na">reset</span>{% endif %}</td><td class="nowrap">{{ when(h.at) }}</td><td>{{ h.by }}</td><td class="sub">{{ h.fields or '-' }}</td><td>{{ h.reason }}</td></tr>
+<tr class="detail-row"><td></td><td colspan="4"><details><summary>Before and after</summary><div class="grid g2 mt-s">
+<div><h3>Before</h3><dl class="kv">{% for k, v in h.before.items() %}<dt>{{ k|replace('_', ' ') }}</dt><dd>{{ v if v is string else (v|tojson if v is mapping else v|join(', ')) }}</dd>{% endfor %}</dl></div>
+<div><h3>After</h3><dl class="kv">{% for k, v in h.after.items() %}<dt>{{ k|replace('_', ' ') }}</dt><dd>{{ v if v is string else (v|tojson if v is mapping else v|join(', ')) }}</dd>{% endfor %}</dl></div></div></details></td></tr>
+{% endfor %}</tbody></table></div>
+{% if is_lib and ctl.edited %}<details class="mt"><summary>Reset to the starter definition</summary><form method="post" action="/controls/{{ ctl.id }}/definition/reset" class="mt-s" data-confirm="Reset {{ ctl.id }} to the starter definition?">
+<input type="hidden" name="csrf" value="{{ csrf }}"><label>Reason<input name="reason" required minlength="10"></label>
+<div class="actions"><button class="btn ghost small" type="submit">Reset</button></div></form></details>{% endif %}</section>{% endif %}
 
 {% if history %}<section class="card"><details><summary>History ({{ history|length }} events)</summary>
 <table class="mt"><tbody>{% for h in history %}<tr><td class="nowrap">{{ when(h.at) }}</td><td>{{ h.actor }}</td><td class="mono">{{ h.action }}</td>

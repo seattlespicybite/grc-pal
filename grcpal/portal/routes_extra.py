@@ -288,7 +288,7 @@ def register(app, h) -> None:
 
     @app.get("/frameworks/new", response_class=HTMLResponse)
     def framework_new(request: Request, fid: str = "", user: User = Depends(current_user)):
-        admin(user)
+        library(user)
         row = p().store.get("frameworks", "f", fid) if fid else None
         return render(request, user, "framework_form.html", row=row)
 
@@ -320,7 +320,7 @@ def register(app, h) -> None:
     # ================================================================ custom controls
     @app.get("/controls/new", response_class=HTMLResponse)
     def control_new(request: Request, user: User = Depends(current_user)):
-        admin(user)
+        library(user)
         return render(request, user, "control_form.html", row=None, frameworks=p().frameworks_in_use,
                       roles_list=sorted(p().base_catalog.roles), frequencies=("continuous", "daily", "weekly", "monthly",
                                                                              "quarterly", "annual", "event"))
@@ -337,12 +337,60 @@ def register(app, h) -> None:
                           frequencies=("continuous", "daily", "weekly", "monthly", "quarterly", "annual", "event"))
         return back(f"/controls/{row['RowKey']}", msg="Control created. Add checks or assign evidence collection below.")
 
+    def library(user: User) -> None:
+        if not p().is_library_owner(user):
+            raise h.HTTPError(403, "Only the control library owner can change control definitions")
+
+    @app.get("/controls/{cid}/definition", response_class=HTMLResponse)
+    def control_definition(request: Request, cid: str, user: User = Depends(current_user)):
+        library(user)
+        portal = p()
+        if portal.custom_control(cid):
+            return RedirectResponse(f"/controls/{cid}/edit", status_code=303)
+        try:
+            d = portal.control_definition(cid)
+        except Invalid as exc:
+            raise h.HTTPError(404, str(exc)) from exc
+        ctl = portal.catalog.control(cid)
+        return render(request, user, "control_definition.html", ctl=ctl, d=d, form={}, frameworks=portal.frameworks_in_use,
+                      roles_list=sorted(portal.base_catalog.roles), roles=portal.base_catalog.roles,
+                      automated=[e for e in ctl["evidence"] if e.get("via") != "upload"])
+
+    @app.post("/controls/{cid}/definition")
+    async def control_definition_save(request: Request, cid: str, user: User = Depends(current_user)):
+        form = _form_dict(await request.form())
+        h.check_csrf(request, user.email, form.get("csrf"))
+        portal = p()
+        try:
+            portal.save_control_definition(user, cid, form)
+        except (Invalid, Forbidden) as exc:
+            if not portal.is_library_owner(user) or not portal.catalog.control(cid):
+                return back(f"/controls/{cid}", err=str(exc))
+            ctl = portal.catalog.control(cid)
+            return render(request, user, "control_definition.html", ctl=ctl, d=portal.control_definition(cid), form=form,
+                          frameworks=portal.frameworks_in_use, roles_list=sorted(portal.base_catalog.roles),
+                          roles=portal.base_catalog.roles, page_err=str(exc),
+                          automated=[e for e in ctl["evidence"] if e.get("via") != "upload"])
+        h.invalidate()
+        return back(f"/controls/{cid}#definition-history", msg="Control updated. The change and your reason are in its history.")
+
+    @app.post("/controls/{cid}/definition/reset")
+    def control_definition_reset(request: Request, cid: str, reason: str = Form(""), csrf: str = Form(""),
+                                 user: User = Depends(current_user)):
+        h.check_csrf(request, user.email, csrf)
+        try:
+            p().reset_control_definition(user, cid, reason)
+        except (Invalid, Forbidden) as exc:
+            return back(f"/controls/{cid}#definition-history", err=str(exc))
+        h.invalidate()
+        return back(f"/controls/{cid}#definition-history", msg="Control reset to the starter definition")
+
     @app.get("/controls/{cid}/edit", response_class=HTMLResponse)
     def control_edit(request: Request, cid: str, user: User = Depends(current_user)):
-        admin(user)
+        library(user)
         row = p().custom_control(cid)
         if not row:
-            raise h.HTTPError(404, "Only custom controls can be edited here; catalog controls live in catalog/controls.yaml")
+            return RedirectResponse(f"/controls/{cid}/definition", status_code=303)
         return render(request, user, "control_form.html", row=row, frameworks=p().frameworks_in_use,
                       roles_list=sorted(p().base_catalog.roles),
                       frequencies=("continuous", "daily", "weekly", "monthly", "quarterly", "annual", "event"))

@@ -157,7 +157,7 @@ def test_dev_login_first_user_becomes_admin(tmp_path, monkeypatch):
 
 # ================================================================ pages and roles
 ADMIN_PAGES = ["/", "/controls", "/controls/IAM-04", "/criteria", "/criteria?open=CC6", "/criteria/CC6.1", "/criteria/P5.1",
-               "/controls/IAM-02?from=CC6.1", "/controls/IAM-02?from=../../evil", "/work",
+               "/controls/IAM-02?from=CC6.1", "/controls/IAM-02?from=../../evil", "/controls/IAM-02/definition", "/work",
                "/reviews", "/evidence", "/overrides", "/audit", "/audit?verify=1&action=user.", "/users", "/cycles",
                "/policies", "/policies/information-security-policy", "/dev/outbox",
                "/controls?status=not_started&category=privacy&sort=owner"]
@@ -900,3 +900,95 @@ def test_control_library_owner_is_one_admin_handed_over_and_cleared(env):
     # Users page shows the holder
     as_(client, ADMIN)
     assert "Control library owner" in client.get("/users").text
+
+
+# ================================================================ control definitions (library owner)
+def _def_form(portal, cid, **changes):
+    d = portal.control_definition(cid)
+    form = {"title": d["title"], "description": d["description"], "owner": d["owner"],
+            "owner_emails": ", ".join(d["owner_emails"]), "extra_evidence": "\n".join(d["extra_evidence"]),
+            "reason": "Tailored for this client after scoping workshop"}
+    form.update({f"map_{fid}": ", ".join(ids) for fid, ids in d["mappings"].items()})
+    form.update(changes)
+    return form
+
+
+def test_library_owner_edits_control_with_history_and_others_cannot(env):
+    portal, client = env
+    form = _def_form(portal, "IAM-02", description="MFA enforced through Okta sign-on policies for all users.",
+                     owner_emails=f"{CONTRIB.email}, second.owner@example.com",
+                     map_soc2="CC6.1, CC6.6, CC6.2", extra_evidence="Okta sign-on policy export")
+    # ordinary admins, control owners and auditors cannot change definitions
+    for who in (ADMIN2, CONTRIB, AUDITOR):
+        with pytest.raises(Forbidden):
+            portal.save_control_definition(who, "IAM-02", form)
+    with pytest.raises(Invalid):
+        portal.save_control_definition(ADMIN, "IAM-02", {**form, "reason": "short"})
+    with pytest.raises(Invalid):
+        portal.save_control_definition(ADMIN, "IAM-02", {**form, "map_soc2": "CC99.9"})
+    portal.save_control_definition(ADMIN, "IAM-02", form)
+    ctl = portal.catalog.control("IAM-02")
+    assert ctl["description"].startswith("MFA enforced through Okta") and ctl["edited"]["version"] == 1
+    assert ctl["criteria"] == ["CC6.1", "CC6.6", "CC6.2"] and "IAM-02" in portal.catalog.coverage()["CC6.2"]
+    assert any(e["artifact"] == "Okta sign-on policy export" for e in ctl["evidence"])
+    # several named owners: each now sees the control
+    assert set(portal.owner_emails("IAM-02")) >= {CONTRIB.email, "second.owner@example.com"}
+    as_(client, CONTRIB)
+    assert client.get("/controls/IAM-02").status_code == 200
+    # history keeps before and after with the reason; the audit log records it
+    h = portal.control_definition_history("IAM-02")[0]
+    assert h["version"] == 1 and "description" in h["fields"] and h["before"]["mappings"]["soc2"] == ["CC5.2", "CC6.1", "CC6.6"]
+    assert any(e["action"] == "control.edit" and e["target"] == "IAM-02" for e in portal.log.records())
+    # the edit page and its link are for the library owner only
+    as_(client, ADMIN2)
+    assert client.get("/controls/IAM-02/definition").status_code == 403
+    assert "/controls/IAM-02/definition" not in client.get("/controls/IAM-02").text
+    as_(client, ADMIN)
+    page = client.get("/controls/IAM-02").text
+    assert "/controls/IAM-02/definition" in page and "Definition history" in page and "Edited · v1" in page
+    assert client.get("/controls/IAM-02/definition").status_code == 200
+    # reset brings back the starter definition and is recorded too
+    portal.reset_control_definition(ADMIN, "IAM-02", "Client switched back to Entra ID")
+    assert "edited" not in portal.catalog.control("IAM-02") and len(portal.control_definition_history("IAM-02")) == 2
+
+
+def test_control_edit_warns_before_leaving_a_criterion_uncovered(env):
+    portal, _ = env
+    only = [c for c, ctls in portal.catalog.coverage().items() if len(ctls) == 1 and c in portal.catalog.in_scope_criteria]
+    assert only, "the starter catalog has criteria covered by a single control"
+    crit = only[0]
+    cid = portal.catalog.coverage()[crit][0]
+    d = portal.control_definition(cid)
+    remaining = [x for x in d["mappings"]["soc2"] if x != crit] or ["CC1.1"]
+    form = _def_form(portal, cid, map_soc2=", ".join(remaining))
+    with pytest.raises(Invalid, match=crit):
+        portal.save_control_definition(ADMIN, cid, form)
+    portal.save_control_definition(ADMIN, cid, {**form, "confirm_uncovered": "yes"})
+    assert portal.catalog.coverage().get(crit, []) == []
+    last = [e for e in portal.log.records() if e["action"] == "control.edit"][-1]
+    assert last["detail"]["accepted_gaps"] == [crit]
+
+
+def test_control_edits_survive_and_flag_starter_changes_and_are_exported(env):
+    portal, _ = env
+    portal.save_control_definition(ADMIN, "HR-01", _def_form(portal, "HR-01", title="Background checks before start date"))
+    assert portal.catalog.control("HR-01")["edited"]["starter_changed"] is False
+    # a GRC-pal update changes the starter wording: the edit stays and the control is flagged
+    base = portal.base_catalog.control("HR-01")
+    base["description"] = base["description"] + " (updated in a new release)"
+    portal._changed()
+    ctl = portal.catalog.control("HR-01")
+    assert ctl["title"] == "Background checks before start date" and ctl["edited"]["starter_changed"] is True
+    # the auditor export contains every definition change
+    import io as _io
+    import zipfile
+
+    z = zipfile.ZipFile(_io.BytesIO(portal.export_cycle(ADMIN, portal.active_cycle()["RowKey"])))
+    name = next(n for n in z.namelist() if n.startswith("control_definition_changes"))
+    assert "HR-01" in z.read(name).decode()
+
+
+def test_control_edit_history_lists_only_fields_that_changed(env):
+    portal, _ = env
+    portal.save_control_definition(ADMIN, "IAM-02", _def_form(portal, "IAM-02", owner_emails="pat@example.com"))
+    assert portal.control_definition_history("IAM-02")[0]["fields"] == "owner_emails"

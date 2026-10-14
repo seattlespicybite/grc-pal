@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% block title %}Frameworks{% endblock %}
 {% block content %}
 <div class="page-head"><div><h1>Frameworks</h1><div class="sub">Every control can map to requirements in any number of frameworks. Add more as files in your program repository or create one here.</div></div>
-{% if user.is_admin %}<div><a class="btn ghost small" href="/controls/new">New control</a> <a class="btn small" href="/frameworks/new">New framework</a></div>{% endif %}</div>
+{% if user.is_admin and user.email == library_owner %}<div><a class="btn ghost small" href="/controls/new">New control</a> <a class="btn small" href="/frameworks/new">New framework</a></div>{% endif %}</div>
 <div class="grid g3">{% for r in rows %}<div class="stat{{ '' if r.in_use else ' off' }}"><div class="row-between"><a class="strong" href="/frameworks/{{ r.fw.id }}">{{ r.fw.name }}</a>
 <span class="pill {{ 'ok' if r.in_use else 'not_started' }}">{{ 'In use' if r.in_use else 'Off' }}</span></div>
 <div class="n-s mt-s">{{ r.covered }} / {{ r.requirements }}</div><div class="l">requirements with at least one control · {{ r.controls }} controls · {{ r.fw.source }}</div>

@@ -944,6 +944,8 @@ class Portal(FeaturesMixin, AccountsMixin):
         table("users", self.users())
         table("policy_acknowledgments", [r for p in self.catalog.policies for r in self.store.list("acks", p["id"])])
         table("audit_log", [r for r in self.log.records() if cycle["start"] <= r["at"][:10] and r["at"] <= end])
+        table("control_definition_changes", [{k: v for k, v in r.items() if k not in ("PartitionKey", "RowKey")}
+                                             for r in self.control_definition_history()])
         files["audit_chain_verification.json"] = json.dumps(self.log.verify(), indent=2).encode()
         files["cycle.json"] = json.dumps({k: v for k, v in cycle.items() if k != "PartitionKey"}, indent=2).encode()
         if control_status is not None:
