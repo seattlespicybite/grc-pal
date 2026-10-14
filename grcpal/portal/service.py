@@ -431,6 +431,42 @@ class Portal(FeaturesMixin, AccountsMixin):
             a["overdue"] = a["status"] in ("open", "returned") and a["due"] < today
         return sorted(rows, key=lambda a: (a["status"] in CLOSED_STATES, a["due"]))
 
+    def edit_assignment(self, actor: User, assignment_id: str, assignee: str, contributors: list[str], due: str,
+                        instructions: str) -> dict:
+        """Change who works on an open request, the helpers, due date or instructions. Uploads keep their
+        original uploader; people who are removed lose access to the request; people who are added are emailed."""
+        self._admin(actor)
+        a = self.assignment(assignment_id)
+        if a["status"] in CLOSED_STATES or a["cycle"] != self.active_cycle()["RowKey"]:
+            raise Invalid("Only open requests in the current cycle can be changed")
+        assignee = (assignee or "").strip().lower()
+        contributors = sorted({c.strip().lower() for c in contributors if c.strip()} - {assignee})
+        for email in [assignee, *contributors]:
+            if not EMAIL.match(email):
+                raise Invalid(f"'{email}' is not a valid email address")
+        try:
+            due_date = dt.date.fromisoformat(due)
+        except ValueError as exc:
+            raise Invalid("Due date must be YYYY-MM-DD") from exc
+        if due_date < self.today and due_date.isoformat() != a["due"]:
+            raise Invalid("Due date cannot be in the past")
+        for email in [assignee, *contributors]:
+            self._ensure_contributor(actor, email)
+        new = {"assignee": assignee, "contributors": contributors, "due": due_date.isoformat(),
+               "instructions": (instructions or "").strip()[:4000]}
+        changes = {k: {"from": a.get(k), "to": v} for k, v in new.items() if a.get(k) != v}
+        if not changes:
+            return a
+        row = self.store.update("assignments", "a", assignment_id, {**new, "updated_at": _now()})
+        detail = {k: v for k, v in changes.items() if k != "instructions"}
+        if "instructions" in changes:
+            detail["instructions_changed"] = True
+        self.audit(actor, "assignment.edit", assignment_id, {"controls": a["controls"], **detail})
+        added = ({assignee, *contributors}) - self.participants(a)
+        if added:
+            self._notify("assigned", sorted(added), actor, notify.assigned(self, row, actor), a["controls"])
+        return row
+
     def cancel_assignment(self, actor: User, assignment_id: str, reason: str) -> None:
         self._admin(actor)
         a = self.assignment(assignment_id)

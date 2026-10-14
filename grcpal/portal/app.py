@@ -491,6 +491,18 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         invalidate()
         return back(f"/assignments/{a['RowKey']}", msg="Assignment created and the assignee was emailed")
 
+    @app.post("/assignments/{assignment_id}/edit")
+    def edit_assignment(request: Request, assignment_id: str, assignee: str = Form(...), contributors: str = Form(""),
+                        due: str = Form(...), instructions: str = Form(""), csrf: str = Form(""),
+                        user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        try:
+            p().edit_assignment(user, assignment_id, assignee, contributors.replace(";", ",").split(","), due, instructions)
+        except (Invalid, Forbidden) as exc:
+            return back(f"/assignments/{assignment_id}", err=str(exc))
+        invalidate()
+        return back(f"/assignments/{assignment_id}", msg="Request updated; anyone newly added was emailed")
+
     @app.post("/assignments/{assignment_id}/cancel")
     def cancel_assignment(request: Request, assignment_id: str, reason: str = Form(""), csrf: str = Form(""),
                           user: User = Depends(current_user)):

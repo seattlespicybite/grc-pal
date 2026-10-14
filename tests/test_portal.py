@@ -838,3 +838,33 @@ def test_controls_list_soc2_filters(env):
     assert "filtered to CC6" in client.get("/controls?family=CC6&criterion=CC1.1").text
     auto = client.get("/controls?evidenced=manual").text
     assert "IAM-02</b>" not in auto
+
+
+def test_admin_edits_request_people_due_date_and_access_follows(env):
+    portal, client = env
+    a = assign(portal, "HR-01", CONTRIB)
+    u = portal.upload(CONTRIB, "x.pdf", PDF, "first upload", assignment_id=a["RowKey"])
+    portal.mailer.outbox.clear()
+    with pytest.raises(Forbidden):
+        portal.edit_assignment(CONTRIB, a["RowKey"], CONTRIB.email, [], a["due"], "")
+    row = portal.edit_assignment(ADMIN, a["RowKey"], HR.email, [CONTRIB.email, "new.helper@example.com"],
+                                 "2026-11-15", a["instructions"])
+    assert row["assignee"] == HR.email and row["contributors"] == sorted([CONTRIB.email, "new.helper@example.com"])
+    assert row["due"] == "2026-11-15"
+    # only people who were not on the request before are emailed
+    emailed = {m.to for m in portal.mailer.outbox}
+    assert emailed == {HR.email, "new.helper@example.com"}
+    entry = [e for e in portal.log.records() if e["action"] == "assignment.edit"][-1]
+    assert entry["detail"]["assignee"] == {"from": CONTRIB.email, "to": HR.email}
+    # the earlier upload keeps its original uploader
+    assert portal.uploads(assignment=a["RowKey"], cycle=None)[0]["uploaded_by"] == CONTRIB.email == u["uploaded_by"]
+    # someone removed from the request loses access to it
+    portal.edit_assignment(ADMIN, a["RowKey"], HR.email, [], "2026-11-15", a["instructions"])
+    as_(client, CONTRIB)
+    assert client.get(f"/assignments/{a['RowKey']}").status_code == 404
+    # closed requests cannot be changed; past due dates are refused
+    with pytest.raises(Invalid):
+        portal.edit_assignment(ADMIN, a["RowKey"], HR.email, [], "2020-01-01", "")
+    portal.cancel_assignment(ADMIN, a["RowKey"], "not needed")
+    with pytest.raises(Invalid):
+        portal.edit_assignment(ADMIN, a["RowKey"], HR.email, [], "2026-11-20", "")
