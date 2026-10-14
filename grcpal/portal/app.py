@@ -181,9 +181,17 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         return p().program_view(request.cookies.get(VIEW_COOKIE, ""))
 
     def safe_dest(url: str, default: str) -> str:
-        return url if url.startswith("/") and not url.startswith("//") and "\\" not in url else default
+        """A path inside this portal, or the default. Rejects other hosts, schemes, backslashes and control
+        characters (browsers drop tabs and newlines, which can turn "/\t/x" into "//x")."""
+        if not url or not url.startswith("/") or url.startswith("//") or any(c == "\\" or ord(c) < 33 for c in url):
+            return default
+        parts = urlparse(url)
+        if parts.scheme or parts.netloc or "%0" in url.lower():
+            return default
+        return url
 
     def back(url: str, msg: str | None = None, err: str | None = None) -> RedirectResponse:
+        url = safe_dest(url, "/")  # every redirect stays inside the portal
         q = urlencode({k: v for k, v in (("msg", msg), ("err", err)) if v})
         url, _, frag = url.partition("#")
         return RedirectResponse(f"{url}{'&' if '?' in url else '?'}{q}{'#' + frag if frag else ''}" if q else url,
@@ -386,7 +394,10 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     def switch_view(request: Request, f: str = "all", next: str = "/", user: User = Depends(current_user)):
         """Remember which framework this person wants to look at. Only changes what is shown, never access."""
         portal = p()
-        choice = f if f in portal.frameworks_in_use or f == "all" else "all"
+        choice = "all"
+        for fid in portal.frameworks_in_use:  # the cookie value comes from our own list, never from the request
+            if fid == f:
+                choice = fid
         resp = RedirectResponse(safe_dest(next, "/"), status_code=303)
         resp.set_cookie(VIEW_COOKIE, choice, max_age=365 * 86400, path="/", httponly=True, samesite="lax",
                         secure=request.url.scheme == "https")

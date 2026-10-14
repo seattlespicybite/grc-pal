@@ -992,3 +992,36 @@ def test_control_edit_history_lists_only_fields_that_changed(env):
     portal, _ = env
     portal.save_control_definition(ADMIN, "IAM-02", _def_form(portal, "IAM-02", owner_emails="pat@example.com"))
     assert portal.control_definition_history("IAM-02")[0]["fields"] == "owner_emails"
+
+
+def test_email_check_is_fast_on_crafted_input_and_still_correct():
+    import time
+
+    from grcpal.portal.auth import EMAIL_RE
+    from grcpal.portal.service import EMAIL
+
+    for rx in (EMAIL, EMAIL_RE):
+        for good in ("pat@example.com", "new.helper@sub.example.co.uk", "a+b@example.io"):
+            assert rx.match(good), good
+        for bad in ("pat@example", "a b@example.com", "a@b@example.com", "@example.com", "pat@.example.com",
+                    "pat@example..com", "pat@example.com.", "x" * 70 + "@example.com"):
+            assert not rx.match(bad), bad
+        start = time.perf_counter()
+        rx.match("!@!." + "!." * 20000 + "\n")
+        assert time.perf_counter() - start < 0.05
+
+
+def test_safe_redirect_targets_stay_inside_the_portal(env):
+    _, client = env
+    as_(client, ADMIN)
+    for bad in ("//evil.example", "/\\evil.example", "/\t/evil.example", "https://evil.example/x", "/%0a/evil",
+                "javascript:alert(1)", "", "evil.example"):
+        loc = client.get("/view", params={"f": "all", "next": bad}, follow_redirects=False).headers["location"]
+        assert loc == "/", (bad, loc)
+    assert client.get("/view", params={"f": "all", "next": "/controls?family=CC6"},
+                      follow_redirects=False).headers["location"] == "/controls?family=CC6"
+    # the cookie value always comes from the portal's own list, never from the request
+    r = client.get("/view", params={"f": "soc2; Domain=evil.example", "next": "/"}, follow_redirects=False)
+    assert r.headers["set-cookie"].startswith("grcpal_view=all;") and "evil" not in r.headers["set-cookie"]
+    # control routes only redirect to real controls
+    assert client.get("/controls/..%2F..%2Fevil/definition", follow_redirects=False).status_code == 404

@@ -31,7 +31,7 @@ from grcpal.portal.mailer import ConsoleMailer, Mailer, Message
 from grcpal.portal.security import safe_filename, validate_upload
 from grcpal.tasks import period_label
 
-EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+EMAIL = re.compile(r"^[^@\s]{1,64}@(?=[^@\s]{1,253}\Z)[^@\s.]+(?:\.[^@\s.]+)+\Z")  # linear time: labels cannot overlap
 RUN_ID = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{6}Z$")
 SLUG = re.compile(r"[^a-z0-9]+")
 MIN_JUSTIFICATION = 30

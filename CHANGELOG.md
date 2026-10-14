@@ -41,6 +41,10 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ### Fixed
 - `owner_emails` and `links` on custom controls are stored as JSON, so they also work with Azure
   Table storage.
+- Email address check rewritten to run in linear time (a crafted value could make the old pattern slow;
+  found by CodeQL). It now also rejects addresses such as `pat@.example.com` and local parts over 64 characters.
+- Redirect targets are checked in one place: only paths inside the portal, never another host or
+  scheme, backslashes or control characters.
 
 ## [0.1.0] - unreleased
 

@@ -345,8 +345,11 @@ def register(app, h) -> None:
     def control_definition(request: Request, cid: str, user: User = Depends(current_user)):
         library(user)
         portal = p()
-        if portal.custom_control(cid):
-            return RedirectResponse(f"/controls/{cid}/edit", status_code=303)
+        known = portal.catalog.control(cid)
+        if not known:
+            raise h.HTTPError(404, "Control not found")
+        if known.get("custom"):
+            return RedirectResponse(f"/controls/{known['id']}/edit", status_code=303)
         try:
             d = portal.control_definition(cid)
         except Invalid as exc:
@@ -390,7 +393,10 @@ def register(app, h) -> None:
         library(user)
         row = p().custom_control(cid)
         if not row:
-            return RedirectResponse(f"/controls/{cid}/definition", status_code=303)
+            ctl = p().catalog.control(cid)
+            if not ctl:
+                raise h.HTTPError(404, "Control not found")
+            return RedirectResponse(f"/controls/{ctl['id']}/definition", status_code=303)
         return render(request, user, "control_form.html", row=row, frameworks=p().frameworks_in_use,
                       roles_list=sorted(p().base_catalog.roles),
                       frequencies=("continuous", "daily", "weekly", "monthly", "quarterly", "annual", "event"))

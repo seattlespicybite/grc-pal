@@ -35,7 +35,7 @@ ROLE_HELP = {
 }
 AUTH_MODES = ("local", "easyauth", "proxy", "dev")
 DEV_COOKIE = "grcpal_dev_user"
-_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_EMAIL = re.compile(r"^[^@\s]{1,64}@(?=[^@\s]{1,253}\Z)[^@\s.]+(?:\.[^@\s.]+)+\Z")  # linear time: labels cannot overlap
 EMAIL_RE = _EMAIL
 _EMAIL_CLAIMS = ("preferred_username", "email", "upn",
                  "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn",
