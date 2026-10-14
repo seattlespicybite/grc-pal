@@ -18,7 +18,9 @@ LABEL org.opencontainers.image.title="GRC-pal" \
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 COPY --from=build /wheels /wheels
 RUN pip install --no-index --find-links /wheels "grc-pal[portal,aws,gcp]" && rm -rf /wheels \
- && useradd --system --uid 10001 --no-create-home grcpal
+ && useradd --system --uid 10001 --no-create-home grcpal \
+ && mkdir -p /data && chown 10001:10001 /data && chmod 700 /data
+# /data belongs to the app user, so a Docker volume mounted there is writable (new volumes copy this ownership)
 WORKDIR /tmp
 USER 10001
 ENV GRCPAL_ENV=production GRCPAL_AUTH_MODE=local GRCPAL_EVIDENCE_DIR=/tmp/evidence GRCPAL_SQLITE=/tmp/grcpal.db

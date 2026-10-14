@@ -13,7 +13,7 @@ often; check the vendors' current sites before comparing.
 | Automated tests / integrations | ✓ Entra ID, Intune, Azure, AWS, Google Cloud, GitHub; Prowler, Maester, testssl; custom HTTP/TLS checks | Far fewer integrations; Google Workspace, Okta, Jira are roadmap items |
 | Continuous monitoring dashboard | ✓ Daily control health, by category | |
 | Evidence library | ✓ Write-once storage with hashes and full populations | Stronger tamper evidence than many hosted tools; you hold the data |
-| Tasks and owners for manual controls | ✓ Requests with due dates, assignees, contributors | |
+| Tasks and owners for manual controls | ✓ Requests with due dates, assignees, contributors (changeable at any time); 18 recurring activities | |
 | Reminders and notifications | ✓ Email on assignment, upload, comment, review; reminder button; weekly overdue job | No Slack or Teams yet |
 | Comments and collaboration on evidence | ✓ Threads on requests and files | |
 | Audit periods | ✓ Cycles with carry-forward and last-cycle evidence | |
@@ -27,7 +27,9 @@ often; check the vendors' current sites before comparing.
 | Trust center for customers | Not yet | Roadmap: static public page generated from control status and approved documents |
 | Security questionnaire automation | Not yet | Roadmap: answer library from controls and policies, AI-drafted with human approval |
 | AI assistance | ✓ Per-control review and full mock audit ([ai-assistant.md](ai-assistant.md)) | Questionnaire answering is roadmap |
-| Roles and permissions | ✓ Admin, contributor, auditor; enforced server-side | Custom roles and SCIM are roadmap |
+| Roles and permissions | ✓ Admin, Control owner, Auditor, plus one control library owner; enforced server-side | Custom roles and SCIM are roadmap |
+| Control library changes with history | ✓ Library owner edits owners, wording and mappings; reason required, versioned, in the auditor export | Many hosted tools keep no reviewer-ready change history |
+| Single-framework focus | ✓ Turn frameworks on or off; with one on, the portal shows only that framework | |
 | Audit trail of the platform itself | ✓ Hash-chained, verifiable, exported daily | |
 | Multi-entity / multi-tenant | ✓ One instance per organization with strict isolation | Pooled tier is optional future work |
 | Cost and lock-in | Free software (AGPL); you pay your own cloud usage; data in your storage account | Commercial tools are subscriptions; exports vary |
