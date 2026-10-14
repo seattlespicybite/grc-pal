@@ -36,7 +36,7 @@
       {% if auth_mode == 'dev' %}<a href="/dev/outbox" class="{{ 'active' if path.startswith('/dev') }}">Email outbox (dev)</a>{% endif %}{% endif %}
     </nav>
     <div class="side-user"><b>{{ user.name }}</b>{{ user.email }}
-      <div class="mt-s"><span class="role role-{{ user.role }}">{{ user.role|capitalize }}</span> <span class="sub-dark">Cycle: {{ cycle.name }}</span></div>
+      <div class="mt-s"><span class="role role-{{ user.role }}">{{ role_labels[user.role] }}</span> <span class="sub-dark">Cycle: {{ cycle.name }}</span></div>
       <a class="signout" href="{{ logout_url }}">{{ 'Switch user' if auth_mode == 'dev' else 'Sign out' }}</a></div>
   </aside>
   <main class="main" id="main">

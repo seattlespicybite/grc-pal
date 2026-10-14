@@ -49,7 +49,7 @@ explain choices in plain words, keep changes small, never leave the test suite r
 | Portal app and routes | `grcpal/portal/app.py`, `grcpal/portal/routes_extra.py` |
 | Business rules (authorize + audit every write) | `grcpal/portal/service.py`, `grcpal/portal/features.py` |
 | Storage (tenant isolation) | `grcpal/portal/store.py` (`TenantStore`, `SqliteStore`, `TableStore`) |
-| Sign-in and roles | `grcpal/portal/auth.py` (easyauth, proxy, dev; roles admin/contributor/auditor) |
+| Sign-in and roles | `grcpal/portal/auth.py` (local, easyauth, proxy, dev; roles admin/contributor/auditor, shown as Admin/Control owner/Auditor), local accounts and sessions in `accounts.py` + `routes_accounts.py` (tests: `tests/test_accounts.py`) |
 | Audit log (hash chain), event log, jobs | `grcpal/portal/auditlog.py`, `eventlog.py`, `jobs.py` |
 | Email | `grcpal/portal/mailer.py`, `notify.py`, `templates/email/` |
 | Security headers, CSRF, upload validation | `grcpal/portal/security.py` |
@@ -73,7 +73,8 @@ explain choices in plain words, keep changes small, never leave the test suite r
    metadata addresses; re-checks redirects).
 6. AI output is advisory: stored as evidence (`ai_review/`), shown escaped, accepted or dismissed by an
    admin. Evidence sent to models stays inside `<evidence>` tags (`_fence`), emails masked by default.
-7. Contributors see only assigned or owned controls (404 for others); auditors are read-only.
+7. Contributors (Control owners) see only assigned or owned controls (404 for others); auditors are read-only
+   and refused after their `access_until` date. Passwords and tokens are stored only as hashes (`accounts.py`).
 8. Keep `Referrer-Policy: same-origin` (no-referrer makes browsers send `Origin: null` and breaks forms).
 9. No real organization names, emails or secrets in code, tests or fixtures. Use `example.com`.
 

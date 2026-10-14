@@ -15,7 +15,7 @@
 <div class="form-row"><div><label for="ow">Owner role</label><select id="ow" name="owner"><option value="">(none: use emails)</option>{% for r in roles_list %}<option value="{{ r }}" {{ 'selected' if r == (row.owner if row else val('owner')) }}>{{ r }}</option>{% endfor %}</select>
 <div class="hint">A role from catalog/roles.yaml, or leave empty and list people.</div></div>
 <div><label for="oe">Owner emails</label><input id="oe" name="owner_emails" value="{{ (row.owner_emails|join(', ')) if row else val('owner_emails') }}" placeholder="name@example.com">
-<div class="hint">They get contributor access to this control and its reminders.</div></div></div></section>
+<div class="hint">They get Control owner access to this control and its reminders.</div></div></div></section>
 
 <section class="card"><h2>Frameworks</h2><p class="sub">Enter the requirement IDs this control satisfies, separated by commas. At least one.</p>
 {% for fid, fw in frameworks.items() %}{% set current = (row.mappings.get(fid, [])|join(', ')) if row else val('map_' ~ fid) %}

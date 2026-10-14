@@ -36,11 +36,11 @@
 <button class="btn" name="action" value="next" type="submit">Continue</button></form>
 
 {% elif step.kind == 'access' %}
-<table class="mt"><tbody>{% for u in people %}<tr><td><b>{{ u.name }}</b><div class="sub">{{ u.RowKey }}</div></td><td><span class="role role-{{ u.role }}">{{ u.role|capitalize }}</span></td></tr>{% endfor %}</tbody></table>
+<table class="mt"><tbody>{% for u in people %}<tr><td><b>{{ u.name }}</b><div class="sub">{{ u.RowKey }}</div></td><td><span class="role role-{{ u.role }}">{{ role_labels[u.role] }}</span></td></tr>{% endfor %}</tbody></table>
 <form method="post" action="/users" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
 <div class="form-row"><div><label for="em">Work email</label><input id="em" name="email" type="email" required></div>
 <div><label for="nm">Name</label><input id="nm" name="name"></div>
-<div><label for="rl">Role</label><select id="rl" name="role">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == 'admin' }}>{{ r|capitalize }}</option>{% endfor %}</select></div></div>
+<div><label for="rl">Role</label><select id="rl" name="role">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == 'admin' }}>{{ role_labels[r] }}</option>{% endfor %}</select></div></div>
 <div class="hint">{{ role_help.admin }}. {{ role_help.contributor }}. {{ role_help.auditor }}.</div>
 <div class="actions"><button class="btn ghost" type="submit">Add person</button></div></form>
 <form method="post" action="/setup/{{ step.id }}" class="actions"><input type="hidden" name="csrf" value="{{ csrf }}">

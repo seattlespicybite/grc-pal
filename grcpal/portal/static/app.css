@@ -222,3 +222,6 @@ table.logs td { font-size: 13px; }
 /* checkboxes inside labels keep their natural size */
 label > input[type=checkbox], label > input[type=radio] { display: inline-block; width: auto; margin: 0 8px 0 0; vertical-align: middle; }
 label.check, label.toggle { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+/* Users page: one-time password link and the action buttons */
+.link-box { word-break: break-all; background: var(--surface-2); padding: 10px 12px; border-radius: 6px; user-select: all; }
+.actions-cell { display: flex; gap: 6px; flex-wrap: wrap; }

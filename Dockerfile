@@ -21,7 +21,7 @@ RUN pip install --no-index --find-links /wheels "grc-pal[portal,aws,gcp]" && rm 
  && useradd --system --uid 10001 --no-create-home grcpal
 WORKDIR /tmp
 USER 10001
-ENV GRCPAL_ENV=production GRCPAL_AUTH_MODE=easyauth GRCPAL_EVIDENCE_DIR=/tmp/evidence GRCPAL_SQLITE=/tmp/grcpal.db
+ENV GRCPAL_ENV=production GRCPAL_AUTH_MODE=local GRCPAL_EVIDENCE_DIR=/tmp/evidence GRCPAL_SQLITE=/tmp/grcpal.db
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')" || exit 1
 CMD ["uvicorn", "grcpal.portal.app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", \

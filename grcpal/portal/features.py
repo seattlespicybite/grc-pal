@@ -712,8 +712,13 @@ class FeaturesMixin:
         prod = os.getenv("GRCPAL_ENV", "").lower() == "production"
         mode = auth_mode()
         add("Sign-in", mode != "dev", f"mode: {mode}",
-            "Development sign-in lets anyone act as anyone. Deploy with deploy/azure/deploy.sh (Easy Auth) or put a "
-            "sign-in proxy in front and set GRCPAL_AUTH_MODE=proxy.")
+            "Development sign-in lets anyone act as anyone. On a VM use local accounts (GRCPAL_AUTH_MODE=local, the "
+            "default); on Azure, deploy/azure/deploy.sh sets up Easy Auth.")
+        if mode == "local":
+            https = os.getenv("GRCPAL_PUBLIC_URL", "").startswith("https://")
+            add("HTTPS", https, "on" if https else "off",
+                "Without HTTPS, passwords cross the network in clear text. Put GRC-pal behind HTTPS (see the VM "
+                "guide) and set GRCPAL_PUBLIC_URL to the https:// address.")
         add("Production mode", prod, "GRCPAL_ENV=production" if prod else "not set",
             "Set GRCPAL_ENV=production on shared instances; it blocks development shortcuts.")
         add("Form signing key", bool(os.getenv("GRCPAL_SECRET")), "set" if os.getenv("GRCPAL_SECRET") else "random per restart",

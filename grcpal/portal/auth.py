@@ -1,8 +1,10 @@
 """Authentication (who is this?) and the role model (what may they do?).
 
-Sign-in is delegated; GRC-pal never handles passwords:
+Sign-in modes:
 
-  * easyauth (default): Azure Container Apps / App Service built-in authentication. The platform
+  * local (default): GRC-pal's own accounts. Passwords are stored only as scrypt hashes and sessions
+    live on the server (see accounts.py). Meant for a VM on an internal network.
+  * easyauth: Azure Container Apps / App Service built-in authentication. The platform
     signs the user in (Microsoft Entra ID, or any OIDC provider it supports) and injects the
     X-MS-CLIENT-PRINCIPAL header. Requests without it are rejected.
   * proxy: a trusted reverse proxy (oauth2-proxy, Pomerium, Caddy forward_auth) signs the user
@@ -22,13 +24,19 @@ import re
 from dataclasses import dataclass, field
 
 ROLES = ("admin", "contributor", "auditor")
+# "contributor" is stored in the data; people see it as "Control owner".
+ROLE_LABELS = {"admin": "Admin", "contributor": "Control owner", "auditor": "Auditor"}
 ROLE_HELP = {
-    "admin": "Full access: assign work, review evidence, override, manage users and cycles",
-    "contributor": "Sees only the controls assigned to them or owned by them; uploads evidence and comments",
-    "auditor": "Read-only: controls, evidence, comments, overrides, audit log and exports",
+    "admin": "Full access: assign work, review evidence, override, manage users, cycles and configuration",
+    "contributor": "Sees only the controls assigned to them or owned by them; uploads evidence and comments. "
+                   "No access to configuration",
+    "auditor": "Read-only: controls, evidence, comments, overrides, audit log and exports, until the access "
+               "end date. No access to configuration",
 }
+AUTH_MODES = ("local", "easyauth", "proxy", "dev")
 DEV_COOKIE = "grcpal_dev_user"
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+EMAIL_RE = _EMAIL
 _EMAIL_CLAIMS = ("preferred_username", "email", "upn",
                  "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn",
                  "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")
@@ -88,9 +96,9 @@ SYSTEM = User(email="system@grc-pal.local", name="GRC-pal scheduler", role="admi
 
 
 def auth_mode() -> str:
-    mode = os.getenv("GRCPAL_AUTH_MODE", "easyauth")
-    if mode not in ("easyauth", "proxy", "dev"):
-        raise RuntimeError("GRCPAL_AUTH_MODE must be easyauth, proxy or dev")
+    mode = os.getenv("GRCPAL_AUTH_MODE", "local")
+    if mode not in AUTH_MODES:
+        raise RuntimeError("GRCPAL_AUTH_MODE must be local, easyauth, proxy or dev")
     if mode == "dev" and os.getenv("GRCPAL_ENV", "").lower() == "production":
         raise RuntimeError("GRCPAL_AUTH_MODE=dev is not allowed when GRCPAL_ENV=production")
     return mode
@@ -132,6 +140,8 @@ def _check_email(email: str) -> str:
 def identity_from_request(headers, cookies=None) -> Identity:
     mode = auth_mode()
     cookies = cookies or {}
+    if mode == "local":  # sessions live in the portal store: see Portal.session_user
+        raise AuthError("not signed in")
     if mode == "dev":
         raw = headers.get("x-dev-principal") or os.getenv("GRCPAL_DEV_PRINCIPAL")
         if cookies.get(DEV_COOKIE):

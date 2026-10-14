@@ -2,24 +2,34 @@
 {% block content %}
 <div class="page-head"><div><h1>Users and roles</h1><div class="sub">Who can sign in to GRC-pal for {{ org }}, and what they can do. Every change is in the audit log.</div></div>
 <a class="btn ghost small" href="/users.csv">Download for access review (CSV)</a></div>
-<div class="grid g3">{% for r in roles %}<div class="stat"><div class="strong"><span class="role role-{{ r }}">{{ r|capitalize }}</span></div><div class="l">{{ role_help[r] }}</div></div>{% endfor %}</div>
-<section class="card mt-l"><details><summary>Add a person</summary>
+{% if new_link %}<section class="card"><h2>Password link for {{ new_link.email }}</h2>
+<p class="sub">Send this link to {{ new_link.email }} (it was also emailed if email is set up). It works once and expires in 72 hours. Anyone with the link can set this person's password, so send it only to them.</p>
+<p class="mono link-box">{{ new_link.url }}</p></section>{% endif %}
+<div class="grid g3">{% for r in roles %}<div class="stat"><div class="strong"><span class="role role-{{ r }}">{{ role_labels[r] }}</span></div><div class="l">{{ role_help[r] }}</div></div>{% endfor %}</div>
+<section class="card mt-l"><details {{ 'open' if not new_link and rows|length < 2 }}><summary>Add a person</summary>
 <form method="post" action="/users" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
 <div class="form-row"><div><label for="em">Work email</label><input id="em" name="email" type="email" required></div>
 <div><label for="nm">Name</label><input id="nm" name="name"></div>
-<div><label for="rl">Role</label><select id="rl" name="role">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == 'contributor' }}>{{ r|capitalize }}</option>{% endfor %}</select></div></div>
-<div class="hint">They sign in with their normal company account. People you assign work to, and owners listed in catalog/roles.yaml, get contributor access automatically.</div>
+<div><label for="rl">Role</label><select id="rl" name="role">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == 'contributor' }}>{{ role_labels[r] }}</option>{% endfor %}</select></div>
+<div data-show-when="role=auditor"><label for="au">Access ends</label><input id="au" name="access_until" type="date" min="{{ today }}"><div class="hint">Blank: 90 days from today.</div></div></div>
+<div class="hint">{% if auth_mode == 'local' %}After you add someone you get a one-time link for them to choose a password. {% else %}They sign in with their normal company account. {% endif %}People you assign work to, and owners listed in catalog/roles.yaml, get Control owner access automatically.</div>
 <div class="actions"><button class="btn" type="submit">Add</button></div></form></details></section>
 <div class="card table-wrap"><table><thead><tr><th>Person</th><th>Role</th><th>Status</th><th>Added</th><th>Last seen</th><th></th></tr></thead><tbody>
-{% for u in rows %}<tr><td><b>{{ u.name }}</b><div class="sub">{{ u.RowKey }}</div></td>
+{% for u in rows %}<tr><td><b>{{ u.name }}</b><div class="sub">{{ u.RowKey }}</div>{% if u.local_only %}<div class="sub">Break-glass admin (local sign-in only)</div>{% endif %}</td>
 <td><form method="post" action="/users/{{ u.RowKey|urlencode }}/role" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}">
-<select name="role" data-autosubmit aria-label="Role for {{ u.RowKey }}">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == u.role }}>{{ r|capitalize }}</option>{% endfor %}</select>
-<noscript><button class="btn small ghost" type="submit">Save</button></noscript></form></td>
-<td>{{ pill('ok', 'Active') if u.active else pill('cancelled', 'Disabled') }}</td>
+<select name="role" data-autosubmit aria-label="Role for {{ u.RowKey }}">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == u.role }}>{{ role_labels[r] }}</option>{% endfor %}</select>
+<noscript><button class="btn small ghost" type="submit">Save</button></noscript></form>
+{% if u.role == 'auditor' %}<form method="post" action="/users/{{ u.RowKey|urlencode }}/until" class="inline mt-s"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label class="sub" for="until-{{ loop.index }}">Access ends</label> <input id="until-{{ loop.index }}" name="access_until" type="date" value="{{ u.access_until or '' }}" min="{{ today }}">
+<button class="btn small ghost" type="submit">Save</button>{% if not u.access_until %} <span class="sub">No end date set</span>{% endif %}</form>{% endif %}</td>
+<td>{% if not u.active %}{{ pill('cancelled', 'Disabled') }}{% elif u.access_until and u.access_until < today %}{{ pill('stale', 'Access ended') }}{% else %}{{ pill('ok', 'Active') }}{% endif %}
+{% if auth_mode == 'local' and u.active and not u.password_hash %}<div class="sub">No password yet</div>{% endif %}</td>
 <td class="sub">{{ u.source }}<br>{{ u.created_at[:10] }} by {{ u.created_by }}</td><td class="sub">{{ when(u.last_seen) if u.last_seen else 'never' }}</td>
-<td><form method="post" action="/users/{{ u.RowKey|urlencode }}/active" {% if u.active %}data-confirm="Disable {{ u.RowKey }}? They will lose access immediately."{% endif %}>
+<td><div class="actions-cell">{% if auth_mode == 'local' and u.active %}<form method="post" action="/users/{{ u.RowKey|urlencode }}/link" data-confirm="Create a new password link for {{ u.RowKey }}? Any earlier link stops working; their current password keeps working until they use it.">
+<input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small ghost" type="submit">{{ 'Reset password' if u.password_hash else 'Password link' }}</button></form>{% endif %}
+<form method="post" action="/users/{{ u.RowKey|urlencode }}/active" {% if u.active %}data-confirm="Disable {{ u.RowKey }}? They will lose access immediately."{% endif %}>
 <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="active" value="{{ '0' if u.active else '1' }}">
-<button class="btn small {{ 'ghost' if u.active else '' }}" type="submit">{{ 'Disable' if u.active else 'Enable' }}</button></form></td></tr>{% endfor %}
+<button class="btn small {{ 'ghost' if u.active else '' }}" type="submit">{{ 'Disable' if u.active else 'Enable' }}</button></form></div></td></tr>{% endfor %}
 </tbody></table></div>
-<p class="sub">Disabling is preferred over deletion so the audit trail keeps a name for every action. GRC-pal never stores passwords; sign-in is handled by your identity provider.</p>
+<p class="sub">Disabling is preferred over deletion so the audit trail keeps a name for every action. {% if auth_mode == 'local' %}Passwords are stored only as one-way hashes; admins never see them.{% else %}GRC-pal never stores passwords; sign-in is handled by your identity provider.{% endif %}</p>
 {% endblock %}

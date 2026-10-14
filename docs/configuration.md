@@ -40,7 +40,7 @@ There are two layers:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `GRCPAL_AUTH_MODE` | `easyauth` | `easyauth` (Azure Container Apps / App Service), `proxy` (trusted reverse proxy) or `dev` |
+| `GRCPAL_AUTH_MODE` | `local` | `local` (GRC-pal accounts with passwords, for a VM), `easyauth` (Azure Container Apps / App Service), `proxy` (trusted reverse proxy) or `dev` |
 | `GRCPAL_BOOTSTRAP_ADMINS` | (empty) | Comma-separated emails created as admins at first sign-in |
 | `GRCPAL_ALLOWED_TENANT_IDS` | (empty = any) | Entra directory IDs allowed to sign in (easyauth) |
 | `GRCPAL_GROUP_ADMIN` / `_CONTRIBUTOR` / `_AUDITOR` | (empty) | Optional group object IDs that create a user with that role at first sign-in |

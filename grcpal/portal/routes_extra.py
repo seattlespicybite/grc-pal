@@ -33,7 +33,8 @@ STEPS = (
               "command builder below gives you the exact deployment command."},
     {"id": "organization", "kind": "section", "section": "organization"},
     {"id": "access", "title": "People and access", "kind": "access",
-     "intro": "Admins manage everything, contributors see only their own controls, auditors have read-only access. "
+     "intro": "Admins manage everything, Control owners see only their own controls, auditors have read-only access "
+              "until their access end date. "
               "Add at least one more admin so nobody reviews their own uploads. Everyone else can be added later, "
               "or gets access automatically when you assign them work."},
     {"id": "microsoft", "kind": "section", "section": "microsoft"},

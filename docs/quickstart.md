@@ -17,7 +17,7 @@ Open http://localhost:8000. You see a sign-in page with sample people:
 | Pick | To see |
 | --- | --- |
 | Alex Admin | Dashboard, reviews, users, cycles, reminders, overrides, audit log |
-| Harper HR (contributor) | Only HR controls; upload evidence, comment, last cycle's evidence |
+| Harper HR (Control owner) | Only HR controls; upload evidence, comment, last cycle's evidence |
 | Casey (external auditor) | Read-only views and the export zip |
 
 Things to try:
@@ -52,13 +52,36 @@ grcpal validate
 grcpal serve --base . --db portal.db
 ```
 
-The first person to sign in on an empty instance becomes an admin (development mode only).
-People listed in `catalog/roles.yaml` get contributor access automatically for the controls
+`--demo` aside, `grcpal serve` uses local accounts: run `grcpal create-admin` first (section 4).
+People listed in `catalog/roles.yaml` get Control owner access automatically for the controls
 their role owns.
+
+## 4. On a VM for your team (local accounts)
+
+Without `--demo`, GRC-pal uses its own accounts: people sign in with an email and password.
+
+```bash
+export GRCPAL_SQLITE=/var/lib/grcpal/grcpal.db GRCPAL_EVIDENCE_DIR=/var/lib/grcpal/evidence
+export GRCPAL_PUBLIC_URL=https://grc.internal.example.com
+grcpal create-admin you@example.com --name "Your Name"     # asks for the password twice
+grcpal serve --host 0.0.0.0
+```
+
+With Docker: `docker compose exec grcpal grcpal create-admin you@example.com`.
+
+1. Sign in at `/login` with the admin you just created.
+2. Open **Users and roles** and add people. After each one you get a one-time link (also emailed
+   if email is set up). They open it and choose their own password; you never see it.
+3. Forgot a password? People use **Forgot password?** on the sign-in page, or an admin clicks
+   **Reset password** on the Users page for a new link. Locked out completely? Run
+   `grcpal create-admin` again on the server (break-glass).
+
+Put GRC-pal behind HTTPS before other people use it, so passwords do not cross the network in
+clear text. A step-by-step VM guide with HTTPS and scheduled collection is coming next.
 
 ## Development mode is for your computer only
 
-`grcpal serve` and Docker Compose use simulated sign-in: anyone who can reach the page can act as
+`grcpal serve --demo` and Docker Compose use simulated sign-in: anyone who can reach the page can act as
 any user. The app refuses to start in that mode when `GRCPAL_ENV=production`. For a shared or
 internet-facing instance, follow [deploy-azure.md](deploy-azure.md).
 
