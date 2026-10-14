@@ -257,8 +257,11 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     @app.get("/controls", response_class=HTMLResponse)
     def controls(request: Request, q: str = "", status: str = "", category: str = "", owner: str = "",
-                 sort: str = "id", framework: str = "", user: User = Depends(current_user)):
+                 sort: str = "id", framework: str = "", family: str = "", criterion: str = "", evidenced: str = "",
+                 user: User = Depends(current_user)):
         from grcpal import frameworks as fw_mod
+        from grcpal.collectors import disabled_sources
+        from grcpal.portal import soc2
 
         portal = p()
         rows = health()["controls"]
@@ -284,19 +287,53 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             rows = [c for c in rows if any(portal.catalog.criteria[x]["category"] == category for x in c["criteria"])]
         if owner:
             rows = [c for c in rows if c["owner"] == owner]
+        soc2_on = "soc2" in fws and view in ("soc2", "all")
+        fam_ids = list(dict.fromkeys(soc2.family_of(x) for x in soc2.ordered_criteria(portal.catalog)))
+        if family not in fam_ids:
+            family = ""
+        crit_options = [x for x in soc2.ordered_criteria(portal.catalog) if not family or soc2.family_of(x) == family]
+        if criterion not in crit_options:
+            criterion = ""
+        if soc2_on and (family or criterion):
+            rows = [c for c in rows if any((x == criterion) if criterion else (soc2.family_of(x) == family)
+                                           for x in c["criteria"])]
+        skip = disabled_sources(portal.catalog, portal.settings)
+        how = {c["id"]: soc2.evidenced_by(by_id.get(c["id"], c), skip) for c in rows}
+        if evidenced in soc2.TYPE_LABELS:
+            rows = [c for c in rows if how[c["id"]]["type"] == evidenced]
         keys = {"id": lambda c: c["id"], "status": lambda c: c["status"], "owner": lambda c: c["owner"],
                 "title": lambda c: c["title"].lower()}
         rows = sorted(rows, key=keys.get(sort, keys["id"]))
         return render(request, user, "controls.html", rows=rows, q=q, status=status, category=category,
                       owner=owner, sort=sort, owners=sorted(portal.catalog.roles), framework=framework,
-                      frameworks=fws, columns=columns, refs=refs)
+                      frameworks=fws, columns=columns, refs=refs, how=how, soc2_on=soc2_on, family=family,
+                      criterion=criterion, evidenced=evidenced, families=[(f, soc2.FAMILY_NAMES.get(f, f)) for f in fam_ids],
+                      crit_options=crit_options, hits={criterion} if criterion else (set(crit_options) if family else set()),
+                      list_qs=_list_query(str(request.url.query)))
 
     @app.get("/controls/{control_id}", response_class=HTMLResponse)
     def control_detail(request: Request, control_id: str, user: User = Depends(current_user)):
+        from grcpal.collectors import disabled_sources
+        from grcpal.portal import soc2
+
         portal = p()
         ctl = portal.catalog.control(control_id)
         if not ctl or not portal.can_see_control(user, control_id):
             raise _HTTPError(404, "Control not found, or it is not assigned to you")
+        # Where the person came from. Only a known criterion id or a filtered list is accepted, never a URL.
+        came_from = request.query_params.get("from", "")
+        trail = None
+        if came_from in portal.catalog.criteria and user.sees_everything:
+            siblings = [c for c in portal.catalog.coverage().get(came_from, []) if portal.can_see_control(user, c)]
+            prev_c, next_c, pos = soc2.neighbours(siblings, control_id)
+            fam = soc2.family_of(came_from)
+            trail = {"criterion": came_from, "family": fam, "family_name": soc2.FAMILY_NAMES.get(fam, fam),
+                     "prev": prev_c, "next": next_c, "position": pos, "total": len(siblings)}
+        list_qs = _list_query(request.query_params.get("list", ""))
+        skip = disabled_sources(portal.catalog, portal.settings)
+        how = soc2.evidenced_by(ctl, skip)
+        wanted = [ev["artifact"] for ev in ctl.get("evidence", [])
+                  if not (str(ev.get("via", "")).startswith("collector:") and str(ev["via"]).split(":", 1)[1] in skip)]
         prev = portal.previous_cycle()
         points = [(crit, pt) for crit, pts in portal.catalog.points_of_focus.items() for pt in pts
                   if control_id in pt.get("controls", [])]
@@ -313,7 +350,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                       history=portal.control_history(control_id, 50) if user.sees_everything else [],
                       can_upload=portal.can_upload_control(user, control_id),
                       can_comment=portal.can_comment(user, [control_id]),
-                      wanted=portal.evidence_wanted([control_id]),
+                      wanted=wanted, how=how, trail=trail, list_qs=list_qs,
+                      nav_active="framework" if trail else "",
                       owner_emails=portal.owner_emails(control_id), criteria=portal.catalog.criteria,
                       max_mb=MAX_UPLOAD_BYTES // (1024 * 1024),
                       mappings=_mappings(portal, ctl, current_view(request)),
@@ -769,6 +807,17 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         app.router.routes.remove(r)
         app.router.routes.insert(0, r)
     return app
+
+
+LIST_FILTERS = ("q", "status", "category", "owner", "sort", "framework", "family", "criterion", "evidenced")
+
+
+def _list_query(raw: str) -> str:
+    """Rebuild a controls-list filter query from known keys only, so a crafted value cannot point elsewhere."""
+    from urllib.parse import parse_qsl
+
+    pairs = [(k, v[:100]) for k, v in parse_qsl(raw[:1000]) if k in LIST_FILTERS and v]
+    return urlencode(pairs)
 
 
 def _mappings(portal, ctl: dict, view: str = "all") -> list[tuple]:

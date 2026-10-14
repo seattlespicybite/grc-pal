@@ -1,10 +1,20 @@
 {% extends "base.html" %}{% from "_macros.html" import assign_form, pill, upload_form, uploads_table, thread, file_link, when %}{% block title %}{{ ctl.id }}{% endblock %}
 {% block content %}
-<div class="page-head"><div><div class="sub"><a href="/controls">{{ 'My controls' if user.is_contributor else 'Controls' }}</a> /</div><h1>{{ ctl.id }} · {{ ctl.title }}</h1>
+{% set back_list = '/controls' ~ ('?' ~ list_qs if list_qs else '') %}
+{% if trail %}<nav class="sub" aria-label="Breadcrumb"><a href="/criteria">SOC 2</a> / <a href="/criteria?open={{ trail.family }}#{{ trail.family }}">{{ trail.family }} {{ trail.family_name }}</a> / <a href="/criteria/{{ trail.criterion }}">{{ trail.criterion }}</a> /</nav>
+{% else %}<nav class="sub" aria-label="Breadcrumb"><a href="{{ back_list }}">{{ 'My controls' if user.is_contributor else 'Controls' }}</a> /</nav>{% endif %}
+<div class="page-head"><div><h1>{{ ctl.id }} · {{ ctl.title }}</h1>
 <div class="sub">{% if ctl.custom %}<span class="pill custom">Custom control</span> {% if user.is_admin %}<a href="/controls/{{ ctl.id }}/edit">Edit</a> · {% endif %}{% endif %}Owner: {{ ctl.owner }}{% if owner_emails %} ({{ owner_emails|join(', ') }}){% endif %} · {{ ctl.frequency }} · {{ ctl.type }} · cycle {{ cycle.name }}</div></div>
 <div class="head-actions">{{ pill(status.status) }}{% if status.override %} <span class="sub">computed: {{ status_labels.get(status.computed_status, status.computed_status) }}</span>{% endif %}
 {% if user.is_admin %}<form method="post" action="/controls/{{ ctl.id }}/remind" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}">
 <button class="btn small" type="submit" title="Email the people responsible for this control with a link back here">Send reminder</button></form>{% endif %}</div></div>
+
+{% if trail %}<nav class="nav-bar" aria-label="Move between controls"><div class="nav-bar-group">
+<a class="btn small" href="/criteria/{{ trail.criterion }}">← Back to {{ trail.criterion }}</a><a class="btn ghost small" href="/criteria">All SOC 2 criteria</a></div>
+<div class="nav-bar-group">{% if trail.prev %}<a class="btn ghost small" href="/controls/{{ trail.prev }}?from={{ trail.criterion }}">‹ {{ trail.prev }}</a>{% endif %}
+<span class="sub">Control {{ trail.position }} of {{ trail.total }} in {{ trail.criterion }}</span>
+{% if trail.next %}<a class="btn ghost small" href="/controls/{{ trail.next }}?from={{ trail.criterion }}">{{ trail.next }} ›</a>{% endif %}</div></nav>
+{% elif list_qs %}<nav class="nav-bar" aria-label="Back"><div class="nav-bar-group"><a class="btn small" href="{{ back_list }}">← Back to controls list</a></div></nav>{% endif %}
 
 {% if status.override %}<div class="card card-info"><h2>Accepted by admin until {{ status.override.expires }}</h2>
 <div class="note">{{ status.override.justification }}</div>
@@ -14,7 +24,9 @@
 <section class="card"><h2>What this control does</h2><p>{{ ctl.description }}</p>
 <h3>Evidence we are looking for</h3><ul class="list">{% for w in wanted %}<li>{{ w }}</li>{% endfor %}
 {% for a in assignments if a.instructions and a.status not in ('approved', 'cancelled') %}<li class="note-li">{{ a.instructions }}</li>{% endfor %}</ul>
-{% for fw, reqs in mappings %}<h3 class="mt">{{ fw.name }}</h3><div class="tags">{% for rid, title in reqs %}<span>{% if user.sees_everything %}<a href="{{ '/criteria/' ~ rid if fw.id == 'soc2' else '/frameworks/' ~ fw.id }}">{{ rid }}</a>{% else %}{{ rid }}{% endif %} {{ title }}</span>{% endfor %}</div>{% endfor %}
+{% for fw, reqs in mappings %}<h3 class="mt">{{ 'SOC 2 criteria this control meets' if fw.id == 'soc2' else fw.name }}</h3><div class="tags">{% for rid, title in reqs %}<span class="{{ 'hit' if trail and rid == trail.criterion }}">{% if user.sees_everything %}<a href="{{ '/criteria/' ~ rid if fw.id == 'soc2' else '/frameworks/' ~ fw.id }}">{{ rid }}</a>{% else %}{{ rid }}{% endif %} {{ title }}{% if trail and rid == trail.criterion %} · <em>you came from here</em>{% endif %}</span>{% endfor %}</div>{% endfor %}
+<h3 class="mt">How it is evidenced</h3><p><b>{{ how.label }}</b>{% if how.sources %} · {{ how.sources|join(', ') }}{% endif %}{% if how.manual %} <span class="sub">· {{ how.manual|join(', ')|lower }}</span>{% endif %}</p>
+{% if how.hidden %}<p class="sub">Not shown: {{ how.hidden|join(', ') }} (not connected for this organization).</p>{% endif %}
 {% if ctl.links %}<h3 class="mt">Reference documents</h3><ul class="list">{% for l in ctl.links %}<li><a href="{{ l.url }}" rel="noopener noreferrer" target="_blank">{{ l.name }}</a></li>{% endfor %}</ul>{% endif %}</section>
 
 <section class="card" id="upload"><h2>Upload evidence</h2>

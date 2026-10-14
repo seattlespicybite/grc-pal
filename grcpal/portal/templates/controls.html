@@ -1,26 +1,35 @@
 {% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}Controls{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>{{ 'My controls' if user.is_contributor else 'Controls' }}</h1><div class="sub">{{ rows|length }} controls shown</div></div>
+{% set single = columns|length == 1 %}
+<div class="page-head"><div><h1>{{ 'My controls' if user.is_contributor else (columns[0].name.split(' (')[0].split(':')[0] ~ ' controls' if single else 'Controls') }}</h1>
+<div class="sub">{{ rows|length }} controls shown{% if criterion %} · filtered to {{ criterion }}{% elif family %} · filtered to {{ family }}{% endif %}</div></div>
 {% if user.is_admin %}<a class="btn small" href="/controls/new">New custom control</a>{% endif %}</div>
 <form class="filters" method="get" action="/controls" role="search">
   <input name="q" value="{{ q }}" placeholder="Search ID or title" aria-label="Search">
+  {% if soc2_on %}<select name="family" data-autosubmit aria-label="SOC 2 family"><option value="">All SOC 2 families</option>
+    {% for fid, fname in families %}<option value="{{ fid }}" {{ 'selected' if fid == family }}>{{ fid }} {{ fname }}</option>{% endfor %}</select>
+  <select name="criterion" data-autosubmit aria-label="SOC 2 criterion"><option value="">{{ 'All in ' ~ family if family else 'All criteria' }}</option>
+    {% for x in crit_options %}<option value="{{ x }}" {{ 'selected' if x == criterion }}>{{ x }}</option>{% endfor %}</select>{% endif %}
+  <select name="evidenced" data-autosubmit aria-label="Evidenced by"><option value="">Any evidence type</option>
+    {% for k, v in [('automated', 'Automatic'), ('hybrid', 'Hybrid'), ('manual', 'Manual')] %}<option value="{{ k }}" {{ 'selected' if k == evidenced }}>{{ v }}</option>{% endfor %}</select>
   <select name="status" data-autosubmit aria-label="Status"><option value="">All statuses</option>
     {% for s in ['ok', 'accepted', 'findings', 'attention', 'not_started'] %}<option value="{{ s }}" {{ 'selected' if s == status }}>{{ status_labels[s] }}</option>{% endfor %}</select>
-  <select name="category" data-autosubmit aria-label="Category"><option value="">All categories</option>
-    {% for k, v in category_names.items() %}<option value="{{ k }}" {{ 'selected' if k == category }}>{{ v }}</option>{% endfor %}</select>
   {% if view == 'all' and frameworks|length > 1 %}<select name="framework" data-autosubmit aria-label="Framework"><option value="">All frameworks</option>
     {% for fid, fw in frameworks.items() %}<option value="{{ fid }}" {{ 'selected' if fid == framework }}>{{ fw.name }}</option>{% endfor %}</select>{% endif %}
   <select name="owner" data-autosubmit aria-label="Owner"><option value="">All owners</option>
     {% for o in owners %}<option value="{{ o }}" {{ 'selected' if o == owner }}>{{ o }}</option>{% endfor %}</select>
+  {% if category %}<input type="hidden" name="category" value="{{ category }}">{% endif %}
   <input type="hidden" name="sort" value="{{ sort }}"><button class="btn small" type="submit">Filter</button>
-  {% if q or status or category or owner or framework %}<a href="/controls">Clear</a>{% endif %}
+  {% if q or status or category or owner or framework or family or criterion or evidenced %}<a href="/controls">Clear</a>{% endif %}
 </form>
-{% set qs = 'q=' ~ q ~ '&status=' ~ status ~ '&category=' ~ category ~ '&owner=' ~ owner ~ '&framework=' ~ framework %}
+{% set qs = 'q=' ~ q|urlencode ~ '&status=' ~ status ~ '&category=' ~ category ~ '&owner=' ~ owner|urlencode ~ '&framework=' ~ framework ~ '&family=' ~ family ~ '&criterion=' ~ criterion ~ '&evidenced=' ~ evidenced %}
 <div class="card table-wrap"><table>
 <thead><tr><th><a href="/controls?{{ qs }}&sort=id">ID</a></th><th><a href="/controls?{{ qs }}&sort=title">Control</a></th>
-{% for fw in columns %}<th>{{ fw.name.split(' (')[0] if columns|length > 1 else (fw.name.split(' (')[0] ~ (' criteria' if fw.id == 'soc2' else ' requirements')) }}</th>{% endfor %}<th><a href="/controls?{{ qs }}&sort=owner">Owner</a></th><th>Frequency</th><th><a href="/controls?{{ qs }}&sort=status">Status</a></th></tr></thead>
-<tbody>{% for c in rows %}<tr><td><a href="/controls/{{ c.id }}"><b>{{ c.id }}</b></a></td><td>{{ c.title }}</td>
-{% for fw in columns %}<td class="tags">{% set ids = refs[c.id][fw.id] %}{% for x in ids[:6] %}<span>{{ x }}</span>{% endfor %}{% if ids|length > 6 %}<span>+{{ ids|length - 6 }}</span>{% endif %}{% if c.custom and loop.first %}<span class="custom-tag">custom</span>{% endif %}</td>{% endfor %}
-<td>{{ c.owner }}</td><td>{{ c.frequency }}</td><td>{{ pill(c.status) }}</td></tr>
+{% for fw in columns %}<th>{{ fw.name.split(' (')[0].split(':')[0] ~ (' criteria' if fw.id == 'soc2' else '') }}</th>{% endfor %}
+<th>Evidenced by</th><th><a href="/controls?{{ qs }}&sort=owner">Owner</a></th><th><a href="/controls?{{ qs }}&sort=status">Status</a></th></tr></thead>
+<tbody>{% for c in rows %}{% set h = how[c.id] %}<tr><td class="nowrap"><a href="/controls/{{ c.id }}{% if list_qs %}?list={{ list_qs|urlencode }}{% endif %}"><b>{{ c.id }}</b></a></td><td>{{ c.title }}</td>
+{% for fw in columns %}<td class="tags">{% set ids = refs[c.id][fw.id] %}{% for x in ids[:6] %}<span class="{{ 'hit' if fw.id == 'soc2' and x in hits }}">{{ x }}</span>{% endfor %}{% if ids|length > 6 %}<span>+{{ ids|length - 6 }}</span>{% endif %}{% if c.custom and loop.first %}<span class="custom-tag">custom</span>{% endif %}</td>{% endfor %}
+<td>{{ h.label }}<div class="sub">{{ h.sources|join(', ') if h.sources else c.frequency }}</div></td>
+<td>{{ c.owner }}</td><td>{{ pill(c.status) }}</td></tr>
 {% else %}<tr><td colspan="{{ 5 + columns|length }}" class="empty">No controls match these filters.</td></tr>{% endfor %}</tbody></table></div>
 {% endblock %}

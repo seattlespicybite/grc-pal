@@ -798,3 +798,43 @@ def test_soc2_overview_and_criterion_pages(env):
     assert "Not in scope" in page and "In scope: Security, Availability ·" in page
     as_(client, AUDITOR)
     assert client.get("/criteria/CC6.1").status_code == 200
+
+
+def test_control_page_remembers_where_you_came_from(env):
+    portal, client = env
+    as_(client, ADMIN)
+    client.get("/view?f=soc2&next=/")
+    page = client.get("/controls/IAM-02?from=CC6.1").text
+    assert 'href="/criteria/CC6.1">← Back to CC6.1' in page and 'href="/criteria">All SOC 2 criteria' in page
+    siblings = portal.catalog.coverage()["CC6.1"]
+    i = siblings.index("IAM-02")
+    assert f'href="/controls/{siblings[i - 1]}?from=CC6.1"' in page and f'href="/controls/{siblings[i + 1]}?from=CC6.1"' in page
+    assert f"Control {i + 1} of {len(siblings)} in CC6.1" in page and "you came from here" in page
+    # the left menu stays on the SOC 2 criteria, not Controls
+    assert re.search(r'<a href="/criteria" class="active">', page) and not re.search(r'<a href="/controls" class="active">', page)
+    # only a known criterion id is accepted; anything else is ignored, never turned into a link
+    for bad in ("https://evil.example", "//evil.example", "../../criteria/CC6.1", "CC6.1<script>"):
+        r = client.get("/controls/IAM-02", params={"from": bad}).text
+        assert "Back to" not in r and "evil.example" not in r
+    # from the list: the back link keeps the filters, and only known filter keys survive
+    page = client.get("/controls/IAM-05", params={"list": "family=CC6&criterion=CC6.3&next=https://evil.example&q=rev"}).text
+    assert 'href="/controls?family=CC6&amp;criterion=CC6.3&amp;q=rev">← Back to controls list' in page
+    assert "evil.example" not in page
+    # control owners do not get the criteria trail (criteria pages are for admins and auditors)
+    as_(client, HR)
+    page = client.get("/controls/HR-02?from=CC1.4").text
+    assert "Back to CC1.4" not in page and 'href="/criteria"' not in page
+
+
+def test_controls_list_soc2_filters(env):
+    portal, client = env
+    as_(client, ADMIN)
+    page = client.get("/controls?family=CC6&criterion=CC6.3").text
+    expected = portal.catalog.coverage()["CC6.3"]
+    assert f"{len(expected)} controls shown" in page and all(f">{c}</b>" in page for c in expected)
+    assert '<span class="hit">CC6.3</span>' in page
+    assert 'href="/controls/IAM-05?list=family%3DCC6%26criterion%3DCC6.3' in page
+    # a criterion outside the chosen family is ignored rather than returning an empty list
+    assert "filtered to CC6" in client.get("/controls?family=CC6&criterion=CC1.1").text
+    auto = client.get("/controls?evidenced=manual").text
+    assert "IAM-02</b>" not in auto

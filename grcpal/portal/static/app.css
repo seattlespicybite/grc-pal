@@ -265,3 +265,7 @@ label.check, label.toggle { display: flex; gap: 8px; align-items: center; font-w
   .crit-row > :nth-child(3) { display: none; }
   .fam-body { padding-left: 20px; }
 }
+.tags span.hit { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); font-weight: 600; }
+.nav-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 18px; }
+.nav-bar-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
