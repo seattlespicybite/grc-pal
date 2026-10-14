@@ -42,7 +42,7 @@ produces evidence an auditor can test.
    decisions, completion tracking, export. (CC6.2, CC6.3)
 2. **Slack and Microsoft Teams notifications** alongside email, with per-user preferences and a
    weekly digest.
-3. **Restore command** for portal data from the daily export.
+3. **Restore command**: rebuild a clean instance from a `grcpal backup` file (backup and verify are done).
 4. **Risk register UI** with likelihood and impact scoring, treatment owners and review cycle. (CC3)
 5. **Vendor page** with review status, SOC 2 report expiry reminders and CUEC tracking. (CC9.2)
 

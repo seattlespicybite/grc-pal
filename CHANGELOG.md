@@ -2,6 +2,16 @@
 
 All notable changes are listed here. The project follows [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- `grcpal backup keygen | create | verify`: one encrypted file (AES-256-GCM, authenticated chunks) with every
+  table for every tenant, all evidence, the HR inbox and the published configuration. A manifest holds the
+  SHA-256 of every file, row counts, app and schema versions, and the audit-chain check of each tenant.
+  The backup key is separate from `GRCPAL_ENCRYPTION_KEY`, which is never written into a backup. Backups are
+  recorded in each tenant's audit log (`backup.create`, `backup.complete`).
+- `SCHEMA_VERSION` for the stored data model (recorded in backups; migrations follow).
+
 ## [0.1.0] - unreleased
 
 First public release.
