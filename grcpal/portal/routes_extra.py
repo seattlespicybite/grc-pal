@@ -307,6 +307,8 @@ def register(app, h) -> None:
     @app.get("/frameworks/{fid}", response_class=HTMLResponse)
     def framework_detail(request: Request, fid: str, user: User = Depends(current_user)):
         h.need(user, "admin", "auditor")
+        if fid == "soc2":  # SOC 2 has its own view with families, points of focus and navigation
+            return RedirectResponse("/criteria", status_code=303)
         portal = p()
         fw = portal.frameworks.get(fid)
         if not fw:

@@ -154,7 +154,8 @@ def test_dev_login_first_user_becomes_admin(tmp_path, monkeypatch):
 
 
 # ================================================================ pages and roles
-ADMIN_PAGES = ["/", "/controls", "/controls/IAM-04", "/criteria", "/criteria/CC6.1", "/criteria/P5.1", "/work",
+ADMIN_PAGES = ["/", "/controls", "/controls/IAM-04", "/criteria", "/criteria?open=CC6", "/criteria/CC6.1", "/criteria/P5.1",
+               "/controls/IAM-02?from=CC6.1", "/controls/IAM-02?from=../../evil", "/work",
                "/reviews", "/evidence", "/overrides", "/audit", "/audit?verify=1&action=user.", "/users", "/cycles",
                "/policies", "/policies/information-security-policy", "/dev/outbox",
                "/controls?status=not_started&category=privacy&sort=owner"]
@@ -757,3 +758,43 @@ def test_starter_and_repo_yaml_is_valid():
         data = yaml.safe_load(Path(f).read_text())
         for item in (data.get("body") or []) if "ISSUE_TEMPLATE" in f and isinstance(data, dict) else []:
             assert all(v is not None for v in item.get("attributes", {}).values()), f
+
+
+# ================================================================ SOC 2 view: families, criterion order, evidence sources
+def test_soc2_families_order_and_evidence_labels(env):
+    from grcpal.portal import soc2
+
+    portal, _ = env
+    cat = portal.catalog
+    assert [soc2.family_of(x) for x in ("CC6.1", "A1.2", "C1.1", "PI1.3", "P4.2", "P8.1")] == ["CC6", "A1", "C1", "PI1", "P", "P"]
+    order = soc2.ordered_criteria(cat)
+    assert order[0] == "CC1.1" and order.index("CC6.1") == order.index("CC5.3") + 1
+    assert soc2.neighbours(order, "CC1.1")[0] is None and soc2.neighbours(order, "nope") == (None, None, 0)
+    fams = {f["id"]: f for f in soc2.families(cat, {})}
+    assert fams["CC6"]["name"] == "Logical and physical access" and fams["CC6"]["counts"]["not_started"] == fams["CC6"]["total"]
+    assert [c["id"] for c in fams["CC6"]["criteria"]][:2] == ["CC6.1", "CC6.2"]
+    # sources that are switched off for this client are not shown as how the control is evidenced
+    iam02 = cat.control("IAM-02")
+    how = soc2.evidenced_by(iam02, {"aws_iam"})
+    assert how["label"] == "Automatic" and how["sources"] == ["Entra ID"] and how["hidden"] == ["AWS"]
+    only_aws = {**iam02, "evidence": [{"artifact": "x", "via": "collector:aws_iam"}]}
+    assert soc2.evidenced_by(only_aws, {"aws_iam"})["type"] == "manual"   # nothing automatic is connected
+    assert soc2.worst(["ok", "findings", "not_started"]) == "findings" and soc2.worst([]) == "not_started"
+
+
+def test_soc2_overview_and_criterion_pages(env):
+    portal, client = env
+    as_(client, ADMIN)
+    page = client.get("/criteria?open=CC6").text
+    assert "SOC 2 Trust Services Criteria" in page and "Logical and physical access" in page
+    assert '<details class="fam" open id="CC6">' in page and 'href="/criteria/CC6.1"' in page
+    crit = client.get("/criteria/CC6.1").text
+    assert 'href="/criteria/CC5.3"' in crit and 'href="/criteria/CC6.2"' in crit and "Criterion 18 of" in crit
+    assert 'href="/controls/IAM-02?from=CC6.1"' in crit and "How it is evidenced" in crit
+    assert client.get("/frameworks/soc2", follow_redirects=False).headers["location"] == "/criteria"
+    # categories outside the report scope are shown as not in scope
+    portal.base_catalog.scope["in_scope_categories"] = ["security", "availability"]
+    page = client.get("/criteria").text
+    assert "Not in scope" in page and "In scope: Security, Availability ·" in page
+    as_(client, AUDITOR)
+    assert client.get("/criteria/CC6.1").status_code == 200

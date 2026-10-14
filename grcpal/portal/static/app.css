@@ -234,3 +234,34 @@ label.check, label.toggle { display: flex; gap: 8px; align-items: center; font-w
 .view-switch .seg a:hover { text-decoration: none; color: #fff; background: rgba(255,255,255,.07); }
 .view-switch .seg a.on { background: var(--accent); color: #fff; font-weight: 600; }
 .stat.off { opacity: .75; }
+
+/* SOC 2 overview: families and criteria */
+.mb { margin-bottom: 18px; }
+.fam-card { padding: 0; overflow: hidden; }
+.fam-card > .row-between { padding: 14px 20px; border-bottom: 1px solid var(--border); }
+.fam-card > .row-between h2 { margin: 0; }
+.fam { border-bottom: 1px solid var(--surface-2); }
+.fam:last-child, .fam-off:last-child { border-bottom: 0; }
+.fam > summary { list-style: none; color: var(--text); font-weight: 400; }
+.fam > summary::-webkit-details-marker { display: none; }
+.fam-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(80px, 180px) 100px; gap: 12px; align-items: center; padding: 12px 20px; }
+.fam > summary.fam-row:hover { background: var(--surface-2); }
+.fam > summary .fam-id::before { content: "›"; display: inline-block; width: 14px; color: var(--muted); transition: transform .15s; }
+.fam[open] > summary .fam-id::before { transform: rotate(90deg); }
+.fam-id { font-weight: 700; }
+.fam-bar .bar { margin: 0; }
+.fam-count { text-align: right; }
+.fam-off { color: var(--idle); border-bottom: 1px solid var(--surface-2); }
+.fam-off .fam-id::before { content: ""; display: inline-block; width: 14px; }
+.fam-body { padding: 0 20px 12px 48px; }
+.crit-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) 100px 140px; gap: 12px; padding: 8px 10px; border-radius: 8px; color: var(--text); }
+.crit-row:hover { background: var(--surface-2); text-decoration: none; }
+.crit-row b { color: var(--accent); }
+.pager { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+@media (max-width: 720px) {
+  .fam-row { grid-template-columns: 56px minmax(0, 1fr) 80px; }
+  .fam-bar { display: none; }
+  .crit-row { grid-template-columns: 56px minmax(0, 1fr); }
+  .crit-row > :nth-child(3) { display: none; }
+  .fam-body { padding-left: 20px; }
+}

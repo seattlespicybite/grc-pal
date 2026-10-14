@@ -355,21 +355,24 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     # ------------------------------------------------------------------ criteria (admins, auditors)
     @app.get("/criteria", response_class=HTMLResponse)
-    def criteria(request: Request, category: str = "", user: User = Depends(current_user)):
+    def criteria(request: Request, open: str = "", user: User = Depends(current_user)):
+        """SOC 2 overview: criteria grouped into families (CC1-CC9, then the additional categories)."""
         need(user, "admin", "auditor")
+        from grcpal.portal import soc2
+
         portal = p()
         stat = {c["id"]: c["status"] for c in health()["controls"]}
-        rows = []
-        for cid, crit in portal.catalog.criteria.items():
-            if category and crit["category"] != category:
-                continue
-            pts = portal.catalog.points_of_focus.get(cid, [])
-            ctls = portal.catalog.coverage().get(cid, [])
-            rows.append({"id": cid, "title": crit["title"], "category": crit["category"], "controls": ctls,
-                         "points": len(pts), "covered": sum(1 for x in pts if x["status"] == "covered"),
-                         "gaps": sum(1 for x in pts if x["status"] in ("gap", "partial")),
-                         "statuses": sorted({stat.get(c, "not_started") for c in ctls})})
-        return render(request, user, "criteria.html", rows=rows, category=category)
+        fams = soc2.families(portal.catalog, stat)
+        in_scope = [f for f in fams if f["in_scope"]]
+        scoped_controls = {c for f in in_scope for c in f["controls"]}
+        totals = {s: 0 for s in soc2.STATUSES}
+        for c in scoped_controls:
+            s = stat.get(c, "not_started")
+            totals[s if s in totals else "not_started"] += 1
+        categories = [cat for cat in soc2.CATEGORY_ORDER if any(f["category"] == cat and f["in_scope"] for f in fams)]
+        return render(request, user, "criteria.html", families=fams, totals=totals, open_family=open,
+                      scoped_criteria=len(portal.catalog.in_scope_criteria), scoped_controls=len(scoped_controls),
+                      scope_names=[CATEGORY_NAMES.get(c, c) for c in categories])
 
     @app.get("/criteria/{crit_id}", response_class=HTMLResponse)
     def criterion_detail(request: Request, crit_id: str, user: User = Depends(current_user)):
@@ -383,9 +386,21 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         for a in portal.assignments():
             if a["target_type"] == "point" and a["status"] not in ("approved", "cancelled"):
                 open_by_point.setdefault(a["target_id"], []).append(a)
+        from grcpal.collectors import disabled_sources
+        from grcpal.portal import soc2
+
+        order = soc2.ordered_criteria(portal.catalog, in_scope_only=crit_id in portal.catalog.in_scope_criteria)
+        prev_id, next_id, position = soc2.neighbours(order, crit_id)
+        skip = disabled_sources(portal.catalog, portal.settings)
+        controls = [portal.catalog.control(c) for c in portal.catalog.coverage().get(crit_id, [])]
+        how = {c["id"]: soc2.evidenced_by(c, skip) for c in controls}
+        family = soc2.family_of(crit_id)
         return render(request, user, "criterion.html", crit_id=crit_id, crit=crit, stat=stat,
                       points=portal.catalog.points_of_focus.get(crit_id, []), open_by_point=open_by_point,
-                      controls=[portal.catalog.control(c) for c in portal.catalog.coverage().get(crit_id, [])])
+                      controls=controls, how=how, prev_id=prev_id, next_id=next_id, position=position,
+                      order_total=len(order), family=family, family_name=soc2.FAMILY_NAMES.get(family, family),
+                      in_scope=crit_id in portal.catalog.in_scope_criteria,
+                      type_counts={k: sum(1 for h in how.values() if h["type"] == k) for k in soc2.TYPE_LABELS})
 
     # ------------------------------------------------------------------ work and assignments
     @app.get("/work", response_class=HTMLResponse)
