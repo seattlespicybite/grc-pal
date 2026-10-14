@@ -45,6 +45,9 @@ All notable changes are listed here. The project follows [semantic versioning](h
   found by CodeQL). It now also rejects addresses such as `pat@.example.com` and local parts over 64 characters.
 - Redirect targets are checked in one place: only paths inside the portal, never another host or
   scheme, backslashes or control characters.
+- Signing in at `http://localhost:8000` was blocked as a cross-site request because `grcpal serve` records
+  its address as `127.0.0.1`. `localhost`, `127.0.0.1` and `[::1]` now count as the same computer when the
+  portal runs on a loopback address (same port and scheme); real host names must still match exactly.
 
 ## [0.1.0] - unreleased
 
