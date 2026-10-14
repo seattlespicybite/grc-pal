@@ -3,14 +3,14 @@
 #   docker run --rm -p 8000:8000 -e GRCPAL_AUTH_MODE=dev -e GRCPAL_ENV=development -e GRCPAL_DEMO=1 grc-pal
 # Your catalog is not baked in: the portal loads it from storage (grcpal publish-config) or from a
 # mounted folder (GRCPAL_BASE). Without either it shows the built-in starter catalog.
-FROM python:3.12-slim AS build
+FROM python:3.14-slim AS build
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /src
 COPY pyproject.toml README.md LICENSE ./
 COPY grcpal ./grcpal
 RUN pip wheel --wheel-dir /wheels ".[portal,aws,gcp]"
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 LABEL org.opencontainers.image.title="GRC-pal" \
       org.opencontainers.image.description="Open-source SOC 2 compliance automation and evidence portal" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \
