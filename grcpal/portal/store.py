@@ -19,6 +19,9 @@ import sqlite3
 import threading
 from typing import Iterable
 
+# Version of the stored data model. Raise it only together with a migration (planned: grcpal/migrations.py);
+# backups record it so a restore can tell whether the data needs upgrading.
+SCHEMA_VERSION = 1
 TABLES = ("users", "cycles", "assignments", "uploads", "comments", "overrides", "audit",
           "reminders", "acks", "config", "events", "jobs", "customcontrols", "checks", "frameworks",
           "aireviews", "aiaudits")

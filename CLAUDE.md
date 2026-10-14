@@ -21,6 +21,7 @@ explain choices in plain words, keep changes small, never leave the test suite r
   | catalog, frameworks, collectors, evidence, report, tasks, checks | `tests/test_framework.py` |
   | service, auth, store, audit log, uploads, users, routes in `app.py` | `tests/test_portal.py` |
   | settings, integrations, AI, logs, frameworks page, `routes_extra.py` | `tests/test_features.py` |
+  | backup, `store.TABLES`, `SCHEMA_VERSION` | `tests/test_backup.py` |
   | templates, `app.js`, `app.css` | `tests/test_portal.py -k render` (also checks strict CSP), then the full suite |
 - Show diffs or changed parts only; do not paste whole files or full test output back.
 - Done means: full suite green, pyflakes clean, docs/CHANGELOG updated if behavior changed.
@@ -43,6 +44,7 @@ explain choices in plain words, keep changes small, never leave the test suite r
 | Collectors (Entra, Intune, Azure, AWS, GCP, GitHub) | `grcpal/collectors/*.py` (register in `NAMES` and `PLATFORMS`), clients in `grcpal/clients.py`, `grcpal/integrations/` |
 | Evidence store (write-once, SHA-256 manifests, tenant namespace) | `grcpal/evidence.py` |
 | Health report | `grcpal/report.py` |
+| Backup file (.grcbak: encrypt, create, verify) | `grcpal/backup.py` |
 | Settings registry (Configuration page, Setup guide, encryption) | `grcpal/settings.py` (`SCHEMA`), validators in `grcpal/integrations/` |
 | Custom checks (HTTP, TLS, command) and SSRF guard | `grcpal/checks.py` |
 | AI review and mock audit | `grcpal/ai/providers.py`, `grcpal/ai/review.py` |
@@ -56,7 +58,7 @@ explain choices in plain words, keep changes small, never leave the test suite r
 | Templates and static | `grcpal/portal/templates/`, `grcpal/portal/static/app.css`, `app.js` |
 | Demo data | `grcpal/portal/demo.py` |
 | Deployment | `Dockerfile`, `docker-compose.yml`, `deploy/azure/main.bicep`, `deploy/azure/deploy.sh` |
-| Tests | `tests/test_framework.py` (engine), `test_portal.py` (portal core), `test_features.py` (config, logs, frameworks, checks, AI), `test_browser.py` |
+| Tests | `tests/test_framework.py` (engine), `test_portal.py` (portal core), `test_features.py` (config, logs, frameworks, checks, AI), `test_backup.py`, `test_browser.py` |
 | Docs | `README.md`, `docs/*.md`, `CHANGELOG.md` |
 
 ## Rules that must not be broken
@@ -64,6 +66,8 @@ explain choices in plain words, keep changes small, never leave the test suite r
    and calls `self.audit(...)`. Hidden buttons are not authorization.
 2. Application code uses `TenantStore` only, never a backend store directly. Evidence paths stay
    `<source>/<run>`; the namespace is added inside `EvidenceStore`.
+   Only exception: `backup.py` reads every tenant through the raw backend. It is an operator tool
+   (CLI and jobs), must never be called from portal routes, and records its runs in each tenant's audit log.
 3. Strict CSP: no inline `<script>`, no `style="..."`, no `onclick` in portal templates (a test checks).
    Behavior goes in `static/app.js`, styles in `static/app.css`. Email templates may use inline styles.
 4. Secrets: saved via `SettingsStore` (AES-GCM, bound to tenant and field), never echoed to the browser,

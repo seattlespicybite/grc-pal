@@ -22,6 +22,9 @@ Portal administration (uses GRCPAL_TABLES_URL or GRCPAL_SQLITE)
     grcpal ai review --control HR-01      AI evidence review of one control
     grcpal ai audit --framework soc2      AI mock audit across a framework
     grcpal export --cycle 2026 --out export.zip
+    grcpal backup keygen --key-file backup.key            new backup key (keep it outside the instance)
+    grcpal backup create acme.grcbak --key-file backup.key   whole-instance encrypted backup
+    grcpal backup verify acme.grcbak --key-file backup.key   prove a backup is complete and unchanged
 """
 from __future__ import annotations
 
@@ -331,6 +334,47 @@ def cmd_export(args) -> int:
     return 0
 
 
+def cmd_backup(args) -> int:
+    from grcpal import backup
+
+    try:
+        if args.action == "keygen":
+            key = backup.new_key()
+            if not args.key_file:
+                print(key)
+            else:
+                fd = os.open(args.key_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, "w") as f:
+                    f.write(key + "\n")
+            print("Store this backup key outside the instance (password manager or Key Vault). Without it a backup "
+                  "cannot be read; it is not the same as GRCPAL_ENCRYPTION_KEY.", file=sys.stderr)
+            return 0
+        if not args.file:
+            raise SystemExit(f"grcpal backup {args.action} needs a file name")
+        if args.key_file:
+            key = backup.load_key(Path(args.key_file).read_text())
+        elif os.getenv("GRCPAL_BACKUP_KEY"):
+            key = backup.load_key(os.environ["GRCPAL_BACKUP_KEY"])
+        else:
+            raise SystemExit("Give the backup key with --key-file or the GRCPAL_BACKUP_KEY environment variable "
+                             "(create one with: grcpal backup keygen)")
+        if args.action == "create":
+            manifest = backup.create(backup.from_env(args.evidence), Path(args.file), key)
+            report = {"ok": all(a["ok"] for a in manifest["audit"].values()), "problems": [],
+                      "manifest": manifest}
+            report["problems"] = [f"audit log of tenant {t} does not verify"
+                                  for t, a in manifest["audit"].items() if not a["ok"]]
+            out = {**backup.summary(report), "file": args.file, "sha256": manifest["file_sha256"]}
+        else:
+            report = backup.verify(Path(args.file), key)
+            out = backup.summary(report)
+    except backup.BackupError as exc:
+        print(f"backup failed: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(out, indent=2))
+    return 0 if out["ok"] else 2
+
+
 def cmd_report(args) -> int:
     cat = Catalog.load(args.base)
     evidence = EvidenceStore(args.evidence)
@@ -422,6 +466,14 @@ def main(argv: list[str] | None = None) -> int:
     ex.add_argument("--cycle", help="cycle ID (default: active cycle)")
     ex.add_argument("--out", default="grcpal-export.zip")
     ex.set_defaults(fn=cmd_export)
+
+    # allow_abbrev=False: "--key <value>" must fail, never be read as --key-file (keys stay out of shell history)
+    bk = sub.add_parser("backup", help="encrypted backup of the whole instance (tables, evidence, inbox, config)",
+                        allow_abbrev=False)
+    bk.add_argument("action", choices=["create", "verify", "keygen"])
+    bk.add_argument("file", nargs="?", help="backup file (.grcbak) to write or check")
+    bk.add_argument("--key-file", help="file holding the backup key (default: GRCPAL_BACKUP_KEY)")
+    bk.set_defaults(fn=cmd_backup)
 
     args = p.parse_args(argv)
     if args.cmd == "collect" and not (args.all or args.names):
