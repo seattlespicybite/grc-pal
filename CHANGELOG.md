@@ -34,11 +34,22 @@ All notable changes are listed here. The project follows [semantic versioning](h
   reset to starter, coverage warning, flag when a release changes the starter text. History is in
   the auditor export and in backups (new tables `controledits`, `controlhistory`).
 
+### Documentation
+- README rewritten for what GRC-pal does today: SOC 2 view, frameworks in use, control library owner,
+  request editing, backups, and three ways to deploy (VM with Python, Docker, Azure).
+- Quickstart section 4 is now a full production VM guide: settings file, systemd service, Docker
+  option, HTTPS, first sign-in, cron jobs for collection, recurring activities, reminders and backups.
+
 ### Changed
 - Creating or changing custom controls and custom frameworks now needs the control library owner
   (was: any admin).
 
 ### Fixed
+- Scheduled command-line jobs (`grcpal remind`, `grcpal tasks`) now send email with the settings saved
+  on the Configuration page, like the portal does. Before, they used environment variables only, so
+  reminders from cron could silently go to the console.
+- The Docker image creates `/data` owned by the app user, so a volume mounted there (as in
+  `docker-compose.yml` and the VM guide) is writable.
 - `owner_emails` and `links` on custom controls are stored as JSON, so they also work with Azure
   Table storage.
 - Email address check rewritten to run in linear time (a crafted value could make the old pattern slow;

@@ -501,3 +501,21 @@ def test_custom_control_keeps_mapping_to_framework_switched_off(env):
                                        "owner_emails": CONTRIB.email}, existing_id="CUS-09")
     ctl = portal.catalog.control("CUS-09")
     assert ctl["mappings"]["iso27001"] == ["A.5.19"] and ctl["criteria"] == ["CC9.2", "CC9.1"]
+
+
+def test_command_line_uses_email_settings_saved_in_the_portal(env, tmp_path, monkeypatch):
+    """Scheduled jobs (grcpal remind, grcpal tasks) must send mail the way the portal is configured,
+    not only from environment variables."""
+    from grcpal import cli
+    from grcpal.evidence import EvidenceStore
+    from grcpal.portal import mailer
+    from grcpal.portal.store import SqliteStore, TenantStore
+
+    db = tmp_path / "cli.db"
+    monkeypatch.setenv("GRCPAL_SQLITE", str(db))
+    monkeypatch.delenv("GRCPAL_MAIL_BACKEND", raising=False)
+    portal, _ = env
+    web = portal.__class__(portal.base_catalog, TenantStore(SqliteStore(str(db)), "default"), portal.evidence)
+    web.settings_store.save("email", {"GRCPAL_MAIL_BACKEND": "off", "GRCPAL_MAIL_FROM": "grc@example.com"}, ADMIN.email)
+    job = cli._portal(portal.base_catalog, EvidenceStore(tmp_path / "ev"), required=True)
+    assert isinstance(job.mailer, mailer.NullMailer) and job.mailer.sync

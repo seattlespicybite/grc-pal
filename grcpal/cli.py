@@ -206,7 +206,15 @@ def _portal(cat, evidence, required: bool = False):
     from grcpal.portal.service import Portal
     from grcpal.portal.store import from_env
 
-    return Portal(cat, from_env(), evidence, mailer=mailer.from_env(sync=True))
+    portal = Portal(cat, from_env(), evidence)  # applies email settings saved in the portal, then the environment
+    try:
+        # scheduled jobs exit when done, so send synchronously instead of in the background
+        sync_mailer = mailer.from_settings(portal.settings, sync=True)
+    except Exception:  # noqa: BLE001 - incomplete settings: keep what the portal chose (it logged why)
+        return portal
+    sync_mailer.on_result = portal._mail_result
+    portal.mailer = sync_mailer
+    return portal
 
 
 def _admin_portal(args):
