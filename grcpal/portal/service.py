@@ -24,6 +24,7 @@ import zipfile
 from grcpal.evidence import EvidenceStore, utcnow
 from grcpal.portal import notify
 from grcpal.portal.auditlog import AuditLog
+from grcpal.portal.accounts import AccountsMixin
 from grcpal.portal.features import FeaturesMixin
 from grcpal.portal.auth import ROLES, SYSTEM, AuthError, Identity, User, bootstrap_admins, group_role
 from grcpal.portal.mailer import ConsoleMailer, Mailer, Message
@@ -56,7 +57,7 @@ def _rk() -> str:
     return f"{utcnow():%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:10]}"
 
 
-class Portal(FeaturesMixin):
+class Portal(FeaturesMixin, AccountsMixin):
     def __init__(self, catalog, store, evidence: EvidenceStore, mailer: Mailer | None = None,
                  today: dt.date | None = None, public_url: str | None = None, jobs_sync: bool | None = None) -> None:
         self.base_catalog, self.store, self.evidence = catalog, store, evidence
@@ -113,8 +114,7 @@ class Portal(FeaturesMixin):
         """Map a signed-in identity to a portal user, creating the row on first sign-in when allowed."""
         row = self.user_row(identity.email)
         if row:
-            if not row.get("active", True):
-                raise AuthError("your GRC-pal account is disabled; ask an admin", 403)
+            self._check_access(row)
             if (row.get("last_seen") or "") < (utcnow() - dt.timedelta(hours=1)).isoformat():
                 fields = {"last_seen": _now()}
                 if identity.name and identity.name != identity.email:
@@ -140,16 +140,21 @@ class Portal(FeaturesMixin):
         self.audit(by, "user.create", email, {"role": role, "source": source})
         return row
 
-    def add_user(self, actor: User, email: str, name: str, role: str) -> dict:
+    def add_user(self, actor: User, email: str, name: str, role: str, access_until: str = "") -> dict:
         self._admin(actor)
         email = (email or "").strip().lower()
         if not EMAIL.match(email):
             raise Invalid(f"'{email}' is not a valid email address")
         if role not in ROLES:
-            raise Invalid("Role must be admin, contributor or auditor")
+            raise Invalid("Role must be Admin, Control owner or Auditor")
         if self.user_row(email):
             raise Invalid(f"{email} already has access; change their role instead")
-        return self._create_user(email, (name or "").strip()[:120], role, "admin", actor.email)
+        until = self._auditor_until(access_until) if role == "auditor" else ""
+        row = self._create_user(email, (name or "").strip()[:120], role, "admin", actor.email)
+        if until:
+            row = self.store.update("users", "u", email, {"access_until": until})
+            self.audit(actor, "user.access_until", email, {"from": "", "to": until})
+        return row
 
     def _last_admin_guard(self, email: str) -> None:
         if self.active_emails("admin") == [email]:
@@ -161,13 +166,16 @@ class Portal(FeaturesMixin):
         if not row:
             raise Invalid("User not found")
         if role not in ROLES:
-            raise Invalid("Role must be admin, contributor or auditor")
+            raise Invalid("Role must be Admin, Control owner or Auditor")
         if row["role"] == role:
             return
         if row["role"] == "admin":
             self._last_admin_guard(row["RowKey"])
-        self.store.update("users", "u", row["RowKey"], {"role": role})
-        self.audit(actor, "user.role", row["RowKey"], {"from": row["role"], "to": role})
+        # auditors always have an access end date; other roles never do
+        until = self._auditor_until("") if role == "auditor" else ""
+        self.store.update("users", "u", row["RowKey"], {"role": role, "access_until": until})
+        self.revoke_sessions(row["RowKey"])  # new permissions take effect at the next sign-in
+        self.audit(actor, "user.role", row["RowKey"], {"from": row["role"], "to": role, "access_until": until})
 
     def set_active(self, actor: User, email: str, active: bool) -> None:
         self._admin(actor)
@@ -177,6 +185,8 @@ class Portal(FeaturesMixin):
         if not active and row["role"] == "admin":
             self._last_admin_guard(row["RowKey"])
         self.store.update("users", "u", row["RowKey"], {"active": bool(active)})
+        if not active:
+            self.revoke_sessions(row["RowKey"])
         self.audit(actor, "user.enable" if active else "user.disable", row["RowKey"], {})
 
     def _ensure_contributor(self, actor: User, email: str) -> None:

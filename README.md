@@ -34,7 +34,7 @@ pip install "grc-pal[portal] @ git+https://github.com/seattlespicybite/grc-pal"
 grcpal serve --demo
 ```
 
-Open http://localhost:8000 and pick a user: an admin, a contributor (HR) or the external
+Open http://localhost:8000 and pick a user: an admin, a Control owner (HR) or the external
 auditor. The demo has a closed cycle, a carried-forward cycle with work in progress, comments,
 a returned upload, an override and policy acknowledgments. Emails appear under **Email outbox**.
 
@@ -80,7 +80,7 @@ flowchart LR
 | Role | Can do |
 | --- | --- |
 | **Admin** | Everything: assign work, review evidence, override a control with justification and expiry, send reminders, manage users and cycles |
-| **Contributor** | Sees only the controls assigned to them or owned by them; uploads evidence, comments, acknowledges policies |
+| **Control owner** | Sees only the controls assigned to them or owned by them; uploads evidence, comments, acknowledges policies |
 | **Auditor** | Read-only: controls, evidence, comments, overrides, audit log, exports |
 
 Details: [docs/roles.md](docs/roles.md).

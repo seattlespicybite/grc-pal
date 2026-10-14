@@ -9,7 +9,7 @@
 {% if users %}<h1>Choose a user</h1><p class="sub">See what each role can do.</p>
 {% for u in users %}<form method="post" action="/dev/login" class="user-pick"><input type="hidden" name="csrf" value="{{ csrf }}">
 <input type="hidden" name="email" value="{{ u.RowKey }}"><input type="hidden" name="next" value="{{ next }}">
-<button type="submit"><b>{{ u.name }}</b><span class="sub">{{ u.RowKey }}</span><span class="role role-{{ u.role }}">{{ u.role|capitalize }}</span></button></form>{% endfor %}
+<button type="submit"><b>{{ u.name }}</b><span class="sub">{{ u.RowKey }}</span><span class="role role-{{ u.role }}">{{ role_labels[u.role] }}</span></button></form>{% endfor %}
 {% else %}<h1>Create the first admin</h1><p class="sub">This instance has no users yet. The first person to sign in becomes an admin.</p>
 <form method="post" action="/dev/login"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ next }}">
 <label for="e">Email</label><input id="e" name="email" type="email" required>

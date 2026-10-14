@@ -8,7 +8,7 @@ remains your responsibility. To report a vulnerability, see [SECURITY.md](../SEC
 
 | Threat | Protection |
 | --- | --- |
-| Someone outside the organization opens the portal | Sign-in at the platform edge (Easy Auth); only listed directories (`GRCPAL_ALLOWED_TENANT_IDS`); only people in the users table; optional enterprise-app assignment |
+| Someone outside the organization opens the portal | Local accounts (VM): only people an admin added can set a password, one-time links, sessions on the server. On Azure: sign-in at the platform edge (Easy Auth); only listed directories (`GRCPAL_ALLOWED_TENANT_IDS`); only people in the users table; optional enterprise-app assignment |
 | A contributor reads other teams' evidence | Visibility is computed in the service for every request: only assigned or owned controls; raw evidence store hidden; 404 rather than 403 for hidden objects |
 | An auditor changes something | Auditor role has no write paths; every write checks the role in the service layer |
 | One customer sees another's data (hosted use) | Separate deployment and storage account per customer; in addition every record key and evidence path carries the tenant prefix and reads outside it are refused (see [saas-architecture.md](saas-architecture.md)) |
@@ -26,6 +26,11 @@ remains your responsibility. To report a vulnerability, see [SECURITY.md](../SEC
 | Server-side request forgery through checks (for example reading cloud metadata to steal the portal's identity) | Checks resolve and pin the address, refuse loopback, private, link-local, multicast and reserved ranges, re-check every redirect, limit time and size |
 | Running code through the web portal | The portal never executes commands; command checks live only in the reviewed repository |
 | AI data exposure or manipulation | See [ai-assistant.md](ai-assistant.md): off by default, confirmation, masking, injection fencing, human disposition, full record |
+| Stolen password database | Passwords stored only as scrypt hashes with a random salt; setup links and session cookies stored only as SHA-256 hashes, so a database copy cannot sign anyone in |
+| Finding which accounts exist | Same answer on sign-in and Forgot password whether or not the account exists |
+| Session theft | HttpOnly, SameSite=Lax cookie (Secure over HTTPS); sessions end after 8 hours, on sign-out, and when the person is disabled, changes role or sets a new password |
+| Auditor keeps access after fieldwork | Every auditor account has an access end date (default 90 days); after it, sign-in and existing sessions are refused |
+| Losing the last admin | `grcpal create-admin` on the server creates or restores a local admin (break-glass); it needs shell access to the VM and is in the audit log |
 | Development shortcuts reaching production | `dev` sign-in refused when `GRCPAL_ENV=production`; production requires `GRCPAL_SECRET` |
 
 ## Data handled
@@ -33,7 +38,7 @@ remains your responsibility. To report a vulnerability, see [SECURITY.md](../SEC
 | Data | Where | Retention |
 | --- | --- | --- |
 | Evidence files and collector output | Blob `evidence` (write-once) | Retention period you set (default 730 days) |
-| Users (email, name, role, last seen) | Table storage | Until deleted by an operator; accounts are disabled, not deleted |
+| Users (email, name, role, last seen, password hash, auditor end date) | Table storage or SQLite | Until deleted by an operator; accounts are disabled, not deleted |
 | Requests, uploads metadata, comments, overrides, acknowledgments | Table storage | Same |
 | Audit log | Table storage, exported daily to blob | Same, plus write-once copies |
 | Application logs | Log Analytics | 30 days |
@@ -50,6 +55,18 @@ file contents.
   the instance (but not locked evidence).
 - Rotate the sign-in secret yearly (`deploy.sh` does it) and keep `GRCPAL_SECRET` secret.
 - Keep the image updated; watch the repository's security advisories.
+
+## Accepted risks for the internal VM proof of concept
+
+Local accounts have **no MFA and no lockout after failed attempts** yet. This is accepted only
+because the portal is reachable from the internal network alone. Failed sign-ins are recorded on the
+Logs page (category security) so you can spot guessing. Before the portal is reachable from outside
+the internal network, add MFA and lockout (roadmap), or use Entra SSO (next release) with
+Conditional Access. Also:
+
+- Use HTTPS; without it passwords cross the network in clear text. The Setup guide flags it.
+- Whoever administers the VM can read the database and evidence folder. Limit VM admin access and
+  include it in your own access reviews.
 
 ## Not included yet
 

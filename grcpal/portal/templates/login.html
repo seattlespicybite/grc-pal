@@ -1,0 +1,17 @@
+{% extends "public.html" %}{% block title %}Sign in{% endblock %}
+{% block content %}
+{% if signed_out %}<div class="flash ok" role="status">You are signed out.</div>{% endif %}
+{% if done %}<div class="flash ok" role="status">Your password is saved. Sign in with it now.</div>{% endif %}
+{% if error %}<div class="flash err" role="alert">{{ error }}</div>{% endif %}
+<div class="card">
+<h1>Sign in</h1>
+<form method="post" action="/login"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ next }}">
+<label for="e">Work email</label><input id="e" name="email" type="email" value="{{ email }}" autocomplete="username" required autofocus>
+<label for="pw">Password</label><input id="pw" name="password" type="password" autocomplete="current-password" required>
+<div class="actions"><button class="btn" type="submit">Sign in</button> <a href="/account/forgot">Forgot password?</a></div></form>
+</div>
+{% if first_admin %}<div class="card"><h2>First time here?</h2>
+<p class="sub">Nobody has a password yet. On the server that runs GRC-pal, create the first admin:</p>
+<p class="mono">grcpal create-admin you@example.com --name "Your Name"</p>
+<p class="sub">With Docker: <span class="mono">docker compose exec grcpal grcpal create-admin you@example.com</span>. Then sign in here and add everyone else on the Users and roles page.</p></div>{% endif %}
+{% endblock %}

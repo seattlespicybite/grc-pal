@@ -26,6 +26,7 @@ Portal administration (uses GRCPAL_TABLES_URL or GRCPAL_SQLITE)
 from __future__ import annotations
 
 import argparse
+import getpass
 import os
 import json
 import sys
@@ -237,7 +238,7 @@ def cmd_serve(args) -> int:
         import uvicorn
     except ImportError:
         raise SystemExit('The portal needs extra packages: pip install "grc-pal[portal]"')
-    os.environ.setdefault("GRCPAL_AUTH_MODE", "dev")
+    os.environ.setdefault("GRCPAL_AUTH_MODE", "dev" if args.demo else "local")
     if args.demo:
         os.environ["GRCPAL_DEMO"] = "1"
         os.environ.setdefault("GRCPAL_SQLITE", ":memory:" if not args.db else args.db)
@@ -295,6 +296,24 @@ def cmd_users(args) -> int:
     else:
         for u in portal.users():
             print(f"{u['RowKey']:40} {u['role']:12} {'active' if u.get('active', True) else 'disabled':9} {u.get('source', '')}")
+    return 0
+
+
+def cmd_create_admin(args) -> int:
+    """First admin and break-glass admin for local sign-in. Needs shell access to the server, which is the
+    point: whoever runs this already controls the VM. The password is typed, never passed as an argument."""
+    from grcpal.portal.service import Invalid
+
+    portal = _admin_portal(args)
+    password = getpass.getpass("Password (at least 12 characters): ")
+    if password != getpass.getpass("Type it again: "):
+        raise SystemExit("The two passwords do not match; nothing was changed")
+    try:
+        portal.create_local_admin(args.email, args.name or "", password)
+    except Invalid as exc:
+        raise SystemExit(str(exc)) from exc
+    print(f"{args.email.lower()} is a local admin (break-glass: password sign-in only). Sign in at "
+          f"{portal.public_url or 'the portal'}/login")
     return 0
 
 
@@ -405,9 +424,15 @@ def main(argv: list[str] | None = None) -> int:
     u = sub.add_parser("users", help="list or add portal users")
     u.add_argument("action", choices=["list", "add"])
     u.add_argument("email", nargs="?")
-    u.add_argument("--role", choices=["admin", "contributor", "auditor"], default="contributor")
+    u.add_argument("--role", choices=["admin", "contributor", "auditor"], default="contributor",
+                   help="contributor is shown as Control owner in the portal")
     u.add_argument("--name")
     u.set_defaults(fn=cmd_users)
+
+    ca = sub.add_parser("create-admin", help="create the first admin or a break-glass admin (local sign-in)")
+    ca.add_argument("email")
+    ca.add_argument("--name")
+    ca.set_defaults(fn=cmd_create_admin)
 
     rm = sub.add_parser("remind", help="email people with overdue requests")
     rm.add_argument("--overdue", action="store_true", required=True)

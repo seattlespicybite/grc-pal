@@ -25,7 +25,9 @@ from grcpal.catalog import Catalog
 from grcpal.evidence import EvidenceStore
 from grcpal.portal import mailer as mailer_mod
 from grcpal.portal import store as store_mod
-from grcpal.portal.auth import DEV_COOKIE, ROLE_HELP, ROLES, AuthError, User, auth_mode, identity_from_request
+from grcpal.portal.accounts import SESSION_COOKIE
+from grcpal.portal.auth import (DEV_COOKIE, ROLE_HELP, ROLE_LABELS, ROLES, AuthError, User, auth_mode,
+                                identity_from_request)
 from grcpal.portal.observability import configure_logging, current_actor, event, new_request_id, request_id
 from grcpal.portal.security import MAX_UPLOAD_BYTES, SECURITY_HEADERS, csrf_token, csrf_valid
 from grcpal.portal.service import Forbidden, Invalid, Portal
@@ -71,12 +73,12 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     app.state.report_cache = (0.0, None)
     app.state.portal.on_change(lambda: setattr(app.state, "report_cache", (0.0, None)))
     templates = Jinja2Templates(directory=str(HERE / "templates"))
-    templates.env.globals.update(status_labels=STATUS_LABELS, category_names=CATEGORY_NAMES, role_help=ROLE_HELP,
+    templates.env.globals.update(status_labels=STATUS_LABELS, category_names=CATEGORY_NAMES, role_help=ROLE_HELP, role_labels=ROLE_LABELS,
                                  roles=ROLES, auth_mode=mode, accept=ACCEPT)
     from grcpal.settings import OPTION_LABELS
     templates.env.globals["option_labels"] = OPTION_LABELS
     app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
-    logout_url = {"easyauth": "/.auth/logout", "dev": "/dev/logout"}.get(mode, os.getenv("GRCPAL_LOGOUT_URL", "/oauth2/sign_out"))
+    logout_url = {"easyauth": "/.auth/logout", "dev": "/dev/logout", "local": "/logout"}.get(mode, os.getenv("GRCPAL_LOGOUT_URL", "/oauth2/sign_out"))
     templates.env.globals["logout_url"] = logout_url
 
     # ------------------------------------------------------------------ middleware
@@ -114,6 +116,13 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         return app.state.portal
 
     def current_user(request: Request) -> User:
+        if mode == "local":
+            try:
+                user = p().session_user(request.cookies.get(SESSION_COOKIE))
+            except AuthError as exc:
+                raise _HTTPError(exc.status, str(exc)) from exc
+            current_actor.set(user.email)
+            return user
         try:
             identity = identity_from_request(request.headers, request.cookies)
         except AuthError as exc:
@@ -175,8 +184,9 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     @app.exception_handler(_HTTPError)
     async def http_error(request: Request, exc: _HTTPError):
-        if exc.status == 401 and mode == "dev" and request.method == "GET":
-            return RedirectResponse(f"/dev/login?next={quote(request.url.path)}", status_code=303)
+        if exc.status == 401 and mode in ("dev", "local") and request.method == "GET":
+            login = "/dev/login" if mode == "dev" else "/login"
+            return RedirectResponse(f"{login}?next={quote(request.url.path)}", status_code=303)
         return templates.TemplateResponse(request, "error.html", {"request": request, "status": exc.status,
                                           "message": exc.message, "user": None, "request_id": request_id.get()},
                                           status_code=exc.status)
@@ -561,27 +571,56 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         need(user, "admin")
         return render(request, user, "users.html", rows=p().users())
 
+    def users_page_with_link(request: Request, user: User, email: str, url: str, msg: str) -> HTMLResponse:
+        # The link is shown once on this page, never put in a redirect URL (it would land in logs and history).
+        return render(request, user, "users.html", rows=p().users(), new_link={"email": email, "url": url},
+                      page_msg=msg)
+
     @app.get("/users.csv")
     def users_csv(user: User = Depends(current_user)):
         need(user, "admin", "auditor")
         buf = io.StringIO()
         w = csv.writer(buf)
-        w.writerow(["email", "name", "role", "active", "source", "created_by", "created_at", "last_seen"])
+        w.writerow(["email", "name", "role", "active", "source", "created_by", "created_at", "last_seen",
+                    "access_until", "password_set"])
         for u in p().users():
-            w.writerow([u["RowKey"], u.get("name", ""), u["role"], u.get("active", True), u.get("source", ""),
-                        u.get("created_by", ""), u.get("created_at", ""), u.get("last_seen", "")])
+            w.writerow([u["RowKey"], u.get("name", ""), ROLE_LABELS.get(u["role"], u["role"]), u.get("active", True),
+                        u.get("source", ""), u.get("created_by", ""), u.get("created_at", ""), u.get("last_seen", ""),
+                        u.get("access_until", ""), bool(u.get("password_hash"))])
         p().audit(user, "users.export", "users.csv", {"rows": len(p().users())})
         return _attachment(f"grcpal-users-{p().today}.csv", buf.getvalue().encode())
 
     @app.post("/users")
     def add_user(request: Request, email: str = Form(...), name: str = Form(""), role: str = Form(...),
-                 csrf: str = Form(""), user: User = Depends(current_user)):
+                 access_until: str = Form(""), csrf: str = Form(""), user: User = Depends(current_user)):
         check_csrf(request, user.email, csrf)
         try:
-            p().add_user(user, email, name, role)
+            row = p().add_user(user, email, name, role, access_until)
+            msg = f"{row['RowKey']} added as {ROLE_LABELS.get(role, role)}"
+            if mode == "local":
+                return users_page_with_link(request, user, row["RowKey"], p().setup_link(user, row["RowKey"]), msg)
         except (Invalid, Forbidden) as exc:
             return back("/users", err=str(exc))
-        return back("/users", msg=f"{email} added as {role}")
+        return back("/users", msg=msg)
+
+    @app.post("/users/{email}/link")
+    def user_link(request: Request, email: str, csrf: str = Form(""), user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        try:
+            url = p().setup_link(user, email)
+        except (Invalid, Forbidden) as exc:
+            return back("/users", err=str(exc))
+        return users_page_with_link(request, user, email.lower(), url, f"New password link for {email.lower()}")
+
+    @app.post("/users/{email}/until")
+    def user_until(request: Request, email: str, access_until: str = Form(""), csrf: str = Form(""),
+                   user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        try:
+            p().set_access_until(user, email, access_until)
+        except (Invalid, Forbidden) as exc:
+            return back("/users", err=str(exc))
+        return back("/users", msg=f"Access end date saved for {email.lower()}")
 
     @app.post("/users/{email}/role")
     def set_role(request: Request, email: str, role: str = Form(...), csrf: str = Form(""),
@@ -591,7 +630,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             p().set_role(user, email, role)
         except (Invalid, Forbidden) as exc:
             return back("/users", err=str(exc))
-        return back("/users", msg=f"{email} is now {role}")
+        return back("/users", msg=f"{email} is now {ROLE_LABELS.get(role, role)}")
 
     @app.post("/users/{email}/active")
     def set_active(request: Request, email: str, active: str = Form(...), csrf: str = Form(""),
@@ -675,7 +714,11 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     from types import SimpleNamespace
 
-    from grcpal.portal import routes_extra
+    from grcpal.portal import routes_accounts, routes_extra
+
+    if mode == "local":
+        routes_accounts.register(app, SimpleNamespace(p=p, templates=templates, HTTPError=_HTTPError,
+                                                      check_csrf=check_csrf, safe_dest=safe_dest))
 
     routes_extra.register(app, SimpleNamespace(
         p=p, current_user=current_user, need=need, check_csrf=check_csrf, render=render, back=back,

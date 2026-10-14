@@ -40,6 +40,17 @@ First public release.
 - Single Bicep template and `deploy.sh` for Azure Container Apps (scale to zero), scheduled jobs
 - Docker image, Docker Compose quickstart, CI, CodeQL, Dependabot, release workflow for GHCR
 
+### Local accounts (for a VM on an internal network)
+- New default sign-in `GRCPAL_AUTH_MODE=local`: GRC-pal's own accounts with passwords stored as scrypt hashes
+- Admins add people and get a one-time link (72 hours, also emailed) for the person to choose a password
+- Forgot password by email (1-hour single-use link) and admin "Reset password" link as break-glass
+- `grcpal create-admin` creates the first admin or restores access (local sign-in only), from the server
+- Server-side sessions (8 hours), ended on sign-out, disable, role change and new password
+- Auditor accounts have an access end date (default 90 days); access is refused after it in every sign-in mode
+- "Contributor" is now shown as "Control owner" (stored value unchanged, no migration)
+- Users CSV adds access end date and whether a password is set; Setup guide flags missing HTTPS
+- Accepted for the internal proof of concept: no MFA or lockout yet (see docs/security.md)
+
 ### Development
 - Catalog and framework YAML is parsed with libyaml's C safe loader when available (about 9x faster load,
   test suite ~40 s to ~16 s); still the safe subset, a test proves Python object tags are rejected
