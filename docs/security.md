@@ -41,6 +41,16 @@ remains your responsibility. To report a vulnerability, see [SECURITY.md](../SEC
 Emails contain control descriptions, request instructions, file names and comment text; never
 file contents.
 
+## How the code and image are built (supply chain)
+
+- Every change reaches `main` through a pull request that must pass tests, CodeQL (security-extended
+  rules), dependency review and a workflow security check (zizmor). CODEOWNERS requires the
+  maintainer's review for CI, Docker and deployment files.
+- GitHub Actions are pinned to exact commit hashes and get the least permissions they need; checkouts do
+  not keep the token on disk. Dependabot proposes updates after a 7-day cooldown.
+- Releases need a maintainer approval, are built in CI with an SBOM and signed build provenance.
+  Verify an image before you run it: `gh attestation verify oci://ghcr.io/seattlespicybite/grc-pal:<version> --owner seattlespicybite`
+
 ## Your responsibilities (complementary controls)
 
 - Keep evidence free of secrets and unnecessary personal data; redact screenshots.

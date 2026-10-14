@@ -1,0 +1,19 @@
+name: Workflow security
+# zizmor checks the GitHub Actions workflows themselves (unpinned actions, token leaks, script injection).
+# Findings appear under Security > Code scanning.
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions: {}
+jobs:
+  zizmor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # upload results to the Security tab
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4

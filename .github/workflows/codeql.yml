@@ -5,18 +5,22 @@ on:
   pull_request:
   schedule:
     - cron: "23 4 * * 1"
-permissions:
-  contents: read
-  security-events: write
+permissions: {}   # nothing by default; each job asks for what it needs
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # upload results to the Security tab
     strategy:
       matrix:
         language: [python, javascript-typescript, actions]
     steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@9f759ee644a3e7c15c1390abf49868036c00067b # v3.38.3
         with:
           languages: ${{ matrix.language }}
-      - uses: github/codeql-action/analyze@v3
+          queries: security-extended   # more security rules than the default set
+      - uses: github/codeql-action/analyze@9f759ee644a3e7c15c1390abf49868036c00067b # v3.38.3

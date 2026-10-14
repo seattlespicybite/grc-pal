@@ -1,0 +1,5 @@
+# Changes to CI, release and repository security settings always need the owner's review.
+/.github/            @seattlespicybite
+/Dockerfile          @seattlespicybite
+/deploy/             @seattlespicybite
+/SECURITY.md         @seattlespicybite

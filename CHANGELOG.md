@@ -44,3 +44,10 @@ First public release.
 - Catalog and framework YAML is parsed with libyaml's C safe loader when available (about 9x faster load,
   test suite ~40 s to ~16 s); still the safe subset, a test proves Python object tags are rejected
 - pytest defaults to short tracebacks; CLAUDE.md maps each area to its test file
+
+### CI and supply chain
+- Actions pinned to commit hashes; per-job least-privilege permissions; checkout does not persist the token
+- New checks on pull requests: dependency review, zizmor workflow security scan; CodeQL uses security-extended rules
+- Release job runs in the `release` environment (maintainer approval) and uses the built-in `gh` CLI
+  instead of a third-party release action
+- Dependabot 7-day cooldown; CODEOWNERS for `.github/`, Dockerfile, `deploy/`, SECURITY.md
