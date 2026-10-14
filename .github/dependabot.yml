@@ -3,11 +3,13 @@ updates:
   - package-ecosystem: pip
     directory: /
     schedule: {interval: weekly}
+    cooldown: {default-days: 7}     # skip versions younger than a week (hijacked releases are usually caught by then)
     groups:
       python: {patterns: ["*"]}
   - package-ecosystem: github-actions
     directory: /
     schedule: {interval: weekly}
+    cooldown: {default-days: 7}
   - package-ecosystem: docker
     directory: /
     schedule: {interval: weekly}
