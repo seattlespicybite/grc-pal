@@ -1025,3 +1025,26 @@ def test_safe_redirect_targets_stay_inside_the_portal(env):
     assert r.headers["set-cookie"].startswith("grcpal_view=all;") and "evil" not in r.headers["set-cookie"]
     # control routes only redirect to real controls
     assert client.get("/controls/..%2F..%2Fevil/definition", follow_redirects=False).status_code == 404
+
+
+def test_local_addresses_count_as_the_same_site(env, monkeypatch):
+    """`grcpal serve` records http://127.0.0.1:8000 while the docs say open http://localhost:8000.
+    Both are this computer, so sign-in must work from either; other sites stay blocked."""
+    portal, client = env
+    monkeypatch.setenv("GRCPAL_PUBLIC_URL", "http://127.0.0.1:8000")
+    as_(client, ADMIN)
+    t = csrf(client)
+    a = assign(portal)
+    for origin in ("http://localhost:8000", "http://127.0.0.1:8000", "http://[::1]:8000"):
+        r = client.post(f"/assignments/{a['RowKey']}/remind", data={"csrf": t}, headers={"Origin": origin},
+                        follow_redirects=False)
+        assert r.status_code == 303, origin
+    for origin in ("https://evil.example", "http://localhost:9999", "http://localhost.evil.example:8000"):
+        r = client.post(f"/assignments/{a['RowKey']}/remind", data={"csrf": t}, headers={"Origin": origin},
+                        follow_redirects=False)
+        assert r.status_code == 403, origin
+    # a real hostname is never treated as local
+    monkeypatch.setenv("GRCPAL_PUBLIC_URL", "https://grc.example.com")
+    r = client.post(f"/assignments/{a['RowKey']}/remind", data={"csrf": t}, headers={"Origin": "http://localhost"},
+                    follow_redirects=False)
+    assert r.status_code == 403

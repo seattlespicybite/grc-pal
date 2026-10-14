@@ -146,7 +146,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         origin = request.headers.get("origin")
         if origin:
             allowed = os.getenv("GRCPAL_PUBLIC_URL") or f"{request.url.scheme}://{request.headers.get('host')}"
-            if urlparse(origin).netloc != urlparse(allowed).netloc:
+            if not _same_site(urlparse(origin), urlparse(allowed)):
                 raise _HTTPError(403, "Cross-site request blocked")
         if not csrf_valid(subject, token):
             raise _HTTPError(403, "Your form expired. Go back, refresh the page and try again.")
@@ -840,6 +840,19 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         app.router.routes.remove(r)
         app.router.routes.insert(0, r)
     return app
+
+
+LOOPBACK = {"localhost", "127.0.0.1", "::1"}
+
+
+def _same_site(origin, allowed) -> bool:
+    """The form came from this portal. localhost, 127.0.0.1 and [::1] are the same computer, so they count as
+    one site when the portal itself runs on a loopback address; the port must still match. Real host names
+    must match exactly."""
+    if origin.netloc == allowed.netloc:
+        return True
+    return (origin.hostname in LOOPBACK and allowed.hostname in LOOPBACK and origin.port == allowed.port
+            and origin.scheme == allowed.scheme)
 
 
 LIST_FILTERS = ("q", "status", "category", "owner", "sort", "framework", "family", "criterion", "evidenced")
