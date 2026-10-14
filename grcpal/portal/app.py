@@ -368,6 +368,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                       history=portal.control_history(control_id, 50) if user.sees_everything else [],
                       can_upload=portal.can_upload_control(user, control_id),
                       can_comment=portal.can_comment(user, [control_id]),
+                      kb_ready={crit for crit, pt in points if (portal.kb.get(crit) and portal.kb[crit].point(pt["id"]))},
                       note=portal.control_note(control_id), note_history=portal.control_note_history(control_id)[1:20],
                       can_note=portal.can_edit_control_note(user, control_id), note_max=portal.NOTE_MAX,
                       wanted=wanted, how=how, trail=trail, list_qs=list_qs,
@@ -510,6 +511,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                       prev=prev, prev_uploads=portal.uploads(assignment=prev["RowKey"], cycle=None) if prev else [],
                       prev_comments=portal.comments(assignment=prev["RowKey"]) if prev else [],
                       wanted=portal.evidence_wanted(a["controls"]), cycle_name=portal.cycle_name(a["cycle"]),
+                      guides=_guide_links(portal, a),
                       can_upload=portal.can_upload(user, a), can_comment=portal.can_comment(user, a["controls"]),
                       max_mb=MAX_UPLOAD_BYTES // (1024 * 1024))
 
@@ -878,6 +880,20 @@ def _same_site(origin, allowed) -> bool:
         return True
     return (origin.hostname in LOOPBACK and allowed.hostname in LOOPBACK and origin.port == allowed.port
             and origin.scheme == allowed.scheme)
+
+
+def _guide_links(portal, a: dict) -> list[tuple[str, str]]:
+    """Knowledge base links for an evidence request: the exact point of focus, or the in-scope criteria
+    of its controls. Built only from known ids, never from request input."""
+    cat = portal.catalog
+    if a.get("target_type") == "point":
+        crit = str(a.get("target_id", "")).split("-PF")[0]
+        if crit in cat.criteria:
+            return [(a["target_id"], f"/kb/{crit}#{a['target_id']}")]
+    in_scope = set(cat.in_scope_criteria)
+    crits = dict.fromkeys(x for c in a.get("controls", []) for x in (cat.control(c) or {}).get("criteria", [])
+                          if x in in_scope)
+    return [(x, f"/kb/{x}") for x in crits]
 
 
 LIST_FILTERS = ("q", "status", "category", "owner", "sort", "framework", "family", "criterion", "evidenced", "deferred")

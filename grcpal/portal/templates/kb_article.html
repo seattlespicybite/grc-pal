@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}{{ crit_id }} guidance{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="sub"><a href="/kb">Knowledge base</a> / {{ family_name }}</div>
+<h1>{{ crit_id }} · {{ article.title if article else crit.title }}</h1>
+<div class="sub">{% if article %}{{ pill('kb-' ~ article.status, 'Reviewed' if article.status == 'reviewed' else 'Draft') }}
+{% if article.status == 'reviewed' %} Reviewed by {{ article.reviewed_by }} on {{ article.last_reviewed }}{% else %} Not yet checked by a reviewer{% endif %}
+{% if article.source == 'program' %} · your organization's version{% endif %}{% else %}Guidance for this criterion is not written yet{% endif %}
+{% if not in_scope %} · <b>not in this report's scope</b>{% endif %}</div></div>
+<div class="head-actions">{% if prev_id %}<a class="btn ghost small" href="/kb/{{ prev_id }}">← {{ prev_id }}</a>{% endif %}
+{% if user.sees_everything %}<a class="btn ghost small" href="/criteria/{{ crit_id }}">Status of {{ crit_id }}</a>{% endif %}
+{% if next_id %}<a class="btn ghost small" href="/kb/{{ next_id }}">{{ next_id }} →</a>{% endif %}</div></div>
+
+<section class="card"><h2>What this criterion asks for</h2>
+{% if article and article.summary %}<p class="kb-text">{{ article.summary }}</p>{% else %}<p>{{ crit.title }}.</p>{% endif %}
+{% if article and article.auditor_approach %}<h3 class="mt">How auditors usually test it</h3><ul class="list">{% for x in article.auditor_approach %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+{% if controls %}<h3 class="mt">Controls that meet {{ crit_id }}</h3><div class="tags">{% for c in controls %}<span><a href="/controls/{{ c.id }}">{{ c.id }}</a> {{ c.title }}</span>{% endfor %}</div>{% endif %}
+</section>
+
+{% for s in sections %}
+<section class="card kb-point" id="{{ s.pf.id }}"><div class="row-between"><h2 class="m0"><span class="mono">{{ s.pf.id }}</span> {{ s.pf.point }}</h2>
+<a class="sub" href="#{{ s.pf.id }}">link</a></div>
+{% if s.guide %}
+<h3 class="mt">What the auditor tests</h3><p class="kb-text">{{ s.guide.what_auditor_tests }}</p>
+<h3 class="mt">Evidence standard</h3><ul class="list">{% for x in s.guide.evidence_standard %}<li>{{ x }}</li>{% endfor %}</ul>
+<h3 class="mt">Good examples</h3><ul class="list">{% for x in s.guide.good_examples %}<li>{{ x }}</li>{% endfor %}</ul>
+{% if s.guide.common_mistakes %}<h3 class="mt">Common mistakes</h3><ul class="list">{% for x in s.guide.common_mistakes %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+{% if s.guide.frequency %}<h3 class="mt">How often, and sampling</h3><p class="kb-text">{{ s.guide.frequency }}</p>{% endif %}
+{% else %}<div class="empty mt-s">Guidance for this point of focus is not written yet.</div>{% endif %}
+{% if s.pf.controls %}<p class="sub mt">Met by: {% for c in s.pf.controls %}{% if c in controls|map(attribute='id')|list %}<a href="/controls/{{ c }}">{{ c }}</a>{% else %}{{ c }}{% endif %}{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+</section>
+{% else %}<section class="card"><div class="empty">No points of focus listed for {{ crit_id }}.</div></section>{% endfor %}
+
+<p class="sub">Point-of-focus titles are short paraphrases for navigation; the AICPA Trust Services Criteria publication is authoritative.
+Guidance is general: confirm evidence expectations with your auditor.</p>
+{% endblock %}

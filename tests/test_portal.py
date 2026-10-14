@@ -160,7 +160,7 @@ ADMIN_PAGES = ["/", "/controls", "/controls/IAM-04", "/criteria", "/criteria?ope
                "/controls/IAM-02?from=CC6.1", "/controls/IAM-02?from=../../evil", "/controls/IAM-02/definition", "/work",
                "/reviews", "/evidence", "/overrides", "/audit", "/audit?verify=1&action=user.", "/users", "/cycles",
                "/policies", "/policies/information-security-policy", "/dev/outbox",
-               "/controls?status=not_started&category=privacy&sort=owner"]
+               "/controls?status=not_started&category=privacy&sort=owner", "/kb", "/kb/CC6.1", "/kb/CC1.2", "/kb/P5.1"]
 
 
 @pytest.mark.parametrize("path", ADMIN_PAGES)

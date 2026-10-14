@@ -241,6 +241,17 @@ class FeaturesMixin:
         return history[0] if history else None
 
     @property
+    def kb(self) -> dict:
+        """Knowledge base articles (starter kit plus the program repository's kb/ folder), loaded once."""
+        if getattr(self, "_kb_cache", None) is None:
+            from grcpal import kb as kb_mod
+            self._kb_cache = kb_mod.load(self.base_catalog.base)
+        return self._kb_cache
+
+    def reload_kb(self) -> None:
+        self._kb_cache = None
+
+    @property
     def frameworks(self) -> dict:
         """Every framework GRC-pal knows (built in, files, custom), whether or not this client uses it."""
         return fw_mod.load(self.base_catalog, self.store.list("frameworks", "f"))

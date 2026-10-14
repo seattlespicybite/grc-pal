@@ -62,6 +62,12 @@ def _ctx(args, settings=None):
 def cmd_validate(args) -> int:
     cat = Catalog.load(args.base)
     errors, warnings = validate(cat, set(collectors.NAMES))
+    from grcpal import kb
+    articles = kb.load(cat.base)
+    errors += [f"knowledge base: {x}" for x in kb.validate(cat, articles)]
+    missing = kb.missing_points(cat, articles, cat.in_scope_criteria)
+    if missing:
+        warnings.append(f"knowledge base: {len(missing)} in-scope points of focus have no guidance yet")
     for w in warnings:
         print(f"WARN  {w}")
     for e in errors:

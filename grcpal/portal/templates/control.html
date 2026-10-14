@@ -147,8 +147,9 @@
 {% endif %}
 
 {% if points %}<section class="card"><h2>Points of focus</h2>
-<table><thead><tr><th>Point</th><th>Status</th><th>Note</th></tr></thead><tbody>
-{% for crit, pt in points %}<tr><td>{% if user.sees_everything %}<a href="/criteria/{{ crit }}">{{ pt.id }}</a>{% else %}<span class="mono">{{ pt.id }}</span>{% endif %} {{ pt.point }}</td><td>{{ pill(pt.status) }}</td><td class="sub">{{ pt.note or '' }}</td></tr>{% endfor %}
+<p class="sub">Each point links to its evidence guidance in the knowledge base: what the auditor tests, what good evidence looks like, and common mistakes.</p>
+<table><thead><tr><th>Point</th><th>Status</th><th>Note</th><th>Guidance</th></tr></thead><tbody>
+{% for crit, pt in points %}<tr><td>{% if user.sees_everything %}<a href="/criteria/{{ crit }}">{{ pt.id }}</a>{% else %}<span class="mono">{{ pt.id }}</span>{% endif %} {{ pt.point }}</td><td>{{ pill(pt.status) }}</td><td class="sub">{{ pt.note or '' }}</td><td class="nowrap"><a href="/kb/{{ crit }}#{{ pt.id }}">{{ 'Evidence guide' if crit in kb_ready else 'Guide (not written yet)' }}</a></td></tr>{% endfor %}
 </tbody></table></section>{% endif %}
 
 {% if ctl.edited and ctl.edited.starter_changed and user.sees_everything %}<div class="flash err" role="status">The starter definition of {{ ctl.id }} changed in a GRC-pal update after it was edited here. Your version is still in use; compare it with the starter text {% if is_lib %}and edit or reset it{% endif %} below.</div>{% endif %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}Knowledge base{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Knowledge base</h1>
+<div class="sub">What auditors test for each SOC 2 criterion and point of focus, what good evidence looks like, and common mistakes.
+In scope: {{ counts.reviewed }} reviewed · {{ counts.draft }} draft · {{ counts.missing }} not written yet</div></div></div>
+
+<p class="sub">Guidance only: your auditor decides what evidence is sufficient. <b>Draft</b> articles have not yet been checked by a reviewer.
+Record how your organization meets each control in its <b>How we meet this control</b> notes.</p>
+
+{% for g in groups if g.in_scope %}
+<section class="card fam-card"><div class="row-between"><h2>{{ g.id }} · {{ g.name }}</h2></div>
+<div class="fam-body">{% for r in g.rows %}<a class="crit-row" href="/kb/{{ r.id }}"><b>{{ r.id }}</b><span>{{ r.title }}</span>
+<span class="sub">{{ r.written }} of {{ r.points }} points</span><span>{{ pill('kb-' ~ r.status, {'reviewed': 'Reviewed', 'draft': 'Draft', 'missing': 'Not written'}[r.status]) }}</span></a>{% endfor %}</div></section>
+{% endfor %}
+
+{% set deferred = groups|rejectattr('in_scope')|list %}
+{% if deferred %}<section class="card"><details><summary>Categories not in this report's scope ({{ deferred|map(attribute='name')|join(', ') }})</summary>
+<div class="fam-body mt-s">{% for g in deferred %}{% for r in g.rows %}<a class="crit-row" href="/kb/{{ r.id }}"><b>{{ r.id }}</b><span>{{ r.title }}</span>
+<span class="sub">{{ r.written }} of {{ r.points }} points</span><span>{{ pill('kb-' ~ r.status, {'reviewed': 'Reviewed', 'draft': 'Draft', 'missing': 'Not written'}[r.status]) }}</span></a>{% endfor %}{% endfor %}</div>
+</details></section>{% endif %}
+{% endblock %}

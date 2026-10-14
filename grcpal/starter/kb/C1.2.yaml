@@ -1,0 +1,49 @@
+criterion: C1.2
+title: Confidential information is disposed of securely
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  When confidential information reaches the end of its retention period, or a customer leaves, you find it
+  and destroy it in a way that cannot be undone. That includes data in databases, storage, backups, laptops
+  and other devices. Auditors look for a retention rule, a trigger, and a record that disposal happened.
+auditor_approach:
+  - Reads the data retention and disposal policy and checks that it names data types, retention periods and the disposal method.
+  - Requests the population of disposal events in the period (customer offboardings, retired devices, expired data) and samples from it.
+  - Inspects automated deletion rules, such as storage lifecycle policies, and backup retention settings.
+  - Checks certificates of destruction or wipe records for devices that were disposed of or reissued.
+points:
+  - id: C1.2-PF01
+    what_auditor_tests: >
+      Whether you can tell which confidential information is due for disposal: retention periods are defined
+      and there is a trigger (contract end, retention expiry, device retirement) that starts disposal.
+    evidence_standard:
+      - Retention schedule naming data types, where they are stored, the retention period and the owner.
+      - The trigger for disposal, such as a customer offboarding checklist or an automated lifecycle rule.
+      - Population of disposal triggers in the period (customers who left, devices retired).
+    good_examples:
+      - Data retention policy approved through a pull request, with a table of data types and periods.
+      - Customer offboarding issue template that includes a data deletion step and an owner.
+      - Storage lifecycle policy export showing automatic deletion after the retention period.
+    common_mistakes:
+      - Policy says "data is kept as long as needed" with no periods, so nothing is ever due for deletion.
+      - No list of customers who left during the period, so the auditor cannot pick a sample.
+      - Backups kept far longer than the retention schedule without a documented reason.
+    frequency: Retention schedule reviewed annually; triggers are event driven, and auditors sample from the period's population.
+  - id: C1.2-PF02
+    what_auditor_tests: >
+      Whether disposal actually happened, completely and irreversibly, for the sampled events: data deleted
+      from all stores including backups (or aged out on schedule), and devices wiped or destroyed.
+    evidence_standard:
+      - For each sampled customer exit, a record of what was deleted, from where, when and by whom.
+      - Statement of how backups are handled (deleted or expire within a stated time).
+      - For devices, a wipe record from the MDM or a certificate of destruction from the disposal vendor, matched to the asset inventory.
+    good_examples:
+      - Closed offboarding ticket with deletion script output and the date, linked to the customer contract end.
+      - Intune remote wipe report for retired laptops, reconciled to the asset register.
+      - Certificate of destruction from an e-waste vendor listing serial numbers.
+    common_mistakes:
+      - Deleting the customer's account but leaving their data in analytics stores, exports or logs.
+      - Wipe records that cannot be matched to specific devices because serial numbers are missing.
+      - Disposal done long after the trigger with no explanation of the delay.
+    frequency: Event driven. Expect the auditor to sample customer exits and disposed devices across the whole period.

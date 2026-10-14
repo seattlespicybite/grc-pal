@@ -14,12 +14,12 @@
 {% else %}<tr><td colspan="4" class="empty">No control maps to this criterion yet.</td></tr>{% endfor %}
 </tbody></table></div></section>
 
-<section class="card"><h2>Points of focus</h2>
+<section class="card"><div class="row-between"><h2 class="m0">Points of focus</h2><a class="btn ghost small" href="/kb/{{ crit_id }}">Evidence guidance for {{ crit_id }}</a></div>
 <p class="sub">Short paraphrases for navigation; the AICPA publication is authoritative.</p>
 {% for p in points %}<div class="point-row">
 <div class="row-between"><div><b class="mono">{{ p.id }}</b> {{ p.point }}
 <div class="tags mt-s">{% for c in p.controls %}<span><a href="/controls/{{ c }}?from={{ crit_id }}">{{ c }}</a></span>{% endfor %}</div>
-{% if p.note %}<div class="sub">{{ p.note }}</div>{% endif %}</div><div>{{ pill(p.status) }}</div></div>
+{% if p.note %}<div class="sub">{{ p.note }}</div>{% endif %}<div class="sub"><a href="/kb/{{ crit_id }}#{{ p.id }}">What good evidence looks like</a></div></div><div>{{ pill(p.status) }}</div></div>
 {% for a in open_by_point.get(p.id, []) %}<div class="sub">Assigned to {{ a.assignee }} · due {{ a.due }} · <a href="/assignments/{{ a.RowKey }}">open</a></div>{% endfor %}
 {% if user.is_admin and p.controls %}<details class="mt-s"><summary>Assign evidence for this point</summary>
 {{ assign_form('point', p.id, '/criteria/' ~ crit_id, csrf, '', today) }}</details>{% endif %}</div>
