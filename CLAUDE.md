@@ -8,10 +8,21 @@ explain choices in plain words, keep changes small, never leave the test suite r
 - Read only the files the task needs. Start from the map below instead of exploring the whole tree.
 - Before changing code, say in 2-3 lines what you will change and which tests prove it.
 - Write or update the test first when fixing a bug; make it fail, then fix.
+- Large files (`service.py`, `features.py`, `app.py`, `routes_extra.py`, `settings.py`, `test_portal.py`):
+  find the function with grep, then read only that line range. Never print a whole large file.
 - Run the narrowest tests while working, the full suite once at the end:
-  - one file: `python -m pytest -q tests/test_features.py`
   - one test: `python -m pytest -q tests/test_portal.py -k reminder`
-  - everything: `python -m pytest -q` (about 45 s) and `python -m pyflakes grcpal tests`
+  - after a failure, rerun only what failed: `python -m pytest -q --lf`
+  - everything: `python -m pytest -q` (about 20 s) and `python -m pyflakes grcpal tests`
+- Which tests to run for a change:
+
+  | Changed | Run |
+  | --- | --- |
+  | catalog, frameworks, collectors, evidence, report, tasks, checks | `tests/test_framework.py` |
+  | service, auth, store, audit log, uploads, users, routes in `app.py` | `tests/test_portal.py` |
+  | settings, integrations, AI, logs, frameworks page, `routes_extra.py` | `tests/test_features.py` |
+  | templates, `app.js`, `app.css` | `tests/test_portal.py -k render` (also checks strict CSP), then the full suite |
+- Show diffs or changed parts only; do not paste whole files or full test output back.
 - Done means: full suite green, pyflakes clean, docs/CHANGELOG updated if behavior changed.
 - Do not reformat or rename unrelated code. Do not add dependencies without asking.
 - Commit only when asked. Use a branch and a pull request for anything non-trivial.

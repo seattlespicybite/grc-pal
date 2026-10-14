@@ -40,3 +40,7 @@ include = ["grcpal*"]
 [tool.setuptools.package-data]
 "grcpal.portal" = ["templates/*.html", "templates/email/*", "static/*"]
 "grcpal" = ["starter/**/*", "starter/**/.*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--tb=short"   # short failure output: easier to read, fewer AI tokens

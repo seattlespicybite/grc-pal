@@ -39,3 +39,8 @@ First public release.
 ### Deployment
 - Single Bicep template and `deploy.sh` for Azure Container Apps (scale to zero), scheduled jobs
 - Docker image, Docker Compose quickstart, CI, CodeQL, Dependabot, release workflow for GHCR
+
+### Development
+- Catalog and framework YAML is parsed with libyaml's C safe loader when available (about 9x faster load,
+  test suite ~40 s to ~16 s); still the safe subset, a test proves Python object tags are rejected
+- pytest defaults to short tracebacks; CLAUDE.md maps each area to its test file
