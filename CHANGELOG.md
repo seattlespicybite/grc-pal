@@ -11,6 +11,18 @@ All notable changes are listed here. The project follows [semantic versioning](h
   The backup key is separate from `GRCPAL_ENCRYPTION_KEY`, which is never written into a backup. Backups are
   recorded in each tenant's audit log (`backup.create`, `backup.complete`).
 - `SCHEMA_VERSION` for the stored data model (recorded in backups; migrations follow).
+- **Frameworks in use.** Admins turn frameworks on or off per organization (Frameworks page or
+  `GRCPAL_FRAMEWORKS`; audited, at least one stays on). With one framework the portal shows only that
+  framework; with several, a **Showing** switcher picks one or **All**. The switch is a display
+  preference and never changes access. Mappings to frameworks that are off are kept.
+- **SOC 2 view.** Criteria grouped into families (CC1-CC9, then the additional categories) with
+  status bars and report scope; criterion pages with previous/next and how each control is evidenced
+  from connected sources only.
+- **Control navigation.** Control pages remember whether you came from a criterion or a filtered
+  list: trail, **Back to** buttons, previous/next within the criterion, and the menu stays in place.
+  Only known criterion IDs and list filter keys are accepted, so the links cannot point outside the portal.
+- Controls list: SOC 2 family, criterion and evidence-type filters; one requirements column per
+  framework shown.
 
 ## [0.1.0] - unreleased
 
