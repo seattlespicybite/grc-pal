@@ -213,10 +213,10 @@ class FeaturesMixin:
 
     @property
     def frameworks_in_use(self) -> dict:
-        """Frameworks switched on for this client (GRCPAL_FRAMEWORKS). Empty setting means all of them."""
+        """Frameworks switched on for this client (GRCPAL_FRAMEWORKS). Empty setting means SOC 2 only."""
         known = self.frameworks
-        chosen = [f for f in self.settings.list("GRCPAL_FRAMEWORKS") if f in known]
-        return {f: known[f] for f in chosen} if chosen else known
+        chosen = [f for f in self.settings.list("GRCPAL_FRAMEWORKS") if f in known] or ["soc2"]
+        return {f: known[f] for f in chosen}
 
     def program_view(self, requested: str = "") -> str:
         """The framework the portal shows: the only one in use, the one the person picked, or "all"."""

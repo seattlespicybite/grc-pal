@@ -1239,6 +1239,7 @@ points_of_focus:
     point: Confidential information is destroyed
     controls:
     - DAT-02
+    - DAT-03
     status: covered
   PI1.1:
   - id: PI1.1-PF01

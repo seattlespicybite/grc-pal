@@ -213,6 +213,7 @@ def test_custom_control_lifecycle_visibility_and_report(env):
     from grcpal import report
 
     portal, client = env
+    portal.set_framework_in_use(ADMIN, "iso27001", True)
     login(client, ADMIN)
     assert client.get("/controls/new").status_code == 200
     t = token(client, "/controls/new")
@@ -447,8 +448,12 @@ def test_control_page_after_mock_audit(env):
 # ================================================================ frameworks in use and the framework shown
 def test_frameworks_in_use_toggle_is_admin_only_audited_and_hides_others(env):
     portal, client = env
-    assert {"soc2", "iso27001"} <= set(portal.frameworks_in_use)  # empty setting: every framework
+    assert list(portal.frameworks_in_use) == ["soc2"]  # empty setting: SOC 2 only (the default)
     login(client, ADMIN)
+    page = client.get("/controls").text
+    assert "SOC 2 criteria" in page and "ISO/IEC 27001" not in page and 'class="view-switch"' not in page
+    portal.set_framework_in_use(ADMIN, "iso27001", True)
+    assert set(portal.frameworks_in_use) == {"soc2", "iso27001"}
     assert client.get("/view?f=all&next=/controls", follow_redirects=False).status_code == 303
     assert "ISO/IEC 27001" in client.get("/controls").text
     t = token(client, "/frameworks")
@@ -479,6 +484,7 @@ def test_frameworks_in_use_toggle_is_admin_only_audited_and_hides_others(env):
 
 def test_view_switch_only_changes_display_and_rejects_outside_redirects(env):
     portal, client = env
+    portal.set_framework_in_use(ADMIN, "iso27001", True)
     login(client, ADMIN)
     r = client.get("/view?f=iso27001&next=/controls", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/controls" and "grcpal_view=iso27001" in r.headers["set-cookie"]
@@ -494,6 +500,7 @@ def test_view_switch_only_changes_display_and_rejects_outside_redirects(env):
 
 def test_custom_control_keeps_mapping_to_framework_switched_off(env):
     portal, _ = env
+    portal.set_framework_in_use(ADMIN, "iso27001", True)
     portal.save_custom_control(ADMIN, {"id": "CUS-09", "title": "Customer schedule control", "map_soc2": "CC9.2",
                                        "map_iso27001": "A.5.19", "owner_emails": CONTRIB.email})
     portal.set_framework_in_use(ADMIN, "iso27001", False)

@@ -251,8 +251,11 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             return RedirectResponse("/work", status_code=303)
         portal, data = p(), health()
         cats: dict = {}
+        in_scope = set(portal.catalog.in_scope_criteria)
         for c in data["controls"]:
             for crit in c["criteria"]:
+                if crit not in in_scope:  # deferred categories are not part of this report
+                    continue
                 cat = portal.catalog.criteria[crit]["category"]
                 cats.setdefault(cat, {}).setdefault(c["status"], set()).add(c["id"])
         by_cat = {k: {s: len(v) for s, v in d.items()} for k, d in cats.items()}
@@ -266,7 +269,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     @app.get("/controls", response_class=HTMLResponse)
     def controls(request: Request, q: str = "", status: str = "", category: str = "", owner: str = "",
                  sort: str = "id", framework: str = "", family: str = "", criterion: str = "", evidenced: str = "",
-                 user: User = Depends(current_user)):
+                 deferred: str = "", user: User = Depends(current_user)):
         from grcpal import frameworks as fw_mod
         from grcpal.collectors import disabled_sources
         from grcpal.portal import soc2
@@ -286,6 +289,12 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         visible = portal.visible_controls(user)
         if visible is not None:
             rows = [c for c in rows if c["id"] in visible]
+        # controls that serve only categories deferred from the report stay out of the way unless asked for
+        out_of_scope = [c for c in rows if c["criteria"] and not c["in_scope"]]
+        deferred_hidden = 0
+        if not (deferred or category):
+            deferred_hidden = len(out_of_scope)
+            rows = [c for c in rows if not (c["criteria"] and not c["in_scope"])]
         if q:
             ql = q.lower()
             rows = [c for c in rows if ql in c["id"].lower() or ql in c["title"].lower()]
@@ -315,7 +324,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         return render(request, user, "controls.html", rows=rows, q=q, status=status, category=category,
                       owner=owner, sort=sort, owners=sorted(portal.catalog.roles), framework=framework,
                       frameworks=fws, columns=columns, refs=refs, how=how, soc2_on=soc2_on, family=family,
-                      criterion=criterion, evidenced=evidenced, families=[(f, soc2.FAMILY_NAMES.get(f, f)) for f in fam_ids],
+                      criterion=criterion, evidenced=evidenced, deferred=bool(deferred), deferred_hidden=deferred_hidden,
+                      families=[(f, soc2.FAMILY_NAMES.get(f, f)) for f in fam_ids],
                       crit_options=crit_options, hits={criterion} if criterion else (set(crit_options) if family else set()),
                       list_qs=_list_query(str(request.url.query)))
 
@@ -855,7 +865,7 @@ def _same_site(origin, allowed) -> bool:
             and origin.scheme == allowed.scheme)
 
 
-LIST_FILTERS = ("q", "status", "category", "owner", "sort", "framework", "family", "criterion", "evidenced")
+LIST_FILTERS = ("q", "status", "category", "owner", "sort", "framework", "family", "criterion", "evidenced", "deferred")
 
 
 def _list_query(raw: str) -> str:

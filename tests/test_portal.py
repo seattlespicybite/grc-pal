@@ -842,6 +842,26 @@ def test_controls_list_soc2_filters(env):
     assert "IAM-02</b>" not in auto
 
 
+def test_starter_scope_is_security_availability_confidentiality_and_deferred_controls_hidden(env):
+    portal, client = env
+    scope = portal.base_catalog.scope
+    assert scope["in_scope_categories"] == ["security", "availability", "confidentiality"]
+    assert set(scope["deferred_categories"]) == {"processing_integrity", "privacy"}
+    cats = {portal.catalog.criteria[c]["category"] for c in portal.catalog.in_scope_criteria}
+    assert cats == {"security", "availability", "confidentiality"}
+    as_(client, ADMIN)
+    page = client.get("/controls").text
+    assert ">PI-01</b>" not in page and ">PRV-01</b>" not in page and ">IAM-02</b>" in page
+    assert "deferred controls hidden" in page and 'href="/controls?deferred=1"' in page
+    shown = client.get("/controls?deferred=1").text
+    assert ">PI-01</b>" in shown and ">PRV-01</b>" in shown
+    # choosing a deferred category on purpose shows its controls
+    assert ">PRV-01</b>" in client.get("/controls?category=privacy").text
+    # the dashboard shows only categories in the report scope
+    dash = client.get("/").text
+    assert "<b>Confidentiality</b>" in dash and "<b>Privacy</b>" not in dash and "<b>Processing Integrity</b>" not in dash
+
+
 def test_admin_edits_request_people_due_date_and_access_follows(env):
     portal, client = env
     a = assign(portal, "HR-01", CONTRIB)
