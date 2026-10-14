@@ -193,7 +193,7 @@ class FeaturesMixin:
 
     # ================================================================ frameworks (custom)
     def save_framework(self, actor, fid: str, name: str, version: str, description: str, requirements_text: str) -> dict:
-        self._admin(actor)
+        self._library(actor)
         fid = (fid or "").strip().lower()
         if not fw_mod.ID_RE.match(fid):
             raise self._invalid("Framework ID: 2-40 lowercase letters, digits or hyphens, e.g. hipaa-security")
@@ -238,7 +238,7 @@ class FeaturesMixin:
                 "links": r.get("links") or [], "custom": True}
 
     def save_custom_control(self, actor, form: dict, existing_id: str | None = None) -> dict:
-        self._admin(actor)
+        self._library(actor)
         cid = (existing_id or form.get("id") or "").strip().upper()
         if not CONTROL_ID.match(cid):
             raise self._invalid("Control ID: 2-24 capital letters, digits, dots or hyphens, e.g. CUS-01 or HIPAA-164.312")
@@ -297,7 +297,7 @@ class FeaturesMixin:
         return row
 
     def retire_custom_control(self, actor, cid: str, reason: str) -> None:
-        self._admin(actor)
+        self._library(actor)
         row = self.custom_control(cid)
         if not row:
             raise self._invalid("Custom control not found")

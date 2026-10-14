@@ -170,7 +170,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         in_use = portal.frameworks_in_use
         view = portal.program_view(request.cookies.get(VIEW_COOKIE, ""))
         ctx.setdefault("nav_active", "")
-        ctx.update(fw_in_use=in_use, view=view, view_fw=in_use.get(view),request=request, user=user, csrf=csrf_token(user.email), today=portal.today.isoformat(),
+        ctx.update(fw_in_use=in_use, view=view, view_fw=in_use.get(view), library_owner=portal.library_owner(),request=request, user=user, csrf=csrf_token(user.email), today=portal.today.isoformat(),
                    cycle=portal.active_cycle(), org=portal.org, request_id=request_id.get(),
                    review_count=len(portal.reviewable(user)),
                    my_open=sum(1 for a in portal.assignments(user=user, mine=True) if a["status"] in ("open", "returned")),
@@ -720,6 +720,15 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         except (Invalid, Forbidden) as exc:
             return back("/users", err=str(exc))
         return back("/users", msg=f"{email} is now {ROLE_LABELS.get(role, role)}")
+
+    @app.post("/users/{email}/library-owner")
+    def set_library_owner(request: Request, email: str, csrf: str = Form(""), user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        try:
+            p().set_library_owner(user, email)
+        except (Invalid, Forbidden) as exc:
+            return back("/users", err=str(exc))
+        return back("/users", msg=f"{email} is now the control library owner")
 
     @app.post("/users/{email}/active")
     def set_active(request: Request, email: str, active: str = Form(...), csrf: str = Form(""),

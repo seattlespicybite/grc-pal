@@ -5,6 +5,9 @@
 {% if new_link %}<section class="card"><h2>Password link for {{ new_link.email }}</h2>
 <p class="sub">Send this link to {{ new_link.email }} (it was also emailed if email is set up). It works once and expires in 72 hours. Anyone with the link can set this person's password, so send it only to them.</p>
 <p class="mono link-box">{{ new_link.url }}</p></section>{% endif %}
+<p class="sub">The <b>control library owner</b> is one admin who alone can change control definitions: owners, title,
+description, evidence wanted and framework mappings. Other admins run the program (requests, reviews, users).
+{% if library_owner %}Current owner: <b>{{ library_owner }}</b>.{% else %}<b>Nobody holds this role yet</b>; any admin can assign it below.{% endif %}</p>
 <div class="grid g3">{% for r in roles %}<div class="stat"><div class="strong"><span class="role role-{{ r }}">{{ role_labels[r] }}</span></div><div class="l">{{ role_help[r] }}</div></div>{% endfor %}</div>
 <section class="card mt-l"><details {{ 'open' if not new_link and rows|length < 2 }}><summary>Add a person</summary>
 <form method="post" action="/users" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
@@ -15,7 +18,7 @@
 <div class="hint">{% if auth_mode == 'local' %}After you add someone you get a one-time link for them to choose a password. {% else %}They sign in with their normal company account. {% endif %}People you assign work to, and owners listed in catalog/roles.yaml, get Control owner access automatically.</div>
 <div class="actions"><button class="btn" type="submit">Add</button></div></form></details></section>
 <div class="card table-wrap"><table><thead><tr><th>Person</th><th>Role</th><th>Status</th><th>Added</th><th>Last seen</th><th></th></tr></thead><tbody>
-{% for u in rows %}<tr><td><b>{{ u.name }}</b><div class="sub">{{ u.RowKey }}</div>{% if u.local_only %}<div class="sub">Break-glass admin (local sign-in only)</div>{% endif %}</td>
+{% for u in rows %}<tr><td><b>{{ u.name }}</b><div class="sub">{{ u.RowKey }}</div>{% if u.local_only %}<div class="sub">Break-glass admin (local sign-in only)</div>{% endif %}{% if u.RowKey == library_owner %}<div class="mt-s"><span class="role role-library">Control library owner</span></div>{% endif %}</td>
 <td><form method="post" action="/users/{{ u.RowKey|urlencode }}/role" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}">
 <select name="role" data-autosubmit aria-label="Role for {{ u.RowKey }}">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == u.role }}>{{ role_labels[r] }}</option>{% endfor %}</select>
 <noscript><button class="btn small ghost" type="submit">Save</button></noscript></form>
@@ -27,6 +30,8 @@
 <td class="sub">{{ u.source }}<br>{{ u.created_at[:10] }} by {{ u.created_by }}</td><td class="sub">{{ when(u.last_seen) if u.last_seen else 'never' }}</td>
 <td><div class="actions-cell">{% if auth_mode == 'local' and u.active %}<form method="post" action="/users/{{ u.RowKey|urlencode }}/link" data-confirm="Create a new password link for {{ u.RowKey }}? Any earlier link stops working; their current password keeps working until they use it.">
 <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small ghost" type="submit">{{ 'Reset password' if u.password_hash else 'Password link' }}</button></form>{% endif %}
+{% if u.role == 'admin' and u.active and u.RowKey != library_owner and (not library_owner or user.email == library_owner) %}<form method="post" action="/users/{{ u.RowKey|urlencode }}/library-owner" data-confirm="Make {{ u.RowKey }} the control library owner? {{ 'You will no longer be able to change control definitions.' if library_owner else 'Only this person will be able to change control definitions.' }}">
+<input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small ghost" type="submit">{{ 'Hand over control library' if library_owner else 'Make control library owner' }}</button></form>{% endif %}
 <form method="post" action="/users/{{ u.RowKey|urlencode }}/active" {% if u.active %}data-confirm="Disable {{ u.RowKey }}? They will lose access immediately."{% endif %}>
 <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="active" value="{{ '0' if u.active else '1' }}">
 <button class="btn small {{ 'ghost' if u.active else '' }}" type="submit">{{ 'Disable' if u.active else 'Enable' }}</button></form></div></td></tr>{% endfor %}

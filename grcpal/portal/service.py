@@ -156,6 +156,45 @@ class Portal(FeaturesMixin, AccountsMixin):
             self.audit(actor, "user.access_until", email, {"from": "", "to": until})
         return row
 
+    # ---------------------------------------------------------------- control library owner
+    def library_owner(self) -> str:
+        """Email of the one admin who may change control definitions (owners, text, mappings), or "" if nobody."""
+        for u in self.store.list("users", "u"):
+            if u.get("library_owner") and u.get("active", True) and u["role"] == "admin":
+                return u["RowKey"]
+        return ""
+
+    def is_library_owner(self, user: User) -> bool:
+        # read live from the users table, so a change applies at once, not at the next sign-in
+        return bool(user.is_admin and self.library_owner() == user.email)
+
+    def _library(self, actor: User) -> None:
+        if not self.is_library_owner(actor):
+            raise Forbidden("Only the control library owner can change control definitions"
+                            + ("" if self.library_owner() else "; an admin must take on that role first (Users and roles)"))
+
+    def set_library_owner(self, actor: User, email: str) -> None:
+        """Hand the control library owner role to an active admin. Only the current holder can hand it over;
+        when nobody holds it (for example the holder left), any admin can take it on or give it."""
+        self._admin(actor)
+        current = self.library_owner()
+        if current and current != actor.email:
+            raise Forbidden(f"Only the current control library owner ({current}) can hand this role over")
+        row = self.user_row(email)
+        if not row or row["role"] != "admin" or not row.get("active", True):
+            raise Invalid("The control library owner must be an active admin")
+        if current == row["RowKey"]:
+            return
+        if current:
+            self.store.update("users", "u", current, {"library_owner": False})
+        self.store.update("users", "u", row["RowKey"], {"library_owner": True})
+        self.audit(actor, "library_owner.set", row["RowKey"], {"from": current or None, "to": row["RowKey"]})
+
+    def _drop_library_owner(self, actor: User, row: dict, why: str) -> None:
+        if row.get("library_owner"):
+            self.store.update("users", "u", row["RowKey"], {"library_owner": False})
+            self.audit(actor, "library_owner.cleared", row["RowKey"], {"reason": why})
+
     def _last_admin_guard(self, email: str) -> None:
         if self.active_emails("admin") == [email]:
             raise Invalid("This is the last active admin. Add another admin first.")
@@ -173,6 +212,8 @@ class Portal(FeaturesMixin, AccountsMixin):
             self._last_admin_guard(row["RowKey"])
         # auditors always have an access end date; other roles never do
         until = self._auditor_until("") if role == "auditor" else ""
+        if row["role"] == "admin":
+            self._drop_library_owner(actor, row, f"role changed to {role}")
         self.store.update("users", "u", row["RowKey"], {"role": role, "access_until": until})
         self.revoke_sessions(row["RowKey"])  # new permissions take effect at the next sign-in
         self.audit(actor, "user.role", row["RowKey"], {"from": row["role"], "to": role, "access_until": until})
@@ -184,6 +225,8 @@ class Portal(FeaturesMixin, AccountsMixin):
             raise Invalid("User not found")
         if not active and row["role"] == "admin":
             self._last_admin_guard(row["RowKey"])
+        if not active:
+            self._drop_library_owner(actor, row, "account disabled")
         self.store.update("users", "u", row["RowKey"], {"active": bool(active)})
         if not active:
             self.revoke_sessions(row["RowKey"])

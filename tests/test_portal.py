@@ -48,6 +48,8 @@ def make_portal(tmp_path, tenant="acme", base_store=None, people=(ADMIN, ADMIN2,
                     public_url="https://grc.example.com")
     for u in people:
         portal._create_user(u.email, u.name, u.role, "test", "test")
+    if ADMIN in people:  # ADMIN is the control library owner in tests; ADMIN2 is an ordinary admin
+        store.update("users", "u", ADMIN.email, {"library_owner": True})
     return portal
 
 
@@ -868,3 +870,33 @@ def test_admin_edits_request_people_due_date_and_access_follows(env):
     portal.cancel_assignment(ADMIN, a["RowKey"], "not needed")
     with pytest.raises(Invalid):
         portal.edit_assignment(ADMIN, a["RowKey"], HR.email, [], "2026-11-20", "")
+
+
+def test_control_library_owner_is_one_admin_handed_over_and_cleared(env):
+    portal, client = env
+    assert portal.library_owner() == ADMIN.email
+    assert portal.is_library_owner(ADMIN) and not portal.is_library_owner(ADMIN2)
+    # only the holder hands it over; other admins and non-admins cannot take it
+    with pytest.raises(Forbidden):
+        portal.set_library_owner(ADMIN2, ADMIN2.email)
+    with pytest.raises(Forbidden):
+        portal.set_library_owner(CONTRIB, CONTRIB.email)
+    with pytest.raises(Invalid):
+        portal.set_library_owner(ADMIN, AUDITOR.email)   # must be an active admin
+    portal.set_library_owner(ADMIN, ADMIN2.email)
+    assert portal.library_owner() == ADMIN2.email and not portal.is_library_owner(ADMIN)
+    assert [u for u in portal.users() if u.get("library_owner")] == [portal.user_row(ADMIN2.email)]
+    e = [x for x in portal.log.records() if x["action"] == "library_owner.set"][-1]
+    assert e["detail"] == {"from": ADMIN.email, "to": ADMIN2.email}
+    # losing admin rights clears it at once; then any admin can assign it
+    portal.set_role(ADMIN, ADMIN2.email, "contributor")
+    assert portal.library_owner() == ""
+    assert any(x["action"] == "library_owner.cleared" for x in portal.log.records())
+    portal.set_library_owner(ADMIN, ADMIN.email)
+    assert portal.library_owner() == ADMIN.email
+    # only the holder can create or change custom controls
+    with pytest.raises(Forbidden):
+        portal.save_custom_control(ADMIN2, {"id": "CUS-50", "title": "Should fail", "map_soc2": "CC1.1"})
+    # Users page shows the holder
+    as_(client, ADMIN)
+    assert "Control library owner" in client.get("/users").text
