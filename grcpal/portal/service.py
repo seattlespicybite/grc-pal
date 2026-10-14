@@ -31,7 +31,7 @@ from grcpal.portal.mailer import ConsoleMailer, Mailer, Message
 from grcpal.portal.security import safe_filename, validate_upload
 from grcpal.tasks import period_label
 
-EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+EMAIL = re.compile(r"^[^@\s]{1,64}@(?=[^@\s]{1,253}\Z)[^@\s.]+(?:\.[^@\s.]+)+\Z")  # linear time: labels cannot overlap
 RUN_ID = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{6}Z$")
 SLUG = re.compile(r"[^a-z0-9]+")
 MIN_JUSTIFICATION = 30
@@ -156,6 +156,45 @@ class Portal(FeaturesMixin, AccountsMixin):
             self.audit(actor, "user.access_until", email, {"from": "", "to": until})
         return row
 
+    # ---------------------------------------------------------------- control library owner
+    def library_owner(self) -> str:
+        """Email of the one admin who may change control definitions (owners, text, mappings), or "" if nobody."""
+        for u in self.store.list("users", "u"):
+            if u.get("library_owner") and u.get("active", True) and u["role"] == "admin":
+                return u["RowKey"]
+        return ""
+
+    def is_library_owner(self, user: User) -> bool:
+        # read live from the users table, so a change applies at once, not at the next sign-in
+        return bool(user.is_admin and self.library_owner() == user.email)
+
+    def _library(self, actor: User) -> None:
+        if not self.is_library_owner(actor):
+            raise Forbidden("Only the control library owner can change control definitions"
+                            + ("" if self.library_owner() else "; an admin must take on that role first (Users and roles)"))
+
+    def set_library_owner(self, actor: User, email: str) -> None:
+        """Hand the control library owner role to an active admin. Only the current holder can hand it over;
+        when nobody holds it (for example the holder left), any admin can take it on or give it."""
+        self._admin(actor)
+        current = self.library_owner()
+        if current and current != actor.email:
+            raise Forbidden(f"Only the current control library owner ({current}) can hand this role over")
+        row = self.user_row(email)
+        if not row or row["role"] != "admin" or not row.get("active", True):
+            raise Invalid("The control library owner must be an active admin")
+        if current == row["RowKey"]:
+            return
+        if current:
+            self.store.update("users", "u", current, {"library_owner": False})
+        self.store.update("users", "u", row["RowKey"], {"library_owner": True})
+        self.audit(actor, "library_owner.set", row["RowKey"], {"from": current or None, "to": row["RowKey"]})
+
+    def _drop_library_owner(self, actor: User, row: dict, why: str) -> None:
+        if row.get("library_owner"):
+            self.store.update("users", "u", row["RowKey"], {"library_owner": False})
+            self.audit(actor, "library_owner.cleared", row["RowKey"], {"reason": why})
+
     def _last_admin_guard(self, email: str) -> None:
         if self.active_emails("admin") == [email]:
             raise Invalid("This is the last active admin. Add another admin first.")
@@ -173,6 +212,8 @@ class Portal(FeaturesMixin, AccountsMixin):
             self._last_admin_guard(row["RowKey"])
         # auditors always have an access end date; other roles never do
         until = self._auditor_until("") if role == "auditor" else ""
+        if row["role"] == "admin":
+            self._drop_library_owner(actor, row, f"role changed to {role}")
         self.store.update("users", "u", row["RowKey"], {"role": role, "access_until": until})
         self.revoke_sessions(row["RowKey"])  # new permissions take effect at the next sign-in
         self.audit(actor, "user.role", row["RowKey"], {"from": row["role"], "to": role, "access_until": until})
@@ -184,6 +225,8 @@ class Portal(FeaturesMixin, AccountsMixin):
             raise Invalid("User not found")
         if not active and row["role"] == "admin":
             self._last_admin_guard(row["RowKey"])
+        if not active:
+            self._drop_library_owner(actor, row, "account disabled")
         self.store.update("users", "u", row["RowKey"], {"active": bool(active)})
         if not active:
             self.revoke_sessions(row["RowKey"])
@@ -430,6 +473,42 @@ class Portal(FeaturesMixin, AccountsMixin):
         for a in rows:
             a["overdue"] = a["status"] in ("open", "returned") and a["due"] < today
         return sorted(rows, key=lambda a: (a["status"] in CLOSED_STATES, a["due"]))
+
+    def edit_assignment(self, actor: User, assignment_id: str, assignee: str, contributors: list[str], due: str,
+                        instructions: str) -> dict:
+        """Change who works on an open request, the helpers, due date or instructions. Uploads keep their
+        original uploader; people who are removed lose access to the request; people who are added are emailed."""
+        self._admin(actor)
+        a = self.assignment(assignment_id)
+        if a["status"] in CLOSED_STATES or a["cycle"] != self.active_cycle()["RowKey"]:
+            raise Invalid("Only open requests in the current cycle can be changed")
+        assignee = (assignee or "").strip().lower()
+        contributors = sorted({c.strip().lower() for c in contributors if c.strip()} - {assignee})
+        for email in [assignee, *contributors]:
+            if not EMAIL.match(email):
+                raise Invalid(f"'{email}' is not a valid email address")
+        try:
+            due_date = dt.date.fromisoformat(due)
+        except ValueError as exc:
+            raise Invalid("Due date must be YYYY-MM-DD") from exc
+        if due_date < self.today and due_date.isoformat() != a["due"]:
+            raise Invalid("Due date cannot be in the past")
+        for email in [assignee, *contributors]:
+            self._ensure_contributor(actor, email)
+        new = {"assignee": assignee, "contributors": contributors, "due": due_date.isoformat(),
+               "instructions": (instructions or "").strip()[:4000]}
+        changes = {k: {"from": a.get(k), "to": v} for k, v in new.items() if a.get(k) != v}
+        if not changes:
+            return a
+        row = self.store.update("assignments", "a", assignment_id, {**new, "updated_at": _now()})
+        detail = {k: v for k, v in changes.items() if k != "instructions"}
+        if "instructions" in changes:
+            detail["instructions_changed"] = True
+        self.audit(actor, "assignment.edit", assignment_id, {"controls": a["controls"], **detail})
+        added = ({assignee, *contributors}) - self.participants(a)
+        if added:
+            self._notify("assigned", sorted(added), actor, notify.assigned(self, row, actor), a["controls"])
+        return row
 
     def cancel_assignment(self, actor: User, assignment_id: str, reason: str) -> None:
         self._admin(actor)
@@ -865,6 +944,8 @@ class Portal(FeaturesMixin, AccountsMixin):
         table("users", self.users())
         table("policy_acknowledgments", [r for p in self.catalog.policies for r in self.store.list("acks", p["id"])])
         table("audit_log", [r for r in self.log.records() if cycle["start"] <= r["at"][:10] and r["at"] <= end])
+        table("control_definition_changes", [{k: v for k, v in r.items() if k not in ("PartitionKey", "RowKey")}
+                                             for r in self.control_definition_history()])
         files["audit_chain_verification.json"] = json.dumps(self.log.verify(), indent=2).encode()
         files["cycle.json"] = json.dumps({k: v for k, v in cycle.items() if k != "PartitionKey"}, indent=2).encode()
         if control_status is not None:

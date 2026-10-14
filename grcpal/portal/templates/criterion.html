@@ -1,15 +1,24 @@
 {% extends "base.html" %}{% from "_macros.html" import assign_form, pill %}{% block title %}{{ crit_id }}{% endblock %}
 {% block content %}
-<div class="page-head"><div><div class="sub"><a href="/criteria">Criteria</a> / {{ category_names[crit.category] }}</div>
-<h1>{{ crit_id }} · {{ crit.title }}</h1></div></div>
-<section class="card"><h2>Controls</h2><div class="table-wrap"><table><tbody>
-{% for c in controls %}<tr><td><a href="/controls/{{ c.id }}"><b>{{ c.id }}</b></a> {{ c.title }}</td><td>{{ c.owner }}</td><td>{{ pill(stat.get(c.id, 'not_started')) }}</td></tr>{% endfor %}
+<nav class="sub" aria-label="Breadcrumb"><a href="/criteria">SOC 2</a> / <a href="/criteria?open={{ family }}#{{ family }}">{{ family }} {{ family_name }}</a> /</nav>
+<div class="page-head"><div><h1>{{ crit_id }} · {{ crit.title }}</h1>
+<div class="sub">{{ controls|length }} controls{% for k, label in [('automated', 'automatic'), ('hybrid', 'hybrid'), ('manual', 'manual')] %}{% if type_counts[k] %} · {{ type_counts[k] }} {{ label }}{% endif %}{% endfor %}{% if not in_scope %} · <b>not in scope</b>{% endif %}</div></div>
+{% if position %}<nav class="head-actions pager" aria-label="Criteria">{% if prev_id %}<a class="btn ghost small" href="/criteria/{{ prev_id }}">‹ {{ prev_id }}</a>{% endif %}
+<span class="sub">Criterion {{ position }} of {{ order_total }}</span>{% if next_id %}<a class="btn ghost small" href="/criteria/{{ next_id }}">{{ next_id }} ›</a>{% endif %}</nav>{% endif %}</div>
+
+<section class="card"><div class="row-between"><h2>Controls that meet {{ crit_id }}</h2><span class="sub">Only sources connected for this organization are shown</span></div>
+<div class="table-wrap"><table><thead><tr><th>Control</th><th>How it is evidenced</th><th>Owner</th><th>Status</th></tr></thead><tbody>
+{% for c in controls %}{% set h = how[c.id] %}<tr><td><a href="/controls/{{ c.id }}?from={{ crit_id }}"><b>{{ c.id }}</b></a> {{ c.title }}</td>
+<td><b>{{ h.label }}</b>{% if h.sources %} · {{ h.sources|join(', ') }}{% endif %}{% if h.manual and h.type != 'automated' %}<span class="sub"> · {{ h.manual|join(', ')|lower }}</span>{% endif %}</td>
+<td class="sub">{{ c.owner }}</td><td>{{ pill(stat.get(c.id, 'not_started')) }}</td></tr>
+{% else %}<tr><td colspan="4" class="empty">No control maps to this criterion yet.</td></tr>{% endfor %}
 </tbody></table></div></section>
+
 <section class="card"><h2>Points of focus</h2>
 <p class="sub">Short paraphrases for navigation; the AICPA publication is authoritative.</p>
 {% for p in points %}<div class="point-row">
 <div class="row-between"><div><b class="mono">{{ p.id }}</b> {{ p.point }}
-<div class="tags mt-s">{% for c in p.controls %}<span><a href="/controls/{{ c }}">{{ c }}</a></span>{% endfor %}</div>
+<div class="tags mt-s">{% for c in p.controls %}<span><a href="/controls/{{ c }}?from={{ crit_id }}">{{ c }}</a></span>{% endfor %}</div>
 {% if p.note %}<div class="sub">{{ p.note }}</div>{% endif %}</div><div>{{ pill(p.status) }}</div></div>
 {% for a in open_by_point.get(p.id, []) %}<div class="sub">Assigned to {{ a.assignee }} · due {{ a.due }} · <a href="/assignments/{{ a.RowKey }}">open</a></div>{% endfor %}
 {% if user.is_admin and p.controls %}<details class="mt-s"><summary>Assign evidence for this point</summary>

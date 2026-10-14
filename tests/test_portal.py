@@ -48,6 +48,8 @@ def make_portal(tmp_path, tenant="acme", base_store=None, people=(ADMIN, ADMIN2,
                     public_url="https://grc.example.com")
     for u in people:
         portal._create_user(u.email, u.name, u.role, "test", "test")
+    if ADMIN in people:  # ADMIN is the control library owner in tests; ADMIN2 is an ordinary admin
+        store.update("users", "u", ADMIN.email, {"library_owner": True})
     return portal
 
 
@@ -154,7 +156,8 @@ def test_dev_login_first_user_becomes_admin(tmp_path, monkeypatch):
 
 
 # ================================================================ pages and roles
-ADMIN_PAGES = ["/", "/controls", "/controls/IAM-04", "/criteria", "/criteria/CC6.1", "/criteria/P5.1", "/work",
+ADMIN_PAGES = ["/", "/controls", "/controls/IAM-04", "/criteria", "/criteria?open=CC6", "/criteria/CC6.1", "/criteria/P5.1",
+               "/controls/IAM-02?from=CC6.1", "/controls/IAM-02?from=../../evil", "/controls/IAM-02/definition", "/work",
                "/reviews", "/evidence", "/overrides", "/audit", "/audit?verify=1&action=user.", "/users", "/cycles",
                "/policies", "/policies/information-security-policy", "/dev/outbox",
                "/controls?status=not_started&category=privacy&sort=owner"]
@@ -757,3 +760,268 @@ def test_starter_and_repo_yaml_is_valid():
         data = yaml.safe_load(Path(f).read_text())
         for item in (data.get("body") or []) if "ISSUE_TEMPLATE" in f and isinstance(data, dict) else []:
             assert all(v is not None for v in item.get("attributes", {}).values()), f
+
+
+# ================================================================ SOC 2 view: families, criterion order, evidence sources
+def test_soc2_families_order_and_evidence_labels(env):
+    from grcpal.portal import soc2
+
+    portal, _ = env
+    cat = portal.catalog
+    assert [soc2.family_of(x) for x in ("CC6.1", "A1.2", "C1.1", "PI1.3", "P4.2", "P8.1")] == ["CC6", "A1", "C1", "PI1", "P", "P"]
+    order = soc2.ordered_criteria(cat)
+    assert order[0] == "CC1.1" and order.index("CC6.1") == order.index("CC5.3") + 1
+    assert soc2.neighbours(order, "CC1.1")[0] is None and soc2.neighbours(order, "nope") == (None, None, 0)
+    fams = {f["id"]: f for f in soc2.families(cat, {})}
+    assert fams["CC6"]["name"] == "Logical and physical access" and fams["CC6"]["counts"]["not_started"] == fams["CC6"]["total"]
+    assert [c["id"] for c in fams["CC6"]["criteria"]][:2] == ["CC6.1", "CC6.2"]
+    # sources that are switched off for this client are not shown as how the control is evidenced
+    iam02 = cat.control("IAM-02")
+    how = soc2.evidenced_by(iam02, {"aws_iam"})
+    assert how["label"] == "Automatic" and how["sources"] == ["Entra ID"] and how["hidden"] == ["AWS"]
+    only_aws = {**iam02, "evidence": [{"artifact": "x", "via": "collector:aws_iam"}]}
+    assert soc2.evidenced_by(only_aws, {"aws_iam"})["type"] == "manual"   # nothing automatic is connected
+    assert soc2.worst(["ok", "findings", "not_started"]) == "findings" and soc2.worst([]) == "not_started"
+
+
+def test_soc2_overview_and_criterion_pages(env):
+    portal, client = env
+    as_(client, ADMIN)
+    page = client.get("/criteria?open=CC6").text
+    assert "SOC 2 Trust Services Criteria" in page and "Logical and physical access" in page
+    assert '<details class="fam" open id="CC6">' in page and 'href="/criteria/CC6.1"' in page
+    crit = client.get("/criteria/CC6.1").text
+    assert 'href="/criteria/CC5.3"' in crit and 'href="/criteria/CC6.2"' in crit and "Criterion 18 of" in crit
+    assert 'href="/controls/IAM-02?from=CC6.1"' in crit and "How it is evidenced" in crit
+    assert client.get("/frameworks/soc2", follow_redirects=False).headers["location"] == "/criteria"
+    # categories outside the report scope are shown as not in scope
+    portal.base_catalog.scope["in_scope_categories"] = ["security", "availability"]
+    page = client.get("/criteria").text
+    assert "Not in scope" in page and "In scope: Security, Availability ·" in page
+    as_(client, AUDITOR)
+    assert client.get("/criteria/CC6.1").status_code == 200
+
+
+def test_control_page_remembers_where_you_came_from(env):
+    portal, client = env
+    as_(client, ADMIN)
+    client.get("/view?f=soc2&next=/")
+    page = client.get("/controls/IAM-02?from=CC6.1").text
+    assert 'href="/criteria/CC6.1">← Back to CC6.1' in page and 'href="/criteria">All SOC 2 criteria' in page
+    siblings = portal.catalog.coverage()["CC6.1"]
+    i = siblings.index("IAM-02")
+    assert f'href="/controls/{siblings[i - 1]}?from=CC6.1"' in page and f'href="/controls/{siblings[i + 1]}?from=CC6.1"' in page
+    assert f"Control {i + 1} of {len(siblings)} in CC6.1" in page and "you came from here" in page
+    # the left menu stays on the SOC 2 criteria, not Controls
+    assert re.search(r'<a href="/criteria" class="active">', page) and not re.search(r'<a href="/controls" class="active">', page)
+    # only a known criterion id is accepted; anything else is ignored, never turned into a link
+    for bad in ("https://evil.example", "//evil.example", "../../criteria/CC6.1", "CC6.1<script>"):
+        r = client.get("/controls/IAM-02", params={"from": bad}).text
+        assert "Back to" not in r and "evil.example" not in r
+    # from the list: the back link keeps the filters, and only known filter keys survive
+    page = client.get("/controls/IAM-05", params={"list": "family=CC6&criterion=CC6.3&next=https://evil.example&q=rev"}).text
+    assert 'href="/controls?family=CC6&amp;criterion=CC6.3&amp;q=rev">← Back to controls list' in page
+    assert "evil.example" not in page
+    # control owners do not get the criteria trail (criteria pages are for admins and auditors)
+    as_(client, HR)
+    page = client.get("/controls/HR-02?from=CC1.4").text
+    assert "Back to CC1.4" not in page and 'href="/criteria"' not in page
+
+
+def test_controls_list_soc2_filters(env):
+    portal, client = env
+    as_(client, ADMIN)
+    page = client.get("/controls?family=CC6&criterion=CC6.3").text
+    expected = portal.catalog.coverage()["CC6.3"]
+    assert f"{len(expected)} controls shown" in page and all(f">{c}</b>" in page for c in expected)
+    assert '<span class="hit">CC6.3</span>' in page
+    assert 'href="/controls/IAM-05?list=family%3DCC6%26criterion%3DCC6.3' in page
+    # a criterion outside the chosen family is ignored rather than returning an empty list
+    assert "filtered to CC6" in client.get("/controls?family=CC6&criterion=CC1.1").text
+    auto = client.get("/controls?evidenced=manual").text
+    assert "IAM-02</b>" not in auto
+
+
+def test_admin_edits_request_people_due_date_and_access_follows(env):
+    portal, client = env
+    a = assign(portal, "HR-01", CONTRIB)
+    u = portal.upload(CONTRIB, "x.pdf", PDF, "first upload", assignment_id=a["RowKey"])
+    portal.mailer.outbox.clear()
+    with pytest.raises(Forbidden):
+        portal.edit_assignment(CONTRIB, a["RowKey"], CONTRIB.email, [], a["due"], "")
+    row = portal.edit_assignment(ADMIN, a["RowKey"], HR.email, [CONTRIB.email, "new.helper@example.com"],
+                                 "2026-11-15", a["instructions"])
+    assert row["assignee"] == HR.email and row["contributors"] == sorted([CONTRIB.email, "new.helper@example.com"])
+    assert row["due"] == "2026-11-15"
+    # only people who were not on the request before are emailed
+    emailed = {m.to for m in portal.mailer.outbox}
+    assert emailed == {HR.email, "new.helper@example.com"}
+    entry = [e for e in portal.log.records() if e["action"] == "assignment.edit"][-1]
+    assert entry["detail"]["assignee"] == {"from": CONTRIB.email, "to": HR.email}
+    # the earlier upload keeps its original uploader
+    assert portal.uploads(assignment=a["RowKey"], cycle=None)[0]["uploaded_by"] == CONTRIB.email == u["uploaded_by"]
+    # someone removed from the request loses access to it
+    portal.edit_assignment(ADMIN, a["RowKey"], HR.email, [], "2026-11-15", a["instructions"])
+    as_(client, CONTRIB)
+    assert client.get(f"/assignments/{a['RowKey']}").status_code == 404
+    # closed requests cannot be changed; past due dates are refused
+    with pytest.raises(Invalid):
+        portal.edit_assignment(ADMIN, a["RowKey"], HR.email, [], "2020-01-01", "")
+    portal.cancel_assignment(ADMIN, a["RowKey"], "not needed")
+    with pytest.raises(Invalid):
+        portal.edit_assignment(ADMIN, a["RowKey"], HR.email, [], "2026-11-20", "")
+
+
+def test_control_library_owner_is_one_admin_handed_over_and_cleared(env):
+    portal, client = env
+    assert portal.library_owner() == ADMIN.email
+    assert portal.is_library_owner(ADMIN) and not portal.is_library_owner(ADMIN2)
+    # only the holder hands it over; other admins and non-admins cannot take it
+    with pytest.raises(Forbidden):
+        portal.set_library_owner(ADMIN2, ADMIN2.email)
+    with pytest.raises(Forbidden):
+        portal.set_library_owner(CONTRIB, CONTRIB.email)
+    with pytest.raises(Invalid):
+        portal.set_library_owner(ADMIN, AUDITOR.email)   # must be an active admin
+    portal.set_library_owner(ADMIN, ADMIN2.email)
+    assert portal.library_owner() == ADMIN2.email and not portal.is_library_owner(ADMIN)
+    assert [u for u in portal.users() if u.get("library_owner")] == [portal.user_row(ADMIN2.email)]
+    e = [x for x in portal.log.records() if x["action"] == "library_owner.set"][-1]
+    assert e["detail"] == {"from": ADMIN.email, "to": ADMIN2.email}
+    # losing admin rights clears it at once; then any admin can assign it
+    portal.set_role(ADMIN, ADMIN2.email, "contributor")
+    assert portal.library_owner() == ""
+    assert any(x["action"] == "library_owner.cleared" for x in portal.log.records())
+    portal.set_library_owner(ADMIN, ADMIN.email)
+    assert portal.library_owner() == ADMIN.email
+    # only the holder can create or change custom controls
+    with pytest.raises(Forbidden):
+        portal.save_custom_control(ADMIN2, {"id": "CUS-50", "title": "Should fail", "map_soc2": "CC1.1"})
+    # Users page shows the holder
+    as_(client, ADMIN)
+    assert "Control library owner" in client.get("/users").text
+
+
+# ================================================================ control definitions (library owner)
+def _def_form(portal, cid, **changes):
+    d = portal.control_definition(cid)
+    form = {"title": d["title"], "description": d["description"], "owner": d["owner"],
+            "owner_emails": ", ".join(d["owner_emails"]), "extra_evidence": "\n".join(d["extra_evidence"]),
+            "reason": "Tailored for this client after scoping workshop"}
+    form.update({f"map_{fid}": ", ".join(ids) for fid, ids in d["mappings"].items()})
+    form.update(changes)
+    return form
+
+
+def test_library_owner_edits_control_with_history_and_others_cannot(env):
+    portal, client = env
+    form = _def_form(portal, "IAM-02", description="MFA enforced through Okta sign-on policies for all users.",
+                     owner_emails=f"{CONTRIB.email}, second.owner@example.com",
+                     map_soc2="CC6.1, CC6.6, CC6.2", extra_evidence="Okta sign-on policy export")
+    # ordinary admins, control owners and auditors cannot change definitions
+    for who in (ADMIN2, CONTRIB, AUDITOR):
+        with pytest.raises(Forbidden):
+            portal.save_control_definition(who, "IAM-02", form)
+    with pytest.raises(Invalid):
+        portal.save_control_definition(ADMIN, "IAM-02", {**form, "reason": "short"})
+    with pytest.raises(Invalid):
+        portal.save_control_definition(ADMIN, "IAM-02", {**form, "map_soc2": "CC99.9"})
+    portal.save_control_definition(ADMIN, "IAM-02", form)
+    ctl = portal.catalog.control("IAM-02")
+    assert ctl["description"].startswith("MFA enforced through Okta") and ctl["edited"]["version"] == 1
+    assert ctl["criteria"] == ["CC6.1", "CC6.6", "CC6.2"] and "IAM-02" in portal.catalog.coverage()["CC6.2"]
+    assert any(e["artifact"] == "Okta sign-on policy export" for e in ctl["evidence"])
+    # several named owners: each now sees the control
+    assert set(portal.owner_emails("IAM-02")) >= {CONTRIB.email, "second.owner@example.com"}
+    as_(client, CONTRIB)
+    assert client.get("/controls/IAM-02").status_code == 200
+    # history keeps before and after with the reason; the audit log records it
+    h = portal.control_definition_history("IAM-02")[0]
+    assert h["version"] == 1 and "description" in h["fields"] and h["before"]["mappings"]["soc2"] == ["CC5.2", "CC6.1", "CC6.6"]
+    assert any(e["action"] == "control.edit" and e["target"] == "IAM-02" for e in portal.log.records())
+    # the edit page and its link are for the library owner only
+    as_(client, ADMIN2)
+    assert client.get("/controls/IAM-02/definition").status_code == 403
+    assert "/controls/IAM-02/definition" not in client.get("/controls/IAM-02").text
+    as_(client, ADMIN)
+    page = client.get("/controls/IAM-02").text
+    assert "/controls/IAM-02/definition" in page and "Definition history" in page and "Edited · v1" in page
+    assert client.get("/controls/IAM-02/definition").status_code == 200
+    # reset brings back the starter definition and is recorded too
+    portal.reset_control_definition(ADMIN, "IAM-02", "Client switched back to Entra ID")
+    assert "edited" not in portal.catalog.control("IAM-02") and len(portal.control_definition_history("IAM-02")) == 2
+
+
+def test_control_edit_warns_before_leaving_a_criterion_uncovered(env):
+    portal, _ = env
+    only = [c for c, ctls in portal.catalog.coverage().items() if len(ctls) == 1 and c in portal.catalog.in_scope_criteria]
+    assert only, "the starter catalog has criteria covered by a single control"
+    crit = only[0]
+    cid = portal.catalog.coverage()[crit][0]
+    d = portal.control_definition(cid)
+    remaining = [x for x in d["mappings"]["soc2"] if x != crit] or ["CC1.1"]
+    form = _def_form(portal, cid, map_soc2=", ".join(remaining))
+    with pytest.raises(Invalid, match=crit):
+        portal.save_control_definition(ADMIN, cid, form)
+    portal.save_control_definition(ADMIN, cid, {**form, "confirm_uncovered": "yes"})
+    assert portal.catalog.coverage().get(crit, []) == []
+    last = [e for e in portal.log.records() if e["action"] == "control.edit"][-1]
+    assert last["detail"]["accepted_gaps"] == [crit]
+
+
+def test_control_edits_survive_and_flag_starter_changes_and_are_exported(env):
+    portal, _ = env
+    portal.save_control_definition(ADMIN, "HR-01", _def_form(portal, "HR-01", title="Background checks before start date"))
+    assert portal.catalog.control("HR-01")["edited"]["starter_changed"] is False
+    # a GRC-pal update changes the starter wording: the edit stays and the control is flagged
+    base = portal.base_catalog.control("HR-01")
+    base["description"] = base["description"] + " (updated in a new release)"
+    portal._changed()
+    ctl = portal.catalog.control("HR-01")
+    assert ctl["title"] == "Background checks before start date" and ctl["edited"]["starter_changed"] is True
+    # the auditor export contains every definition change
+    import io as _io
+    import zipfile
+
+    z = zipfile.ZipFile(_io.BytesIO(portal.export_cycle(ADMIN, portal.active_cycle()["RowKey"])))
+    name = next(n for n in z.namelist() if n.startswith("control_definition_changes"))
+    assert "HR-01" in z.read(name).decode()
+
+
+def test_control_edit_history_lists_only_fields_that_changed(env):
+    portal, _ = env
+    portal.save_control_definition(ADMIN, "IAM-02", _def_form(portal, "IAM-02", owner_emails="pat@example.com"))
+    assert portal.control_definition_history("IAM-02")[0]["fields"] == "owner_emails"
+
+
+def test_email_check_is_fast_on_crafted_input_and_still_correct():
+    import time
+
+    from grcpal.portal.auth import EMAIL_RE
+    from grcpal.portal.service import EMAIL
+
+    for rx in (EMAIL, EMAIL_RE):
+        for good in ("pat@example.com", "new.helper@sub.example.co.uk", "a+b@example.io"):
+            assert rx.match(good), good
+        for bad in ("pat@example", "a b@example.com", "a@b@example.com", "@example.com", "pat@.example.com",
+                    "pat@example..com", "pat@example.com.", "x" * 70 + "@example.com"):
+            assert not rx.match(bad), bad
+        start = time.perf_counter()
+        rx.match("!@!." + "!." * 20000 + "\n")
+        assert time.perf_counter() - start < 0.05
+
+
+def test_safe_redirect_targets_stay_inside_the_portal(env):
+    _, client = env
+    as_(client, ADMIN)
+    for bad in ("//evil.example", "/\\evil.example", "/\t/evil.example", "https://evil.example/x", "/%0a/evil",
+                "javascript:alert(1)", "", "evil.example"):
+        loc = client.get("/view", params={"f": "all", "next": bad}, follow_redirects=False).headers["location"]
+        assert loc == "/", (bad, loc)
+    assert client.get("/view", params={"f": "all", "next": "/controls?family=CC6"},
+                      follow_redirects=False).headers["location"] == "/controls?family=CC6"
+    # the cookie value always comes from the portal's own list, never from the request
+    r = client.get("/view", params={"f": "soc2; Domain=evil.example", "next": "/"}, follow_redirects=False)
+    assert r.headers["set-cookie"].startswith("grcpal_view=all;") and "evil" not in r.headers["set-cookie"]
+    # control routes only redirect to real controls
+    assert client.get("/controls/..%2F..%2Fevil/definition", follow_redirects=False).status_code == 404

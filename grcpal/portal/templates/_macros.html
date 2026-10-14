@@ -68,3 +68,7 @@
 <label>Comment<textarea name="body" required maxlength="4000" placeholder="Ask a question, explain the evidence, or say what is missing. Everyone on this request is emailed."></textarea></label>
 <div class="actions"><button class="btn" type="submit">Post comment</button></div></form>{% endif %}
 {%- endmacro %}
+
+{% macro status_bar(counts, total, label) -%}
+<svg class="bar" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label="{{ label }}: {% for s in ['ok', 'accepted', 'findings', 'attention', 'not_started'] %}{% if counts.get(s) %}{{ counts[s] }} {{ status_labels[s]|lower }}{% if not loop.last %}, {% endif %}{% endif %}{% endfor %}">{% set ns = namespace(x=0) %}{% for s in ['ok', 'accepted', 'findings', 'attention', 'not_started'] %}{% if total and counts.get(s) %}{% set w = 100 * counts[s] / total %}<rect class="fill-{{ s }}" x="{{ ns.x|round(2) }}" y="0" width="{{ w|round(2) }}" height="10"/>{% set ns.x = ns.x + w %}{% endif %}{% endfor %}</svg>
+{%- endmacro %}

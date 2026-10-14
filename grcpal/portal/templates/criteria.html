@@ -1,11 +1,22 @@
-{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}Criteria{% endblock %}
+{% extends "base.html" %}{% from "_macros.html" import pill, status_bar %}{% block title %}SOC 2 criteria{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Criteria and points of focus</h1><div class="sub">{{ rows|length }} criteria</div></div></div>
-<form class="filters" method="get" action="/criteria"><select name="category" data-autosubmit aria-label="Category"><option value="">All categories</option>
-{% for k, v in category_names.items() %}<option value="{{ k }}" {{ 'selected' if k == category }}>{{ v }}</option>{% endfor %}</select>
-<button class="btn small" type="submit">Filter</button></form>
-<div class="card table-wrap"><table><thead><tr><th>Criterion</th><th>Title</th><th>Category</th><th>Points covered</th><th>Open items</th><th>Control status</th></tr></thead><tbody>
-{% for r in rows %}<tr><td><a href="/criteria/{{ r.id }}"><b>{{ r.id }}</b></a></td><td>{{ r.title }}</td><td>{{ category_names[r.category] }}</td>
-<td>{{ r.covered }} / {{ r.points }}</td><td>{% if r.gaps %}{{ pill('partial', r.gaps ~ ' to close') }}{% else %}<span class="sub">none</span>{% endif %}</td>
-<td>{% for s in r.statuses %}{{ pill(s) }} {% endfor %}</td></tr>{% endfor %}</tbody></table></div>
+<div class="page-head"><div><div class="sub">SOC 2 /</div><h1>SOC 2 Trust Services Criteria</h1>
+<div class="sub">In scope: {{ scope_names|join(', ') }} · {{ scoped_criteria }} criteria · {{ scoped_controls }} controls · cycle {{ cycle.name }}</div></div>
+<div class="head-actions"><a class="btn ghost small" href="/controls">All SOC 2 controls</a></div></div>
+
+<div class="grid g5 mb">{% for s in ['ok', 'accepted', 'findings', 'attention', 'not_started'] %}<a class="stat" href="/controls?status={{ s }}"><div class="n {{ s }}">{{ totals[s] }}</div><div class="l">{{ status_labels[s] }}</div></a>{% endfor %}</div>
+
+{% for cat, title, note in [('security', 'Security: Common Criteria', 'Required in every SOC 2 report'), ('other', 'Additional categories', 'Included when the report covers them')] %}
+<section class="card fam-card"><div class="row-between"><h2>{{ title }}</h2><span class="sub">{{ note }}</span></div>
+{% for f in families if (f.category == 'security') == (cat == 'security') %}
+{% if f.in_scope %}<details class="fam"{% if open_family == f.id %} open{% endif %} id="{{ f.id }}">
+<summary class="fam-row"><span class="fam-id">{{ f.id }}</span><span class="fam-name">{{ f.name }}</span>
+<span class="fam-bar">{{ status_bar(f.counts, f.total, f.id ~ ' status') }}</span><span class="sub fam-count">{{ f.total }} controls</span></summary>
+<div class="fam-body">{% for c in f.criteria %}<a class="crit-row" href="/criteria/{{ c.id }}"><b>{{ c.id }}</b><span>{{ c.title }}</span><span class="sub">{{ c.controls }} controls</span><span>{{ pill(c.status) }}</span></a>{% endfor %}</div>
+</details>
+{% else %}<div class="fam-row fam-off"><span class="fam-id">{{ f.id }}</span><span class="fam-name">{{ f.name }}</span><span></span><span class="sub fam-count">Not in scope</span></div>{% endif %}
+{% endfor %}</section>
+{% endfor %}
+<p class="sub">Criterion titles are short paraphrases for navigation; the AICPA publication is authoritative. Scope (which
+categories are in the report) is set in catalog/scope.yaml. Points of focus are on each criterion's page.</p>
 {% endblock %}

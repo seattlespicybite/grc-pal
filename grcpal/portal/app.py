@@ -34,6 +34,7 @@ from grcpal.portal.service import Forbidden, Invalid, Portal
 
 HERE = Path(__file__).parent
 STATUS_LABELS = report_mod._LABELS
+VIEW_COOKIE = "grcpal_view"   # which framework the person is looking at; a display preference, not a permission
 CATEGORY_NAMES = {"security": "Security", "availability": "Availability", "confidentiality": "Confidentiality",
                   "processing_integrity": "Processing Integrity", "privacy": "Privacy"}
 ACCEPT = ".pdf,.png,.jpg,.jpeg,.csv,.xlsx,.docx,.pptx,.txt,.json,.md,.eml"
@@ -166,17 +167,31 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     def render(request: Request, user: User, name: str, **ctx) -> HTMLResponse:
         portal = p()
-        ctx.update(request=request, user=user, csrf=csrf_token(user.email), today=portal.today.isoformat(),
+        in_use = portal.frameworks_in_use
+        view = portal.program_view(request.cookies.get(VIEW_COOKIE, ""))
+        ctx.setdefault("nav_active", "")
+        ctx.update(fw_in_use=in_use, view=view, view_fw=in_use.get(view), library_owner=portal.library_owner(),request=request, user=user, csrf=csrf_token(user.email), today=portal.today.isoformat(),
                    cycle=portal.active_cycle(), org=portal.org, request_id=request_id.get(),
                    review_count=len(portal.reviewable(user)),
                    my_open=sum(1 for a in portal.assignments(user=user, mine=True) if a["status"] in ("open", "returned")),
                    flash=request.query_params.get("msg"), error=request.query_params.get("err"))
         return templates.TemplateResponse(request, name, ctx)
 
+    def current_view(request: Request) -> str:
+        return p().program_view(request.cookies.get(VIEW_COOKIE, ""))
+
     def safe_dest(url: str, default: str) -> str:
-        return url if url.startswith("/") and not url.startswith("//") and "\\" not in url else default
+        """A path inside this portal, or the default. Rejects other hosts, schemes, backslashes and control
+        characters (browsers drop tabs and newlines, which can turn "/\t/x" into "//x")."""
+        if not url or not url.startswith("/") or url.startswith("//") or any(c == "\\" or ord(c) < 33 for c in url):
+            return default
+        parts = urlparse(url)
+        if parts.scheme or parts.netloc or "%0" in url.lower():
+            return default
+        return url
 
     def back(url: str, msg: str | None = None, err: str | None = None) -> RedirectResponse:
+        url = safe_dest(url, "/")  # every redirect stays inside the portal
         q = urlencode({k: v for k, v in (("msg", msg), ("err", err)) if v})
         url, _, frag = url.partition("#")
         return RedirectResponse(f"{url}{'&' if '?' in url else '?'}{q}{'#' + frag if frag else ''}" if q else url,
@@ -250,15 +265,24 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     @app.get("/controls", response_class=HTMLResponse)
     def controls(request: Request, q: str = "", status: str = "", category: str = "", owner: str = "",
-                 sort: str = "id", framework: str = "", user: User = Depends(current_user)):
+                 sort: str = "id", framework: str = "", family: str = "", criterion: str = "", evidenced: str = "",
+                 user: User = Depends(current_user)):
+        from grcpal import frameworks as fw_mod
+        from grcpal.collectors import disabled_sources
+        from grcpal.portal import soc2
+
         portal = p()
         rows = health()["controls"]
-        fws = portal.frameworks
+        fws = portal.frameworks_in_use
+        view = current_view(request)
+        if view != "all":
+            framework = view
         if framework in fws:
-            from grcpal import frameworks as fw_mod
-
             mapped = {c["id"] for c in portal.catalog.controls if fw_mod.requirements_of(c, fws[framework])}
             rows = [c for c in rows if c["id"] in mapped]
+        columns = [fws[view]] if view != "all" else list(fws.values())
+        by_id = {c["id"]: c for c in portal.catalog.controls}
+        refs = {c["id"]: {fw.id: fw_mod.requirements_of(by_id.get(c["id"], c), fw) for fw in columns} for c in rows}
         visible = portal.visible_controls(user)
         if visible is not None:
             rows = [c for c in rows if c["id"] in visible]
@@ -271,19 +295,53 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             rows = [c for c in rows if any(portal.catalog.criteria[x]["category"] == category for x in c["criteria"])]
         if owner:
             rows = [c for c in rows if c["owner"] == owner]
+        soc2_on = "soc2" in fws and view in ("soc2", "all")
+        fam_ids = list(dict.fromkeys(soc2.family_of(x) for x in soc2.ordered_criteria(portal.catalog)))
+        if family not in fam_ids:
+            family = ""
+        crit_options = [x for x in soc2.ordered_criteria(portal.catalog) if not family or soc2.family_of(x) == family]
+        if criterion not in crit_options:
+            criterion = ""
+        if soc2_on and (family or criterion):
+            rows = [c for c in rows if any((x == criterion) if criterion else (soc2.family_of(x) == family)
+                                           for x in c["criteria"])]
+        skip = disabled_sources(portal.catalog, portal.settings)
+        how = {c["id"]: soc2.evidenced_by(by_id.get(c["id"], c), skip) for c in rows}
+        if evidenced in soc2.TYPE_LABELS:
+            rows = [c for c in rows if how[c["id"]]["type"] == evidenced]
         keys = {"id": lambda c: c["id"], "status": lambda c: c["status"], "owner": lambda c: c["owner"],
                 "title": lambda c: c["title"].lower()}
         rows = sorted(rows, key=keys.get(sort, keys["id"]))
         return render(request, user, "controls.html", rows=rows, q=q, status=status, category=category,
                       owner=owner, sort=sort, owners=sorted(portal.catalog.roles), framework=framework,
-                      frameworks=fws)
+                      frameworks=fws, columns=columns, refs=refs, how=how, soc2_on=soc2_on, family=family,
+                      criterion=criterion, evidenced=evidenced, families=[(f, soc2.FAMILY_NAMES.get(f, f)) for f in fam_ids],
+                      crit_options=crit_options, hits={criterion} if criterion else (set(crit_options) if family else set()),
+                      list_qs=_list_query(str(request.url.query)))
 
     @app.get("/controls/{control_id}", response_class=HTMLResponse)
     def control_detail(request: Request, control_id: str, user: User = Depends(current_user)):
+        from grcpal.collectors import disabled_sources
+        from grcpal.portal import soc2
+
         portal = p()
         ctl = portal.catalog.control(control_id)
         if not ctl or not portal.can_see_control(user, control_id):
             raise _HTTPError(404, "Control not found, or it is not assigned to you")
+        # Where the person came from. Only a known criterion id or a filtered list is accepted, never a URL.
+        came_from = request.query_params.get("from", "")
+        trail = None
+        if came_from in portal.catalog.criteria and user.sees_everything:
+            siblings = [c for c in portal.catalog.coverage().get(came_from, []) if portal.can_see_control(user, c)]
+            prev_c, next_c, pos = soc2.neighbours(siblings, control_id)
+            fam = soc2.family_of(came_from)
+            trail = {"criterion": came_from, "family": fam, "family_name": soc2.FAMILY_NAMES.get(fam, fam),
+                     "prev": prev_c, "next": next_c, "position": pos, "total": len(siblings)}
+        list_qs = _list_query(request.query_params.get("list", ""))
+        skip = disabled_sources(portal.catalog, portal.settings)
+        how = soc2.evidenced_by(ctl, skip)
+        wanted = [ev["artifact"] for ev in ctl.get("evidence", [])
+                  if not (str(ev.get("via", "")).startswith("collector:") and str(ev["via"]).split(":", 1)[1] in skip)]
         prev = portal.previous_cycle()
         points = [(crit, pt) for crit, pts in portal.catalog.points_of_focus.items() for pt in pts
                   if control_id in pt.get("controls", [])]
@@ -300,9 +358,12 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                       history=portal.control_history(control_id, 50) if user.sees_everything else [],
                       can_upload=portal.can_upload_control(user, control_id),
                       can_comment=portal.can_comment(user, [control_id]),
-                      wanted=portal.evidence_wanted([control_id]),
+                      wanted=wanted, how=how, trail=trail, list_qs=list_qs,
+                      def_history=portal.control_definition_history(control_id) if user.sees_everything else [],
+                      nav_active="framework" if trail else "",
                       owner_emails=portal.owner_emails(control_id), criteria=portal.catalog.criteria,
-                      max_mb=MAX_UPLOAD_BYTES // (1024 * 1024), mappings=_mappings(portal, ctl),
+                      max_mb=MAX_UPLOAD_BYTES // (1024 * 1024),
+                      mappings=_mappings(portal, ctl, current_view(request)),
                       checks=portal.checks_for(control_id) if user.sees_everything else [],
                       ai=portal.ai_status() if user.sees_everything else None,
                       ai_reviews=portal.ai_reviews(control_id)[:10] if user.sees_everything else [])
@@ -329,23 +390,39 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             return back(f"/controls/{control_id}", err=str(exc))
         return back(f"/controls/{control_id}", msg=_remind_msg(r))
 
+    @app.get("/view")
+    def switch_view(request: Request, f: str = "all", next: str = "/", user: User = Depends(current_user)):
+        """Remember which framework this person wants to look at. Only changes what is shown, never access."""
+        portal = p()
+        choice = "all"
+        for fid in portal.frameworks_in_use:  # the cookie value comes from our own list, never from the request
+            if fid == f:
+                choice = fid
+        resp = RedirectResponse(safe_dest(next, "/"), status_code=303)
+        resp.set_cookie(VIEW_COOKIE, choice, max_age=365 * 86400, path="/", httponly=True, samesite="lax",
+                        secure=request.url.scheme == "https")
+        return resp
+
     # ------------------------------------------------------------------ criteria (admins, auditors)
     @app.get("/criteria", response_class=HTMLResponse)
-    def criteria(request: Request, category: str = "", user: User = Depends(current_user)):
+    def criteria(request: Request, open: str = "", user: User = Depends(current_user)):
+        """SOC 2 overview: criteria grouped into families (CC1-CC9, then the additional categories)."""
         need(user, "admin", "auditor")
+        from grcpal.portal import soc2
+
         portal = p()
         stat = {c["id"]: c["status"] for c in health()["controls"]}
-        rows = []
-        for cid, crit in portal.catalog.criteria.items():
-            if category and crit["category"] != category:
-                continue
-            pts = portal.catalog.points_of_focus.get(cid, [])
-            ctls = portal.catalog.coverage().get(cid, [])
-            rows.append({"id": cid, "title": crit["title"], "category": crit["category"], "controls": ctls,
-                         "points": len(pts), "covered": sum(1 for x in pts if x["status"] == "covered"),
-                         "gaps": sum(1 for x in pts if x["status"] in ("gap", "partial")),
-                         "statuses": sorted({stat.get(c, "not_started") for c in ctls})})
-        return render(request, user, "criteria.html", rows=rows, category=category)
+        fams = soc2.families(portal.catalog, stat)
+        in_scope = [f for f in fams if f["in_scope"]]
+        scoped_controls = {c for f in in_scope for c in f["controls"]}
+        totals = {s: 0 for s in soc2.STATUSES}
+        for c in scoped_controls:
+            s = stat.get(c, "not_started")
+            totals[s if s in totals else "not_started"] += 1
+        categories = [cat for cat in soc2.CATEGORY_ORDER if any(f["category"] == cat and f["in_scope"] for f in fams)]
+        return render(request, user, "criteria.html", families=fams, totals=totals, open_family=open,
+                      scoped_criteria=len(portal.catalog.in_scope_criteria), scoped_controls=len(scoped_controls),
+                      scope_names=[CATEGORY_NAMES.get(c, c) for c in categories])
 
     @app.get("/criteria/{crit_id}", response_class=HTMLResponse)
     def criterion_detail(request: Request, crit_id: str, user: User = Depends(current_user)):
@@ -359,9 +436,21 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         for a in portal.assignments():
             if a["target_type"] == "point" and a["status"] not in ("approved", "cancelled"):
                 open_by_point.setdefault(a["target_id"], []).append(a)
+        from grcpal.collectors import disabled_sources
+        from grcpal.portal import soc2
+
+        order = soc2.ordered_criteria(portal.catalog, in_scope_only=crit_id in portal.catalog.in_scope_criteria)
+        prev_id, next_id, position = soc2.neighbours(order, crit_id)
+        skip = disabled_sources(portal.catalog, portal.settings)
+        controls = [portal.catalog.control(c) for c in portal.catalog.coverage().get(crit_id, [])]
+        how = {c["id"]: soc2.evidenced_by(c, skip) for c in controls}
+        family = soc2.family_of(crit_id)
         return render(request, user, "criterion.html", crit_id=crit_id, crit=crit, stat=stat,
                       points=portal.catalog.points_of_focus.get(crit_id, []), open_by_point=open_by_point,
-                      controls=[portal.catalog.control(c) for c in portal.catalog.coverage().get(crit_id, [])])
+                      controls=controls, how=how, prev_id=prev_id, next_id=next_id, position=position,
+                      order_total=len(order), family=family, family_name=soc2.FAMILY_NAMES.get(family, family),
+                      in_scope=crit_id in portal.catalog.in_scope_criteria,
+                      type_counts={k: sum(1 for h in how.values() if h["type"] == k) for k in soc2.TYPE_LABELS})
 
     # ------------------------------------------------------------------ work and assignments
     @app.get("/work", response_class=HTMLResponse)
@@ -413,6 +502,18 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             return back(dest, err=str(exc))
         invalidate()
         return back(f"/assignments/{a['RowKey']}", msg="Assignment created and the assignee was emailed")
+
+    @app.post("/assignments/{assignment_id}/edit")
+    def edit_assignment(request: Request, assignment_id: str, assignee: str = Form(...), contributors: str = Form(""),
+                        due: str = Form(...), instructions: str = Form(""), csrf: str = Form(""),
+                        user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        try:
+            p().edit_assignment(user, assignment_id, assignee, contributors.replace(";", ",").split(","), due, instructions)
+        except (Invalid, Forbidden) as exc:
+            return back(f"/assignments/{assignment_id}", err=str(exc))
+        invalidate()
+        return back(f"/assignments/{assignment_id}", msg="Request updated; anyone newly added was emailed")
 
     @app.post("/assignments/{assignment_id}/cancel")
     def cancel_assignment(request: Request, assignment_id: str, reason: str = Form(""), csrf: str = Form(""),
@@ -632,6 +733,15 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             return back("/users", err=str(exc))
         return back("/users", msg=f"{email} is now {ROLE_LABELS.get(role, role)}")
 
+    @app.post("/users/{email}/library-owner")
+    def set_library_owner(request: Request, email: str, csrf: str = Form(""), user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        try:
+            p().set_library_owner(user, email)
+        except (Invalid, Forbidden) as exc:
+            return back("/users", err=str(exc))
+        return back("/users", msg=f"{email} is now the control library owner")
+
     @app.post("/users/{email}/active")
     def set_active(request: Request, email: str, active: str = Form(...), csrf: str = Form(""),
                    user: User = Depends(current_user)):
@@ -732,11 +842,24 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     return app
 
 
-def _mappings(portal, ctl: dict) -> list[tuple]:
+LIST_FILTERS = ("q", "status", "category", "owner", "sort", "framework", "family", "criterion", "evidenced")
+
+
+def _list_query(raw: str) -> str:
+    """Rebuild a controls-list filter query from known keys only, so a crafted value cannot point elsewhere."""
+    from urllib.parse import parse_qsl
+
+    pairs = [(k, v[:100]) for k, v in parse_qsl(raw[:1000]) if k in LIST_FILTERS and v]
+    return urlencode(pairs)
+
+
+def _mappings(portal, ctl: dict, view: str = "all") -> list[tuple]:
+    """Requirements a control meets, for the framework in view (or every framework in use)."""
     from grcpal import frameworks as fw_mod
 
     out = []
-    for fw in portal.frameworks.values():
+    in_use = portal.frameworks_in_use
+    for fw in ([in_use[view]] if view in in_use else in_use.values()):
         ids = fw_mod.requirements_of(ctl, fw)
         if ids:
             out.append((fw, [(r, fw.requirements.get(r, {}).get("title", "")) for r in ids]))

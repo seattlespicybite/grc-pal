@@ -44,6 +44,7 @@ def seed(portal) -> bool:
             portal.catalog.roles[role]["email"] = email
     for u in PEOPLE:
         portal._create_user(u.email, u.name, u.role, "demo", "demo-seed")
+    portal.store.update("users", "u", ADMIN.email, {"library_owner": True})  # Alex can change control definitions
 
     real_mailer, portal.mailer = portal.mailer, NullMailer("demo@localhost", sync=True)
     today = portal.today

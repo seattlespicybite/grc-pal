@@ -11,6 +11,40 @@ All notable changes are listed here. The project follows [semantic versioning](h
   The backup key is separate from `GRCPAL_ENCRYPTION_KEY`, which is never written into a backup. Backups are
   recorded in each tenant's audit log (`backup.create`, `backup.complete`).
 - `SCHEMA_VERSION` for the stored data model (recorded in backups; migrations follow).
+- **Frameworks in use.** Admins turn frameworks on or off per organization (Frameworks page or
+  `GRCPAL_FRAMEWORKS`; audited, at least one stays on). With one framework the portal shows only that
+  framework; with several, a **Showing** switcher picks one or **All**. The switch is a display
+  preference and never changes access. Mappings to frameworks that are off are kept.
+- **SOC 2 view.** Criteria grouped into families (CC1-CC9, then the additional categories) with
+  status bars and report scope; criterion pages with previous/next and how each control is evidenced
+  from connected sources only.
+- **Control navigation.** Control pages remember whether you came from a criterion or a filtered
+  list: trail, **Back to** buttons, previous/next within the criterion, and the menu stays in place.
+  Only known criterion IDs and list filter keys are accepted, so the links cannot point outside the portal.
+- Controls list: SOC 2 family, criterion and evidence-type filters; one requirements column per
+  framework shown.
+- **Change people on a request.** Admins change the assignee, helpers, due date and instructions of
+  open requests. Newly added people are emailed; removed people lose access; earlier uploads keep
+  their uploader. Audited (`assignment.edit`).
+- **Control library owner.** One admin alone can change control definitions, custom controls and
+  custom frameworks. Handed over by the holder; any admin can assign it when nobody holds it;
+  cleared when the holder stops being an admin. Audited.
+- **Edit controls in the portal.** Owners (role and several named people), title, description,
+  evidence wanted and framework mappings. Reason required, every version kept with before and after,
+  reset to starter, coverage warning, flag when a release changes the starter text. History is in
+  the auditor export and in backups (new tables `controledits`, `controlhistory`).
+
+### Changed
+- Creating or changing custom controls and custom frameworks now needs the control library owner
+  (was: any admin).
+
+### Fixed
+- `owner_emails` and `links` on custom controls are stored as JSON, so they also work with Azure
+  Table storage.
+- Email address check rewritten to run in linear time (a crafted value could make the old pattern slow;
+  found by CodeQL). It now also rejects addresses such as `pat@.example.com` and local parts over 64 characters.
+- Redirect targets are checked in one place: only paths inside the portal, never another host or
+  scheme, backslashes or control characters.
 
 ## [0.1.0] - unreleased
 

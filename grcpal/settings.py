@@ -69,6 +69,10 @@ SCHEMA: tuple[Section, ...] = (
                   "the name in catalog/scope.yaml.", placeholder="Acme Inc"),
             Field("GRCPAL_SUPPORT_CONTACT", "Support contact", "Email or link people can use when they need help with "
                   "GRC-pal. Shown on error and access-denied pages.", placeholder="security@acme.example"),
+            Field("GRCPAL_FRAMEWORKS", "Frameworks in use", "Framework IDs this organization is working on, one per "
+                  "line (for example soc2). Leave empty to show every framework. Admins can also turn frameworks on "
+                  "and off on the Frameworks page. With one framework, the portal shows only that framework.",
+                  kind="list", placeholder="soc2"),
         ), category="general", testable=False),
     Section(
         "microsoft", "Microsoft Entra ID and Microsoft 365", "Users, MFA, roles, apps, Conditional Access, Intune devices.",

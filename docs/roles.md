@@ -8,6 +8,17 @@ not only by hiding buttons.
 The three roles are **Admin**, **Control owner** and **Auditor**. (Control owner is stored as
 `contributor` in data, exports and the CLI, so older data needs no change.)
 
+**Control library owner** is an extra responsibility held by exactly one admin (it can be the same
+person who runs everything else). Only the library owner can change what a control *is*: its owners,
+title, description, evidence wanted and framework mappings, plus custom controls and custom
+frameworks. Other admins operate the program: requests, reviews, reminders, users. This separates
+the person who defines controls from the people who operate them, which auditors look for.
+
+- The holder hands the role over on **Users and roles** (**Hand over control library**).
+- If nobody holds it (for example the holder left), any admin can give it to an active admin.
+- It is cleared automatically when the holder stops being an admin or is disabled.
+- Every change is in the audit log (`library_owner.set`, `library_owner.cleared`).
+
 ## Permission matrix
 
 | Action | Admin | Control owner | Auditor |
@@ -17,7 +28,7 @@ The three roles are **Admin**, **Control owner** and **Auditor**. (Control owner
 | Criteria and points of focus pages | ✓ |  | ✓ |
 | Browse the raw evidence store | ✓ |  | ✓ |
 | Download portal uploads | ✓ | for controls they can see | ✓ (logged) |
-| Assign work, cancel requests | ✓ |  |  |
+| Assign work; change people, due date or instructions on open requests; cancel requests | ✓ |  |  |
 | Upload evidence | ✓ | own requests and owned controls |  |
 | Comment | ✓ | own requests and owned controls |  |
 | Review (approve or return) | ✓, never own upload |  |  |
@@ -30,11 +41,13 @@ The three roles are **Admin**, **Control owner** and **Auditor**. (Control owner
 | Export zip per cycle | ✓ |  | ✓ |
 | Configuration page and Setup guide | ✓ |  |  |
 | Logs page and background jobs | ✓ |  | ✓ |
-| Frameworks and coverage | ✓ (create custom) |  | ✓ |
-| Create, edit, retire custom controls; add and run checks | ✓ |  |  |
+| Frameworks and coverage; turn frameworks on or off | ✓ |  | ✓ (read) |
+| Change control definitions (owners, wording, evidence wanted, mappings); create, edit, retire custom controls and custom frameworks | library owner only |  | history (read) |
+| Add and run checks | ✓ |  |  |
 | AI review and mock audit | ✓ (run, accept, dismiss) |  | ✓ (read) |
 
-"Owned" means the person's email is on the control's owner role in `catalog/roles.yaml`.
+"Owned" means the person's email is on the control's owner role in `catalog/roles.yaml`, or the
+library owner named them as an owner of the control (a control can have several named owners).
 "Assigned" means they are the assignee or a contributor on a request in any cycle (so they can
 look back at last year's evidence for their controls).
 

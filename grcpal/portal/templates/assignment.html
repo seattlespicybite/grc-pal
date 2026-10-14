@@ -16,6 +16,14 @@
 <details class="mt"><summary>Send a reminder</summary><form method="post" action="/assignments/{{ a.RowKey }}/remind" class="mt-s">
 <input type="hidden" name="csrf" value="{{ csrf }}"><label>Personal note (optional)<textarea name="note" maxlength="1000"></textarea></label>
 <div class="actions"><button class="btn small" type="submit">Email the assignee and contributors</button></div></form></details>
+{% if a.cycle == cycle.RowKey %}<details class="mt-s"><summary>Change people, due date or instructions</summary><form method="post" action="/assignments/{{ a.RowKey }}/edit" class="mt-s">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<label>Assignee (responsible)<input name="assignee" type="email" value="{{ a.assignee }}" required></label>
+<label>Helpers (contributors), comma separated<input name="contributors" value="{{ a.contributors|join(', ') }}" placeholder="name@example.com, other@example.com"></label>
+<label>Due date<input name="due" type="date" value="{{ a.due }}" required></label>
+<label>Instructions<textarea name="instructions" maxlength="4000">{{ a.instructions }}</textarea></label>
+<p class="hint">Uploads already made keep their uploader. People you remove lose access to this request; people you add are emailed.</p>
+<div class="actions"><button class="btn small" type="submit">Save changes</button></div></form></details>{% endif %}
 <details class="mt-s"><summary>Cancel this request</summary><form method="post" action="/assignments/{{ a.RowKey }}/cancel" data-confirm="Cancel this request?" class="actions">
 <input type="hidden" name="csrf" value="{{ csrf }}"><input name="reason" placeholder="Reason for cancelling" required minlength="5" aria-label="Reason"><button class="btn ghost small" type="submit">Cancel request</button></form></details>{% endif %}
 </section>

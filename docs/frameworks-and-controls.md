@@ -27,6 +27,59 @@ Map controls in `catalog/controls.yaml` with `mappings: {hipaa-security: ["164.3
 (SOC 2 also reads `criteria:`, ISO 27001 also reads `iso27001:`). The **Frameworks** page shows
 coverage per requirement, and the AI mock audit can run against any framework.
 
+### Frameworks in use: one at a time when that is all you need
+
+Most organizations start with one framework. An admin chooses which frameworks are **in use** on
+the **Frameworks** page (**Turn on** / **Turn off**), or with the `GRCPAL_FRAMEWORKS` setting
+(Configuration > Organization, one ID per line; empty means all). Each change is in the audit log
+(`framework.on`, `framework.off`), and at least one framework stays on.
+
+- **One framework in use** (for example only SOC 2): the portal is a single-framework tool. The
+  menu shows **SOC 2 criteria** instead of Frameworks, lists and control pages show only SOC 2
+  references, and there is no switcher. Frameworks that are off keep their mappings and evidence;
+  turning one back on brings everything back.
+- **Several in use**: a **Showing** switcher appears at the top of the menu: one framework at a
+  time, or **All** to see shared controls with a column per framework. The choice is a display
+  preference saved in the browser. It never changes what a person may see: control owners still
+  see only their own controls.
+
+### SOC 2 view
+
+**SOC 2 criteria** groups the criteria into families (CC1 Control environment ... CC9 Risk
+mitigation, then Availability, Confidentiality, Processing Integrity and Privacy). Each family shows
+how many controls it has and their status; open it to see its criteria. Categories that are not in
+the report scope (`catalog/scope.yaml`) are shown as *Not in scope*.
+
+A criterion page lists its controls with **how each is evidenced** (automatic, hybrid or manual,
+and from which connected source). Sources that are switched off for this organization, such as AWS
+when only Azure is used, are not shown. Use **‹ ›** to move to the previous or next criterion.
+
+Open a control from a criterion and the page remembers it: the trail shows
+*SOC 2 / CC6 / CC6.1*, **Back to CC6.1** and **All SOC 2 criteria** take you back, **‹ ›** moves
+through that criterion's controls, and the criterion you came from is highlighted. Open a control
+from the **Controls** list and **Back to controls list** keeps your filters. The list can be
+filtered by SOC 2 family, criterion and evidence type.
+
+Criterion titles are short paraphrases for navigation; the AICPA publication is authoritative.
+
+## Changing a control (control library owner)
+
+The control library owner (see [roles.md](roles.md)) can change any control from its page with
+**Edit control**: title, description, owner role, **named owners** (one or more people, each of
+whom can see the control and upload evidence), framework mappings (move a control between SOC 2
+criteria by removing one ID and adding another), and additional evidence people upload. Evidence
+collected automatically is listed but changed in the catalog or Configuration.
+
+- **A reason is required** for every save. It is shown to auditors.
+- **Every version is kept** with who, when, why, and the before and after values (**Definition
+  history** on the control page, `control_definition_changes` in the auditor export).
+  **Reset to the starter definition** is recorded the same way.
+- **Coverage check**: if the change would leave an in-scope criterion with no control, GRC-pal names
+  the criterion and asks you to confirm. The accepted gap is in the audit log.
+- **Upgrades keep your edits.** Edits are stored as a layer over the starter catalog. If a GRC-pal
+  release later changes the starter text of a control you edited, your version stays in use and
+  the control page says the starter changed, so you can compare and decide.
+
 ## Custom (manual) controls
 
 **Controls > New control** creates a control without editing YAML:

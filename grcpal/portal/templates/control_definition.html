@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% block title %}Edit {{ ctl.id }}{% endblock %}
+{% block content %}
+{% macro val(key, default='') -%}{{ form[key] if key in form else default }}{%- endmacro %}
+<nav class="sub" aria-label="Breadcrumb"><a href="/controls">Controls</a> / <a href="/controls/{{ ctl.id }}">{{ ctl.id }}</a> /</nav>
+<div class="page-head"><div><h1>Edit {{ ctl.id }}</h1>
+<div class="sub">Only you, as the control library owner, can change this. Every change keeps the previous version and your reason for auditors.</div></div></div>
+<form method="post" action="/controls/{{ ctl.id }}/definition" class="def-form"><input type="hidden" name="csrf" value="{{ csrf }}">
+<section class="card"><h2>What the control is</h2>
+<label for="ti">Title</label><input id="ti" name="title" required minlength="3" maxlength="200" value="{{ val('title', d.title) }}">
+<label for="de" class="mt">Description</label><textarea id="de" name="description" rows="5" maxlength="4000">{{ val('description', d.description) }}</textarea>
+<div class="hint">What the control does, in words the owner and the auditor will both understand.</div></section>
+
+<section class="card"><h2>Who owns it</h2>
+<div class="form-row"><div><label for="ow">Owner role</label><select id="ow" name="owner"><option value="">No role (named people only)</option>
+{% for r in roles_list %}<option value="{{ r }}" {{ 'selected' if r == val('owner', d.owner) }}>{{ roles[r].title or r }} ({{ r }})</option>{% endfor %}</select>
+<div class="hint">People in this role (catalog/roles.yaml) own the control.</div></div>
+<div><label for="oe">Named owners</label><input id="oe" name="owner_emails" value="{{ val('owner_emails', d.owner_emails|join(', ')) }}" placeholder="name@example.com, other@example.com">
+<div class="hint">One or more people, comma separated. Each can see the control and upload evidence for it. New people get Control owner access.</div></div></div></section>
+
+<section class="card"><h2>Requirements it meets</h2>
+{% for fid, fw in frameworks.items() %}<label for="m-{{ fid }}"{% if not loop.first %} class="mt"{% endif %}>{{ 'SOC 2 criteria' if fid == 'soc2' else fw.name }}</label>
+<input id="m-{{ fid }}" name="map_{{ fid }}" value="{{ val('map_' ~ fid, d.mappings.get(fid, [])|join(', ')) }}" placeholder="{{ 'CC6.1, CC6.3' if fid == 'soc2' else '' }}">{% endfor %}
+<div class="hint">IDs separated by commas. Move a control between criteria by removing one ID and adding another.</div>
+<label class="check mt"><input type="checkbox" name="confirm_uncovered" value="yes"> I accept that a criterion may be left with no control (you will be told which one)</label></section>
+
+<section class="card"><h2>Evidence we are looking for</h2>
+{% if automated %}<p class="sub">Collected or tracked automatically (change these in the catalog or on the Configuration page):</p>
+<ul class="list">{% for e in automated %}<li>{{ e.artifact }} <span class="sub mono">{{ e.via }}</span></li>{% endfor %}</ul>{% endif %}
+<label for="ev" class="mt">Additional evidence people upload, one per line</label>
+<textarea id="ev" name="extra_evidence" rows="4">{{ val('extra_evidence', d.extra_evidence|join('\n')) }}</textarea></section>
+
+<section class="card"><h2>Why are you changing it?</h2>
+<label for="re">Reason (shown to auditors)</label><input id="re" name="reason" required minlength="10" maxlength="1000" value="{{ val('reason') }}"
+ placeholder="e.g. The client enforces MFA with Okta, not Conditional Access">
+<div class="actions mt"><button class="btn" type="submit">Save new version</button> <a class="btn ghost" href="/controls/{{ ctl.id }}">Cancel</a></div></section>
+</form>
+{% endblock %}
