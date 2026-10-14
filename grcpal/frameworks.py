@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import yaml
+from grcpal.catalog import load_yaml
 
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,39}$")
 STARTER_DIR = Path(__file__).parent / "starter" / "frameworks"
@@ -63,7 +63,7 @@ def load(catalog, custom: list[dict] | None = None) -> dict[str, Framework]:
     for folder in folders:
         if folder.is_dir():
             for f in sorted(folder.glob("*.yaml")):
-                doc = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+                doc = load_yaml(f.read_text(encoding="utf-8"))
                 if doc.get("id") and ID_RE.match(doc["id"]) and doc["id"] != "soc2":
                     out[doc["id"]] = _from_doc(doc, "file")
     for row in custom or []:

@@ -12,6 +12,13 @@ KNOWN_TOOLS = {"prowler", "maester", "testssl", "trivy"}
 REQUIRED = ("id", "title", "description", "criteria", "owner", "frequency", "type", "evidence")
 POF_STATUSES = {"covered", "partial", "gap", "n/a"}
 STARTER = Path(__file__).parent / "starter"
+# libyaml's C loader parses the catalog about 9x faster; same safe subset of YAML (no Python objects).
+_SAFE_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
+
+def load_yaml(text) -> dict:
+    """Parse YAML with a safe loader (str or open file). Empty documents return {}."""
+    return yaml.load(text, Loader=_SAFE_LOADER) or {}  # noqa: S506 - safe loader only
 
 
 def load_policies(folder: Path) -> list[dict]:
@@ -27,7 +34,7 @@ def load_policies(folder: Path) -> list[dict]:
         meta, body = {}, text
         if text.startswith("---"):
             _, header, body = text.split("---", 2)
-            meta = yaml.safe_load(header) or {}
+            meta = load_yaml(header)
         out.append({"id": path.stem, "title": meta.get("title", path.stem), "owner": meta.get("owner", ""),
                     "approver": meta.get("approver", ""), "controls": meta.get("controls", []) or [],
                     "version": str(meta.get("version", "1.0")), "effective": str(meta.get("effective", "")),
@@ -38,7 +45,7 @@ def load_policies(folder: Path) -> list[dict]:
 
 def _load(path: Path) -> dict:
     with path.open(encoding="utf-8") as fh:
-        return yaml.safe_load(fh) or {}
+        return load_yaml(fh)
 
 
 @dataclass

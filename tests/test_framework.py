@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 from grcpal import collectors, report, tasks
 from grcpal.catalog import Catalog, validate
@@ -281,3 +282,11 @@ def test_platform_gating_and_report_skip(ctx, tmp_path, monkeypatch):
     iam02 = next(c for c in data["controls"] if c["id"] == "IAM-02")
     aws_item = next(i for i in iam02["evidence"] if i["via"] == "collector:aws_iam")
     assert aws_item["status"] == "n/a" and aws_item["note"] == "platform not in use"
+
+
+def test_load_yaml_is_safe_and_handles_empty():
+    from grcpal.catalog import load_yaml
+    assert load_yaml("") == {}
+    assert load_yaml("a: 1") == {"a": 1}
+    with pytest.raises(yaml.YAMLError):  # no Python objects, even with the fast C loader
+        load_yaml("!!python/object/apply:os.system ['echo pwned']")
