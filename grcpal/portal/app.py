@@ -368,6 +368,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                       history=portal.control_history(control_id, 50) if user.sees_everything else [],
                       can_upload=portal.can_upload_control(user, control_id),
                       can_comment=portal.can_comment(user, [control_id]),
+                      note=portal.control_note(control_id), note_history=portal.control_note_history(control_id)[1:20],
+                      can_note=portal.can_edit_control_note(user, control_id), note_max=portal.NOTE_MAX,
                       wanted=wanted, how=how, trail=trail, list_qs=list_qs,
                       def_history=portal.control_definition_history(control_id) if user.sees_everything else [],
                       nav_active="framework" if trail else "",
@@ -389,6 +391,19 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             return back(f"/controls/{control_id}#upload", err=str(exc))
         invalidate()
         return back(f"/controls/{control_id}#submissions", msg="Evidence uploaded and sent for review")
+
+    @app.post("/controls/{control_id}/note")
+    def control_note_save(request: Request, control_id: str, text: str = Form(""), csrf: str = Form(""),
+                          user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        portal = p()
+        if not portal.catalog.control(control_id) or not portal.can_see_control(user, control_id):
+            raise _HTTPError(404, "Control not found, or it is not assigned to you")
+        try:
+            portal.save_control_note(user, control_id, text)
+        except (Invalid, Forbidden) as exc:
+            return back(f"/controls/{control_id}#notes", err=str(exc))
+        return back(f"/controls/{control_id}#notes", msg="Implementation notes saved")
 
     @app.post("/controls/{control_id}/remind")
     def control_remind(request: Request, control_id: str, note: str = Form(""), csrf: str = Form(""),
