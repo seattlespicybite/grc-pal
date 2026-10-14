@@ -62,6 +62,24 @@ filtered by SOC 2 family, criterion and evidence type.
 
 Criterion titles are short paraphrases for navigation; the AICPA publication is authoritative.
 
+## Changing a control (control library owner)
+
+The control library owner (see [roles.md](roles.md)) can change any control from its page with
+**Edit control**: title, description, owner role, **named owners** (one or more people, each of
+whom can see the control and upload evidence), framework mappings (move a control between SOC 2
+criteria by removing one ID and adding another), and additional evidence people upload. Evidence
+collected automatically is listed but changed in the catalog or Configuration.
+
+- **A reason is required** for every save. It is shown to auditors.
+- **Every version is kept** with who, when, why, and the before and after values (**Definition
+  history** on the control page, `control_definition_changes` in the auditor export).
+  **Reset to the starter definition** is recorded the same way.
+- **Coverage check**: if the change would leave an in-scope criterion with no control, GRC-pal names
+  the criterion and asks you to confirm. The accepted gap is in the audit log.
+- **Upgrades keep your edits.** Edits are stored as a layer over the starter catalog. If a GRC-pal
+  release later changes the starter text of a control you edited, your version stays in use and
+  the control page says the starter changed, so you can compare and decide.
+
 ## Custom (manual) controls
 
 **Controls > New control** creates a control without editing YAML:

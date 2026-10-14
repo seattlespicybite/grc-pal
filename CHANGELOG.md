@@ -23,6 +23,24 @@ All notable changes are listed here. The project follows [semantic versioning](h
   Only known criterion IDs and list filter keys are accepted, so the links cannot point outside the portal.
 - Controls list: SOC 2 family, criterion and evidence-type filters; one requirements column per
   framework shown.
+- **Change people on a request.** Admins change the assignee, helpers, due date and instructions of
+  open requests. Newly added people are emailed; removed people lose access; earlier uploads keep
+  their uploader. Audited (`assignment.edit`).
+- **Control library owner.** One admin alone can change control definitions, custom controls and
+  custom frameworks. Handed over by the holder; any admin can assign it when nobody holds it;
+  cleared when the holder stops being an admin. Audited.
+- **Edit controls in the portal.** Owners (role and several named people), title, description,
+  evidence wanted and framework mappings. Reason required, every version kept with before and after,
+  reset to starter, coverage warning, flag when a release changes the starter text. History is in
+  the auditor export and in backups (new tables `controledits`, `controlhistory`).
+
+### Changed
+- Creating or changing custom controls and custom frameworks now needs the control library owner
+  (was: any admin).
+
+### Fixed
+- `owner_emails` and `links` on custom controls are stored as JSON, so they also work with Azure
+  Table storage.
 
 ## [0.1.0] - unreleased
 
