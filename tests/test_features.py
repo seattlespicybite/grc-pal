@@ -442,3 +442,62 @@ def test_control_page_after_mock_audit(env):
     login(client, ADMIN)
     assert client.get(f"/controls/{first}").status_code == 200
     assert client.get("/audit?target=" + first).status_code == 200
+
+
+# ================================================================ frameworks in use and the framework shown
+def test_frameworks_in_use_toggle_is_admin_only_audited_and_hides_others(env):
+    portal, client = env
+    assert {"soc2", "iso27001"} <= set(portal.frameworks_in_use)  # empty setting: every framework
+    login(client, ADMIN)
+    assert client.get("/view?f=all&next=/controls", follow_redirects=False).status_code == 303
+    assert "ISO/IEC 27001" in client.get("/controls").text
+    t = token(client, "/frameworks")
+    # control owners and auditors cannot change what is in use
+    for who in (CONTRIB, AUDITOR):
+        with pytest.raises(Forbidden):
+            portal.set_framework_in_use(who, "iso27001", False)
+    login(client, ADMIN)
+    r = client.post("/frameworks/iso27001/use", data={"csrf": t, "on": "false"}, follow_redirects=False)
+    assert r.status_code == 303 and "updated" in r.headers["location"]
+    assert list(portal.frameworks_in_use) == ["soc2"]
+    assert any(e["action"] == "framework.off" and e["target"] == "iso27001" for e in portal.log.records())
+    # one framework: the portal is a SOC 2 tool, ISO is gone from lists, control pages and the switcher
+    assert portal.program_view("iso27001") == "soc2"
+    page = client.get("/controls").text
+    assert "SOC 2 criteria" in page and "ISO/IEC 27001" not in page and "A.8.5" not in page
+    assert 'class="view-switch"' not in page
+    ctl = client.get("/controls/IAM-02").text
+    assert "CC6.1" in ctl and "ISO/IEC 27001" not in ctl
+    # the last framework cannot be turned off; unknown ids are refused
+    with pytest.raises(Invalid):
+        portal.set_framework_in_use(ADMIN, "soc2", False)
+    with pytest.raises(Invalid):
+        portal.set_framework_in_use(ADMIN, "nope", True)
+    portal.set_framework_in_use(ADMIN, "iso27001", True)
+    assert set(portal.frameworks_in_use) == {"soc2", "iso27001"}
+
+
+def test_view_switch_only_changes_display_and_rejects_outside_redirects(env):
+    portal, client = env
+    login(client, ADMIN)
+    r = client.get("/view?f=iso27001&next=/controls", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/controls" and "grcpal_view=iso27001" in r.headers["set-cookie"]
+    page = client.get("/controls").text
+    assert "A.8.5" in page and "CC6.1" not in page and 'class="view-switch"' in page
+    assert client.get("/view?f=all&next=//evil.example/x", follow_redirects=False).headers["location"] == "/"
+    assert client.get("/view?f=bogus&next=/", follow_redirects=False).headers["set-cookie"].startswith("grcpal_view=all")
+    # a control owner who picks a view still sees only their own controls
+    login(client, CONTRIB)
+    client.get("/view?f=soc2&next=/controls")
+    assert client.get("/controls/IAM-02").status_code == 404
+
+
+def test_custom_control_keeps_mapping_to_framework_switched_off(env):
+    portal, _ = env
+    portal.save_custom_control(ADMIN, {"id": "CUS-09", "title": "Customer schedule control", "map_soc2": "CC9.2",
+                                       "map_iso27001": "A.5.19", "owner_emails": CONTRIB.email})
+    portal.set_framework_in_use(ADMIN, "iso27001", False)
+    portal.save_custom_control(ADMIN, {"title": "Customer schedule control v2", "map_soc2": "CC9.2, CC9.1",
+                                       "owner_emails": CONTRIB.email}, existing_id="CUS-09")
+    ctl = portal.catalog.control("CUS-09")
+    assert ctl["mappings"]["iso27001"] == ["A.5.19"] and ctl["criteria"] == ["CC9.2", "CC9.1"]

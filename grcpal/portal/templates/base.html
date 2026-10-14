@@ -15,19 +15,27 @@
   <aside class="side">
     <div class="brand"><span class="brand-mark" aria-hidden="true">✓</span><span>GRC-pal<small>{{ org }}</small></span></div>
     {% set path = request.url.path %}
+    {% if fw_in_use|length > 1 %}<nav class="view-switch" aria-label="Framework shown">
+      <div class="nav-sep">Showing</div>
+      <div class="seg">{% for fid, fw in fw_in_use.items() %}<a href="/view?f={{ fid }}&amp;next={{ path|urlencode }}" class="{{ 'on' if view == fid }}"{% if view == fid %} aria-current="true"{% endif %}>{{ fw.name.split(' (')[0] }}</a>{% endfor %}
+      <a href="/view?f=all&amp;next={{ path|urlencode }}" class="{{ 'on' if view == 'all' }}"{% if view == 'all' %} aria-current="true"{% endif %}>All</a></div></nav>{% endif %}
     <nav class="nav" aria-label="Main">
       {% if not user.is_contributor %}<a href="/" class="{{ 'active' if path == '/' }}">Dashboard</a>{% endif %}
       {% if user.can_write %}<a href="/work" class="{{ 'active' if path.startswith('/work') or path.startswith('/assignments') }}">My work {% if my_open %}<span class="count">{{ my_open }}</span>{% endif %}</a>{% endif %}
       {% if user.is_admin %}<a href="/reviews" class="{{ 'active' if path.startswith('/reviews') }}">Reviews {% if review_count %}<span class="count">{{ review_count }}</span>{% endif %}</a>{% endif %}
       <div class="nav-sep">Program</div>
-      <a href="/controls" class="{{ 'active' if path.startswith('/controls') }}">{{ 'My controls' if user.is_contributor else 'Controls' }}</a>
-      {% if user.sees_everything %}<a href="/frameworks" class="{{ 'active' if path.startswith('/frameworks') or path.startswith('/criteria') }}">Frameworks</a>
-      <a href="/evidence" class="{{ 'active' if path.startswith('/evidence') }}">Evidence store</a>{% endif %}
+      {% set in_framework = nav_active == 'framework' or path.startswith('/criteria') or path.startswith('/frameworks/' ~ view) %}
+      {% if user.sees_everything %}{% if view == 'soc2' %}<a href="/criteria" class="{{ 'active' if in_framework }}">SOC 2 criteria</a>
+      {% elif view_fw %}<a href="/frameworks/{{ view_fw.id }}" class="{{ 'active' if in_framework }}">{{ view_fw.name.split(' (')[0] }}</a>
+      {% else %}<a href="/frameworks" class="{{ 'active' if path.startswith('/frameworks') or path.startswith('/criteria') or nav_active == 'framework' }}">Frameworks</a>{% endif %}{% endif %}
+      <a href="/controls" class="{{ 'active' if path.startswith('/controls') and not in_framework }}">{{ 'My controls' if user.is_contributor else 'Controls' }}</a>
+      {% if user.sees_everything %}<a href="/evidence" class="{{ 'active' if path.startswith('/evidence') }}">Evidence store</a>{% endif %}
       <a href="/policies" class="{{ 'active' if path.startswith('/policies') }}">Policies</a>
       {% if user.sees_everything %}<a href="/overrides" class="{{ 'active' if path.startswith('/overrides') }}">Overrides</a>
       <a href="/ai" class="{{ 'active' if path.startswith('/ai') }}">AI assistant</a>
       <div class="nav-sep">Administration</div>
-      {% if user.is_admin %}<a href="/settings" class="{{ 'active' if path.startswith('/settings') }}">Configuration</a>
+      {% if user.is_admin %}{% if view != 'all' %}<a href="/frameworks" class="{{ 'active' if path == '/frameworks' or path.startswith('/frameworks/new') }}">Frameworks in use</a>{% endif %}
+      <a href="/settings" class="{{ 'active' if path.startswith('/settings') }}">Configuration</a>
       <a href="/setup" class="{{ 'active' if path.startswith('/setup') }}">Setup guide</a>{% endif %}
       <a href="/cycles" class="{{ 'active' if path.startswith('/cycles') }}">Cycles and export</a>
       <a href="/logs" class="{{ 'active' if path.startswith('/logs') or path.startswith('/jobs') }}">Logs</a>

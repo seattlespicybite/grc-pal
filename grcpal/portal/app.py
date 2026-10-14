@@ -34,6 +34,7 @@ from grcpal.portal.service import Forbidden, Invalid, Portal
 
 HERE = Path(__file__).parent
 STATUS_LABELS = report_mod._LABELS
+VIEW_COOKIE = "grcpal_view"   # which framework the person is looking at; a display preference, not a permission
 CATEGORY_NAMES = {"security": "Security", "availability": "Availability", "confidentiality": "Confidentiality",
                   "processing_integrity": "Processing Integrity", "privacy": "Privacy"}
 ACCEPT = ".pdf,.png,.jpg,.jpeg,.csv,.xlsx,.docx,.pptx,.txt,.json,.md,.eml"
@@ -166,12 +167,18 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     def render(request: Request, user: User, name: str, **ctx) -> HTMLResponse:
         portal = p()
-        ctx.update(request=request, user=user, csrf=csrf_token(user.email), today=portal.today.isoformat(),
+        in_use = portal.frameworks_in_use
+        view = portal.program_view(request.cookies.get(VIEW_COOKIE, ""))
+        ctx.setdefault("nav_active", "")
+        ctx.update(fw_in_use=in_use, view=view, view_fw=in_use.get(view),request=request, user=user, csrf=csrf_token(user.email), today=portal.today.isoformat(),
                    cycle=portal.active_cycle(), org=portal.org, request_id=request_id.get(),
                    review_count=len(portal.reviewable(user)),
                    my_open=sum(1 for a in portal.assignments(user=user, mine=True) if a["status"] in ("open", "returned")),
                    flash=request.query_params.get("msg"), error=request.query_params.get("err"))
         return templates.TemplateResponse(request, name, ctx)
+
+    def current_view(request: Request) -> str:
+        return p().program_view(request.cookies.get(VIEW_COOKIE, ""))
 
     def safe_dest(url: str, default: str) -> str:
         return url if url.startswith("/") and not url.startswith("//") and "\\" not in url else default
@@ -251,14 +258,20 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     @app.get("/controls", response_class=HTMLResponse)
     def controls(request: Request, q: str = "", status: str = "", category: str = "", owner: str = "",
                  sort: str = "id", framework: str = "", user: User = Depends(current_user)):
+        from grcpal import frameworks as fw_mod
+
         portal = p()
         rows = health()["controls"]
-        fws = portal.frameworks
+        fws = portal.frameworks_in_use
+        view = current_view(request)
+        if view != "all":
+            framework = view
         if framework in fws:
-            from grcpal import frameworks as fw_mod
-
             mapped = {c["id"] for c in portal.catalog.controls if fw_mod.requirements_of(c, fws[framework])}
             rows = [c for c in rows if c["id"] in mapped]
+        columns = [fws[view]] if view != "all" else list(fws.values())
+        by_id = {c["id"]: c for c in portal.catalog.controls}
+        refs = {c["id"]: {fw.id: fw_mod.requirements_of(by_id.get(c["id"], c), fw) for fw in columns} for c in rows}
         visible = portal.visible_controls(user)
         if visible is not None:
             rows = [c for c in rows if c["id"] in visible]
@@ -276,7 +289,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         rows = sorted(rows, key=keys.get(sort, keys["id"]))
         return render(request, user, "controls.html", rows=rows, q=q, status=status, category=category,
                       owner=owner, sort=sort, owners=sorted(portal.catalog.roles), framework=framework,
-                      frameworks=fws)
+                      frameworks=fws, columns=columns, refs=refs)
 
     @app.get("/controls/{control_id}", response_class=HTMLResponse)
     def control_detail(request: Request, control_id: str, user: User = Depends(current_user)):
@@ -302,7 +315,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                       can_comment=portal.can_comment(user, [control_id]),
                       wanted=portal.evidence_wanted([control_id]),
                       owner_emails=portal.owner_emails(control_id), criteria=portal.catalog.criteria,
-                      max_mb=MAX_UPLOAD_BYTES // (1024 * 1024), mappings=_mappings(portal, ctl),
+                      max_mb=MAX_UPLOAD_BYTES // (1024 * 1024),
+                      mappings=_mappings(portal, ctl, current_view(request)),
                       checks=portal.checks_for(control_id) if user.sees_everything else [],
                       ai=portal.ai_status() if user.sees_everything else None,
                       ai_reviews=portal.ai_reviews(control_id)[:10] if user.sees_everything else [])
@@ -328,6 +342,16 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         except (Invalid, Forbidden) as exc:
             return back(f"/controls/{control_id}", err=str(exc))
         return back(f"/controls/{control_id}", msg=_remind_msg(r))
+
+    @app.get("/view")
+    def switch_view(request: Request, f: str = "all", next: str = "/", user: User = Depends(current_user)):
+        """Remember which framework this person wants to look at. Only changes what is shown, never access."""
+        portal = p()
+        choice = f if f in portal.frameworks_in_use or f == "all" else "all"
+        resp = RedirectResponse(safe_dest(next, "/"), status_code=303)
+        resp.set_cookie(VIEW_COOKIE, choice, max_age=365 * 86400, path="/", httponly=True, samesite="lax",
+                        secure=request.url.scheme == "https")
+        return resp
 
     # ------------------------------------------------------------------ criteria (admins, auditors)
     @app.get("/criteria", response_class=HTMLResponse)
@@ -732,11 +756,13 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     return app
 
 
-def _mappings(portal, ctl: dict) -> list[tuple]:
+def _mappings(portal, ctl: dict, view: str = "all") -> list[tuple]:
+    """Requirements a control meets, for the framework in view (or every framework in use)."""
     from grcpal import frameworks as fw_mod
 
     out = []
-    for fw in portal.frameworks.values():
+    in_use = portal.frameworks_in_use
+    for fw in ([in_use[view]] if view in in_use else in_use.values()):
         ids = fw_mod.requirements_of(ctl, fw)
         if ids:
             out.append((fw, [(r, fw.requirements.get(r, {}).get("title", "")) for r in ids]))

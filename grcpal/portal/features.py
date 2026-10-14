@@ -70,7 +70,47 @@ class FeaturesMixin:
 
     @property
     def frameworks(self) -> dict:
+        """Every framework GRC-pal knows (built in, files, custom), whether or not this client uses it."""
         return fw_mod.load(self.base_catalog, self.store.list("frameworks", "f"))
+
+    @property
+    def frameworks_in_use(self) -> dict:
+        """Frameworks switched on for this client (GRCPAL_FRAMEWORKS). Empty setting means all of them."""
+        known = self.frameworks
+        chosen = [f for f in self.settings.list("GRCPAL_FRAMEWORKS") if f in known]
+        return {f: known[f] for f in chosen} if chosen else known
+
+    def program_view(self, requested: str = "") -> str:
+        """The framework the portal shows: the only one in use, the one the person picked, or "all"."""
+        in_use = self.frameworks_in_use
+        if len(in_use) == 1:
+            return next(iter(in_use))
+        return requested if requested in in_use else "all"
+
+    def set_framework_in_use(self, actor, framework_id: str, on: bool) -> list[str]:
+        """Turn a framework on or off for this client. At least one stays on. Recorded in the audit log."""
+        self._admin(actor)
+        known = self.frameworks
+        if framework_id not in known:
+            raise self._invalid("Unknown framework")
+        current = list(self.frameworks_in_use)
+        if on and framework_id not in current:
+            new = current + [framework_id]
+        elif not on and framework_id in current:
+            new = [f for f in current if f != framework_id]
+            if not new:
+                raise self._invalid("Keep at least one framework turned on")
+        else:
+            return current
+        org = self.settings_store.row("organization").get("values") or {}
+        form = {**{k: v for k, v in org.items()}, "GRCPAL_FRAMEWORKS": "\n".join(new)}
+        _, errors = self.settings_store.save("organization", form, actor.email)
+        if errors:
+            raise self._invalid("; ".join(errors))
+        self.audit(actor, "framework.on" if on else "framework.off", framework_id, {"in_use": new})
+        self.events.info("config", f"Framework {'turned on' if on else 'turned off'}: {known[framework_id].name}",
+                         actor=actor.email, framework=framework_id)
+        return new
 
     # ================================================================ settings
     @property
@@ -211,8 +251,11 @@ class FeaturesMixin:
         freq = form.get("frequency") or "annual"
         if freq not in FREQUENCIES:
             raise self._invalid("Choose a frequency")
-        frameworks = self.frameworks
+        frameworks = self.frameworks_in_use
         mappings: dict[str, list[str]] = {}
+        for fid, ids in ((current or {}).get("mappings") or {}).items():
+            if fid not in frameworks:  # keep mappings to frameworks that are switched off (not on the form)
+                mappings[fid] = ids
         for fid, fw in frameworks.items():
             raw = form.get(f"map_{fid}", "")
             ids = [x.strip() for x in re.split(r"[,\s]+", raw) if x.strip()]
@@ -221,7 +264,7 @@ class FeaturesMixin:
                 raise self._invalid(f"{fw.name}: unknown requirement(s) {', '.join(unknown[:5])}")
             if ids:
                 mappings[fid] = ids
-        if not mappings:
+        if not any(mappings.get(f) for f in frameworks):
             raise self._invalid("Map the control to at least one requirement of a framework")
         owner = (form.get("owner") or "").strip()
         owner_emails = sorted({e.strip().lower() for e in re.split(r"[,;\s]+", form.get("owner_emails", "")) if e.strip()})

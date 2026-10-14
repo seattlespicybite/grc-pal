@@ -267,12 +267,24 @@ def register(app, h) -> None:
         h.need(user, "admin", "auditor")
         portal = p()
         rows = []
+        in_use = portal.frameworks_in_use
         for fw in portal.frameworks.values():
             cov = fw_mod.coverage(portal.catalog.controls, fw)
             covered = sum(1 for v in cov.values() if v)
-            rows.append({"fw": fw, "requirements": len(fw.requirements), "covered": covered,
+            rows.append({"fw": fw, "requirements": len(fw.requirements), "covered": covered, "in_use": fw.id in in_use,
                          "controls": len({c for v in cov.values() for c in v})})
         return render(request, user, "frameworks.html", rows=rows)
+
+    @app.post("/frameworks/{fid}/use")
+    def framework_use(request: Request, fid: str, on: str = Form(""), csrf: str = Form(""),
+                      user: User = Depends(current_user)):
+        h.check_csrf(request, user.email, csrf)
+        try:
+            p().set_framework_in_use(user, fid, on == "true")
+        except (Invalid, Forbidden) as exc:
+            return back("/frameworks", err=str(exc))
+        h.invalidate()
+        return back("/frameworks", msg="Frameworks in use updated")
 
     @app.get("/frameworks/new", response_class=HTMLResponse)
     def framework_new(request: Request, fid: str = "", user: User = Depends(current_user)):
@@ -307,7 +319,7 @@ def register(app, h) -> None:
     @app.get("/controls/new", response_class=HTMLResponse)
     def control_new(request: Request, user: User = Depends(current_user)):
         admin(user)
-        return render(request, user, "control_form.html", row=None, frameworks=p().frameworks,
+        return render(request, user, "control_form.html", row=None, frameworks=p().frameworks_in_use,
                       roles_list=sorted(p().base_catalog.roles), frequencies=("continuous", "daily", "weekly", "monthly",
                                                                              "quarterly", "annual", "event"))
 
@@ -318,7 +330,7 @@ def register(app, h) -> None:
         try:
             row = p().save_custom_control(user, form)
         except (Invalid, Forbidden) as exc:
-            return render(request, user, "control_form.html", row=None, frameworks=p().frameworks, form=form,
+            return render(request, user, "control_form.html", row=None, frameworks=p().frameworks_in_use, form=form,
                           roles_list=sorted(p().base_catalog.roles), page_err=str(exc),
                           frequencies=("continuous", "daily", "weekly", "monthly", "quarterly", "annual", "event"))
         return back(f"/controls/{row['RowKey']}", msg="Control created. Add checks or assign evidence collection below.")
@@ -329,7 +341,7 @@ def register(app, h) -> None:
         row = p().custom_control(cid)
         if not row:
             raise h.HTTPError(404, "Only custom controls can be edited here; catalog controls live in catalog/controls.yaml")
-        return render(request, user, "control_form.html", row=row, frameworks=p().frameworks,
+        return render(request, user, "control_form.html", row=row, frameworks=p().frameworks_in_use,
                       roles_list=sorted(p().base_catalog.roles),
                       frequencies=("continuous", "daily", "weekly", "monthly", "quarterly", "annual", "event"))
 
@@ -426,7 +438,7 @@ def register(app, h) -> None:
             except Invalid:
                 scope_sizes[fid] = 0
         return render(request, user, "ai.html", ai=portal.ai_status(), audits=portal.ai_audits(),
-                      frameworks=portal.frameworks, scope_sizes=scope_sizes, running=portal.jobs.running("ai_audit"))
+                      frameworks=portal.frameworks_in_use, scope_sizes=scope_sizes, running=portal.jobs.running("ai_audit"))
 
     @app.post("/ai/audits")
     def ai_audit_start(request: Request, framework: str = Form("soc2"), limit: int = Form(0), csrf: str = Form(""),
