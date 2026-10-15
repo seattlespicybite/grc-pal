@@ -4,7 +4,28 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Changed
+- **Security calendar redesigned** as one year page for admins (activities on the left, months on the
+  right). Month and List views are gone; auditors get the calendar through the cycle export.
+- Statuses are now **Planned** (amber **Past due** after the due date), **Performed** (with the date) and
+  **Missed** (note required) for manual activities, and **Passed**, **Findings**, **Failed**, **Not run**
+  for automated ones (latest run of the month). Earlier "performed late" records show as Performed and
+  "not performed" or "not applicable" as Missed.
+
 ### Added
+- **Edit the calendar in the portal**: add, edit, retire and delete activities; tick the months they are
+  due, the due day (1st, 15th or last day) and any number of linked controls at once. Schedule edits apply
+  from the current month on (versioned in the new `calendarversions` table); past months never change.
+  Delete only works while nothing is recorded. All changes are in the audit log.
+- **Move a due date** for one month; the original date stays on record.
+- **22 new starter activities** in `catalog/tasks.yaml` (40 in total): monthly security meeting minutes,
+  vulnerability scan review, joiner/leaver and change ticket samples, alert and incident log review,
+  deficiency register review and newsletter; quarterly privileged access, guest user, roles, asset,
+  credentials, phishing, firewall and new-vendor reviews; annual objectives, system description, data
+  inventory, incident plan, retention, configuration baseline and continuity plan reviews. Tasks can now
+  list `controls` and a `due_day` directly.
+- Performed calendar activities count as evidence for their linked controls' status.
+
 - **Restore**: `grcpal backup restore FILE` checks the whole backup first and writes nothing unless it is
   intact, then fills an empty instance or a new folder (`--into`); it never overwrites data. Files are
   re-hashed as they are written. A backup from a newer data model is refused. Each tenant's audit chain

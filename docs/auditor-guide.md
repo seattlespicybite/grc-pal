@@ -19,8 +19,8 @@ program repository for the audit period.
 | `policy_acknowledgments.csv` | Who acknowledged which policy version and when (with the policy hash) |
 | `audit_log.csv` | Every change in the period, hash-chained |
 | `control_definition_changes.csv` | Every version of a changed control definition, with author, reason and before/after |
-| `calendar_occurrences.csv` | Every recurring activity due in the cycle (from the schedule, not from what was done), with the latest admin decision, performed date, who recorded it, when and why. Rows still marked "Needs decision" are activities nobody has recorded |
-| `calendar_decisions.csv` | Every calendar decision, including ones later corrected (version and what it replaced) |
+| `calendar_occurrences.csv` | Every scheduled month of every recurring activity in the cycle (from the schedule, not from what was done): scheduled and moved due date, status (Planned, Performed, Missed), past-due flag, performed date, who recorded it, when and the note |
+| `calendar_decisions.csv` | Every change recorded on the calendar, including ones later corrected (version and the status it replaced) |
 | `implementation_notes.csv` | Every version of each control's "How we meet this control" notes, with author and time; each save is also in the audit log with the SHA-256 of the text |
 | `audit_chain_verification.json` | Result of recomputing the chain at export time |
 | `control_status.json` | Control health at export time, including the computed status behind any override |

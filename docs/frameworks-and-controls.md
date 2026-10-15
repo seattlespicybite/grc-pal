@@ -90,31 +90,49 @@ July and October."* It is written for the next person who runs the program and f
 
 ## Security calendar
 
-**Calendar** (admins and auditors) shows every recurring activity from `catalog/tasks.yaml` (access
-reviews, DR test, risk assessment, ...) with its due dates for the year, in Year, Month and List views.
-Automated evidence (collectors and custom checks) is shown as the days it actually ran; **Hide automated
-evidence** removes it. Only activities linked to a control that maps to a framework in use appear (for
-SOC 2, an in-scope criterion), so Privacy activities stay hidden while Privacy is out of scope.
+**Calendar** (admins only) is one page for the year: activities on the left, January to December on the
+right. It lists every recurring manual activity and, below them, every collector and check that is
+switched on. **Hide automated** removes the automated rows. Only activities linked to a control that maps
+to a framework in use appear (for SOC 2, an in-scope criterion), so Privacy activities stay hidden while
+Privacy is out of scope.
 
-GRC-pal never marks an activity missed by itself. After the due date an activity shows **Needs
-decision** until an admin opens it and records one of:
+**Starter activities.** The first time the calendar opens it copies the activities in
+`catalog/tasks.yaml` (40, including monthly ticket samples, quarterly access reviews and annual plan
+reviews). From then on they live in GRC-pal: edit, retire or delete them, and add your own with
+**+ New activity**.
 
-| Decision | When | Needs |
-| --- | --- | --- |
-| Performed | Done on or before the due date | The date |
-| Performed late | Done after the due date | The date and a reason |
-| Not performed (exception) | Did not happen; the auditor will see an exception | A reason |
-| Not applicable | Nothing to do this time (for example, no new vendors this quarter) | A justification |
+**Editing an activity** (click its name): name, owner (for information), steps and expected evidence,
+the months it is due (tick any months), the due day (1st, 15th or last day) and the linked controls
+(tick as many as apply; type in the filter box to find them). A schedule change applies from the current
+month on; months already past keep the schedule they had, so history is never rewritten. A new activity
+counts from the start of the observation period, so earlier months can still be recorded.
+**Retire** hides an activity from now on and keeps everything recorded. **Delete** is only possible while
+nothing has been recorded for it.
 
-A decision cannot be edited. Recording a new one replaces it on the calendar, and both stay in the
-history and the audit log. The occurrence page links each control's "How we meet this control" notes,
-its evidence guide and the evidence uploaded while the activity was open.
+**Recording a month** (click the cell):
 
-Activities due before your first audit cycle started are not shown: set the cycle start date on
-**Cycles and export** to the first day of your observation period. Editing schedules in the portal,
-any date and time, weekly and "2nd Tuesday" rules, scheduled evidence pulls and reminder emails are
-planned next; until then the schedule comes from `catalog/tasks.yaml` (`months`, `due_days`, and an
-optional `due_time` such as `"10:00"`, default 17:00).
+| Status | Meaning |
+| --- | --- |
+| Planned | Not done yet. Shown as **Past due** (amber) once the due date has passed inside the observation period |
+| Performed | Done, with the date it was performed |
+| Missed | Did not happen; a note explaining why is required. The auditor will treat it as an exception |
+
+GRC-pal never marks anything Missed by itself. The same page can move the due date to any day; the
+original date stays on record (a moved cell shows `*`). Every save is a new entry in the history and in
+the audit log, nothing is overwritten. The page also links each control's "How we meet this control"
+notes, its evidence guide and the evidence uploaded that month.
+
+**Automated activities** take their monthly status from real runs:
+
+| Status | Meaning |
+| --- | --- |
+| Passed | The latest run that month worked and found nothing to fix |
+| Findings | The run worked and found items to follow up; the control is doing its job |
+| Failed | The run itself broke (for example an expired secret). Fix it and run again: the month shows the latest run, and the failure stays in the run history |
+| Not run | No run that month, inside the observation period |
+
+Past-due warnings start on the first audit cycle's start date: set it on **Cycles and export** to the
+first day of your observation period.
 
 ## Knowledge base
 

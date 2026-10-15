@@ -215,3 +215,297 @@ tasks:
     checklist:
       - Review privacy notice, consent records, data inventory versus purposes
       - Review disclosure log, sub-processor list, complaints
+
+  # ---- Added for the security calendar. `controls` links an activity to controls directly;
+  # `due_day` is 1, 15 or last (default: 15 when due_days <= 21, otherwise the last day of the month).
+
+  security-meetings:
+    title: Security team meetings (minutes)
+    cadence: monthly
+    months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    due_days: 30
+    due_day: last
+    owner: security-lead
+    approver: executive-sponsor
+    controls: [GOV-03]
+    checklist:
+      - Hold the recurring security meetings for the month
+      - Attach minutes with date, attendees, decisions and follow-ups
+
+  vulnerability-review:
+    title: Vulnerability scan review and remediation SLAs
+    cadence: monthly
+    months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    due_days: 14
+    due_day: 15
+    owner: security-lead
+    approver: executive-sponsor
+    controls: [VUL-01, VUL-03]
+    checklist:
+      - Export the latest scan results (servers, endpoints, cloud, code dependencies)
+      - List critical and high findings past their remediation SLA, with owner and ticket
+      - Record accepted exceptions with approval and expiry
+
+  joiner-leaver-sample:
+    title: Joiner and leaver ticket sample check
+    cadence: monthly
+    months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    due_days: 14
+    due_day: 15
+    owner: security-lead
+    approver: executive-sponsor
+    controls: [IAM-03, IAM-04, DAT-03]
+    checklist:
+      - Take last month's hires and leavers from HR
+      - For a sample, match the approved access request and the account disable date (within 24 hours)
+      - Confirm returned devices were wiped or disposed of; ticket any gaps
+
+  change-sample:
+    title: Change ticket sample review (including emergency changes)
+    cadence: monthly
+    months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    due_days: 14
+    due_day: 15
+    owner: engineering-lead
+    approver: security-lead
+    controls: [CHG-01, CHG-03]
+    checklist:
+      - Sample last month's production changes
+      - Confirm peer review, passing tests and approval; emergency changes reviewed after the fact
+      - Ticket any change that skipped the process
+
+  alert-review:
+    title: Security alert and incident log review
+    cadence: monthly
+    months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    due_days: 30
+    due_day: last
+    owner: security-lead
+    approver: executive-sponsor
+    controls: [LOG-02, IR-02]
+    checklist:
+      - Export the month's high-severity alerts and their disposition
+      - Confirm every security incident has a record, timeline and closure
+      - Note tuning changes to detection rules
+
+  deficiency-review:
+    title: Deficiency and exception register review
+    cadence: monthly
+    months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    due_days: 30
+    due_day: last
+    owner: security-lead
+    approver: executive-sponsor
+    controls: [MON-02]
+    checklist:
+      - Review open deficiencies and exceptions, owners and target dates
+      - Close remediated items with evidence; escalate overdue ones
+
+  security-newsletter:
+    title: Security awareness newsletter
+    cadence: monthly
+    months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    due_days: 30
+    due_day: last
+    owner: security-lead
+    approver: executive-sponsor
+    controls: [HR-02]
+    checklist:
+      - Send the monthly security message to all staff
+      - Attach a copy and the distribution list or send date
+
+  privileged-access-review:
+    title: Privileged access review
+    cadence: quarterly
+    months: [1, 4, 7, 10]
+    due_days: 14
+    due_day: 15
+    owner: security-lead
+    approver: executive-sponsor
+    controls: [IAM-06, IAM-09]
+    checklist:
+      - Export admin roles (directory, cloud, production) and their holders
+      - Confirm each holder still needs the role; remove the rest and link the change
+
+  guest-user-review:
+    title: Guest and external user review
+    cadence: quarterly
+    months: [1, 4, 7, 10]
+    due_days: 14
+    due_day: 15
+    owner: security-lead
+    approver: executive-sponsor
+    controls: [IAM-08]
+    checklist:
+      - Export guest and external accounts with sponsor and last sign-in
+      - Remove accounts without a current business need
+
+  roles-review:
+    title: Security roles and org chart review
+    cadence: quarterly
+    months: [1, 4, 7, 10]
+    due_days: 14
+    due_day: 15
+    owner: security-lead
+    approver: executive-sponsor
+    controls: [GOV-02]
+    checklist:
+      - Confirm the security roles and control owners are current
+      - Attach the current org chart
+
+  asset-inventory-review:
+    title: Asset inventory reconciliation
+    cadence: quarterly
+    months: [2, 5, 8, 11]
+    due_days: 14
+    due_day: 15
+    owner: it-lead
+    approver: security-lead
+    controls: [AST-01, AST-02, AST-03]
+    checklist:
+      - Compare cloud, endpoint and application inventories with the asset owners' lists
+      - Record unknown or unmanaged assets and the follow-up
+
+  credentials-review:
+    title: Application credentials and secrets review
+    cadence: quarterly
+    months: [2, 5, 8, 11]
+    due_days: 14
+    due_day: 15
+    owner: engineering-lead
+    approver: security-lead
+    controls: [IAM-07, CRY-03]
+    checklist:
+      - List application secrets and certificates with owners and expiry
+      - Rotate expiring or unused credentials; confirm secret scanning is on
+
+  phishing-simulation:
+    title: Phishing simulation
+    cadence: quarterly
+    months: [3, 6, 9, 12]
+    due_days: 14
+    due_day: 15
+    owner: security-lead
+    approver: executive-sponsor
+    controls: [HR-02]
+    checklist:
+      - Run the simulation and attach the results (click and report rates)
+      - Assign follow-up training to people who clicked
+
+  firewall-review:
+    title: Firewall and network configuration review
+    cadence: quarterly
+    months: [3, 6, 9, 12]
+    due_days: 30
+    due_day: last
+    owner: it-lead
+    approver: security-lead
+    controls: [NET-01, NET-02]
+    checklist:
+      - Export firewall and network security rules
+      - Review changes since the last review and rules open to the internet; remove what is not needed
+      - Record the reviewer's sign-off
+
+  new-vendor-check:
+    title: New vendor due diligence check
+    cadence: quarterly
+    months: [3, 6, 9, 12]
+    due_days: 30
+    due_day: last
+    owner: security-lead
+    approver: executive-sponsor
+    controls: [VEN-01, VEN-03]
+    checklist:
+      - List vendors added this quarter
+      - Confirm each has a security review, an assurance report or certificate, and security terms in the contract
+
+  security-objectives:
+    title: Security objectives review
+    cadence: annual
+    months: [1]
+    due_days: 30
+    due_day: last
+    owner: security-lead
+    approver: executive-sponsor
+    controls: [GOV-06]
+    checklist:
+      - Review last year's security objectives and results
+      - Set this year's objectives; record leadership approval
+
+  system-description:
+    title: System description update
+    cadence: annual
+    months: [3]
+    due_days: 30
+    due_day: last
+    owner: security-lead
+    approver: executive-sponsor
+    controls: [GOV-10]
+    checklist:
+      - Update the system description (services, infrastructure, people, data, subservice organizations)
+      - Record review and approval
+
+  data-inventory-review:
+    title: Data inventory and data flow review
+    cadence: annual
+    months: [4]
+    due_days: 30
+    due_day: last
+    owner: security-lead
+    approver: executive-sponsor
+    controls: [DAT-04]
+    checklist:
+      - Update the inventory of confidential data and where it flows
+      - Attach the updated data flow diagram
+
+  incident-plan-review:
+    title: Incident response plan and breach notification review
+    cadence: annual
+    months: [4]
+    due_days: 30
+    due_day: last
+    owner: security-lead
+    approver: executive-sponsor
+    controls: [IR-01, IR-04]
+    checklist:
+      - Review the incident response plan, contacts and notification duties
+      - Record changes and approval
+
+  retention-review:
+    title: Data retention and disposal review
+    cadence: annual
+    months: [6]
+    due_days: 30
+    due_day: last
+    owner: security-lead
+    approver: executive-sponsor
+    controls: [DAT-01, DAT-02]
+    checklist:
+      - Confirm data past its retention period was deleted, with records
+      - Confirm classification labels are applied to confidential data
+
+  configuration-baseline-review:
+    title: Secure configuration baseline review
+    cadence: annual
+    months: [8]
+    due_days: 30
+    due_day: last
+    owner: it-lead
+    approver: security-lead
+    controls: [VUL-02, CHG-04]
+    checklist:
+      - Review the configuration baselines for cloud, endpoints and servers
+      - Confirm production and non-production environments stay separated
+
+  continuity-plan-review:
+    title: Business continuity plan review
+    cadence: annual
+    months: [10]
+    due_days: 30
+    due_day: last
+    owner: engineering-lead
+    approver: executive-sponsor
+    controls: [BCP-01]
+    checklist:
+      - Review the business continuity and disaster recovery plan, contacts and recovery objectives
+      - Record changes and approval

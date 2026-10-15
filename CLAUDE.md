@@ -45,7 +45,7 @@ explain choices in plain words, keep changes small, never leave the test suite r
 | Catalog (controls, criteria, roles, tasks, policies) | `grcpal/catalog.py`, `grcpal/starter/catalog/*.yaml`, `grcpal/starter/policies/` |
 | Frameworks (SOC 2 built in, ISO 27001 file, custom; SOC 2 only by default) | `grcpal/frameworks.py`, `grcpal/starter/frameworks/` |
 | Knowledge base (evidence guidance per criterion and point of focus) | `grcpal/kb.py`, `grcpal/starter/kb/*.yaml`, routes `/kb` in `routes_extra.py`, tests `tests/test_kb.py` |
-| Security calendar (activities from tasks.yaml, occurrences computed, admin decisions append-only) | `grcpal/portal/calendar.py` (`CalendarMixin`), routes `routes_calendar.py`, templates `calendar*.html`, table `calendardecisions`, tests `tests/test_calendar.py` |
+| Security calendar (admins only; activities seeded once from tasks.yaml, then edited in the portal; versioned schedules; append-only month records) | `grcpal/portal/calendar.py` (`CalendarMixin`), routes `routes_calendar.py`, templates `calendar*.html`, tables `calendaractivities`, `calendarversions`, `calendardecisions`, tests `tests/test_calendar.py` |
 | Implementation notes per control | `features.py` (`save_control_note`), table `controlnotes`, `control.html` `#notes` |
 | Collectors (Entra, Intune, Azure, AWS, GCP, GitHub) | `grcpal/collectors/*.py` (register in `NAMES` and `PLATFORMS`), clients in `grcpal/clients.py`, `grcpal/integrations/` |
 | Evidence store (write-once, SHA-256 manifests, tenant namespace) | `grcpal/evidence.py` |

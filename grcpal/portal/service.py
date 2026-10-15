@@ -409,7 +409,7 @@ class Portal(FeaturesMixin, CalendarMixin, AccountsMixin, BackupsMixin):
             task = self.catalog.tasks.get(target_id)
             if not task:
                 raise Invalid(f"Unknown task {target_id}")
-            return task["title"], sorted(self.catalog.sources("task").get(target_id, []))
+            return task["title"], sorted(set(self.catalog.sources("task").get(target_id, [])) | set(task.get("controls") or []))
         raise Invalid("Target must be a control, point of focus or task")
 
     def create_assignment(self, actor: User, target_type: str, target_id: str, assignee: str, contributors: list[str],
@@ -890,6 +890,7 @@ class Portal(FeaturesMixin, CalendarMixin, AccountsMixin, BackupsMixin):
         from grcpal.collectors import disabled_sources
 
         return {"overrides": self.active_overrides(), "tasks": tasks, "uploads": uploads,
+                "activities": self.performed_by_control(),
                 "skip_sources": disabled_sources(self.catalog, self.settings)}
 
     # ================================================================ evidence browsing (admins, auditors)
