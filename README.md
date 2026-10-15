@@ -10,12 +10,20 @@ License: [AGPL-3.0-or-later](LICENSE).
 
 ## What's inside
 
-- **Ready-made SOC 2 program:** 77 controls covering all 61 Trust Services Criteria (Security,
-  Availability, Confidentiality, Processing Integrity, Privacy) and 285 points of focus, plus 18
-  recurring activities (access reviews, DR test, risk assessment, tabletop, policy review...).
-- **One framework at a time, or several:** turn on only what the organization works on. With only
-  SOC 2 on, the portal is a SOC 2 tool. ISO/IEC 27001:2022 is built in; add any standard as a file
-  or in the portal, and every control can count for several frameworks.
+- **Ready-made SOC 2 Type 2 program:** 77 controls covering all 61 Trust Services Criteria and 285
+  points of focus, plus 18 recurring activities (access reviews, DR test, risk assessment, tabletop,
+  policy review...). The starter scope is Security, Availability and Confidentiality; Processing
+  Integrity and Privacy are ready but deferred, and their controls stay out of the way until you
+  add them to scope.
+- **SOC 2 first:** a new installation works on SOC 2 only. ISO/IEC 27001:2022 is built in and keeps
+  its mappings: an admin can turn it on per organization to see how far the SOC 2 controls already
+  go. Any other standard can be added as a file or in the portal.
+- **Knowledge base:** evidence guidance for every Security, Availability and Confidentiality
+  criterion and point of focus: what the auditor tests, what good evidence looks like, good
+  examples, common mistakes and how often. Linked from controls, criteria and evidence requests.
+- **How we meet this control:** implementation notes on each control (for example "Covered by
+  InfoSec Policy section 6; DR test every November"), versioned and audit-logged, so the next
+  person inherits the program and the auditor gets your narrative in the export.
 - **SOC 2 view:** criteria grouped into families (CC1-CC9, then Availability, Confidentiality,
   Processing Integrity, Privacy) with status per family, and criterion pages that show how each
   control is evidenced. Control pages remember where you came from (**Back to CC6.1**,
@@ -153,7 +161,8 @@ ID sign-in, logs, scheduled jobs and a keyless identity for your repository's wo
 
 1. **Users and roles:** add people (local accounts get a one-time link to choose a password) and
    make one admin the **control library owner**.
-2. **Frameworks:** keep only the frameworks the organization is working on (for example SOC 2).
+2. **Scope and frameworks:** SOC 2 is the only framework in use by default; set the report scope in
+   `catalog/scope.yaml` (starter: Security, Availability, Confidentiality).
 3. **Setup guide:** connect Microsoft Entra ID / Microsoft 365, Azure, GitHub and email. Each
    connection is tested before it is saved. Turn off what is not used (AWS, Google Cloud).
 4. **Controls:** as library owner, adjust owners and wording to the organization; each change asks
@@ -188,7 +197,7 @@ ID sign-in, logs, scheduled jobs and a keyless identity for your repository's wo
 | [Deploy to Azure](docs/deploy-azure.md) | Azure Container Apps with Entra ID sign-in |
 | [Operations](docs/operations.md) | Daily and yearly routines, cycles, reminders, logs, backups, upgrades |
 | [Roles and permissions](docs/roles.md) | Exactly who can see and do what, including the control library owner |
-| [Frameworks, controls and checks](docs/frameworks-and-controls.md) | Frameworks in use, the SOC 2 view, editing controls, custom controls, URL checks |
+| [Frameworks, controls and checks](docs/frameworks-and-controls.md) | Frameworks in use, the SOC 2 view, implementation notes, the knowledge base, editing controls, custom controls, URL checks |
 | [Configuration](docs/configuration.md) | Configuration page and every environment variable |
 | [Clouds](docs/clouds.md) | Connecting Azure, AWS and Google Cloud with least privilege |
 | [AI assistant](docs/ai-assistant.md) | Evidence review and mock audits, data handling and risks |
