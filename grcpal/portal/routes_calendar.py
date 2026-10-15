@@ -1,22 +1,19 @@
-"""Security calendar pages: year, month and list views, one occurrence, one automated activity, CSV.
-
-Admins and auditors can read; only admins record decisions (checked again in calendar.py)."""
+"""Security calendar pages (admins only): the year view, one month of an activity, the activity editor,
+the run history of an automated activity, and a CSV export. Rules and authorization live in calendar.py."""
 from __future__ import annotations
 
 import calendar as _cal
 import csv
-import datetime as dt
 import io
 
-from fastapi import Depends, Form, Request
+from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse
 
 from grcpal.portal.auth import User
-from grcpal.portal.calendar import DECISIONS, STATUS_LABELS
+from grcpal.portal.calendar import AUTO_STATUSES, DUE_DAYS, STATUSES
 from grcpal.portal.service import Forbidden, Invalid
 
-VIEWS = ("year", "month", "list")
-FILTERS = ("", "needs_decision", "open", "planned", "decided")
+MONTHS = [_cal.month_abbr[m] for m in range(1, 13)]
 
 
 def _csv_cell(value) -> str:
@@ -28,93 +25,48 @@ def _csv_cell(value) -> str:
 def register(app, h) -> None:
     p, current_user, render, back = h.p, h.current_user, h.render, h.back
 
-    def readers(user: User) -> None:
-        h.need(user, "admin", "auditor")
+    def admin(user: User) -> None:
+        h.need(user, "admin")
 
     def clamp_year(year: int) -> int:
-        today = p().today
-        return year if 2000 <= year <= 2100 else today.year
+        return year if 2000 <= year <= 2100 else p().today.year
+
+    def group_rows(rows: list[dict]) -> list[dict]:
+        groups = [("Monthly", lambda n: n == 12), ("Quarterly", lambda n: n == 4), ("Annual", lambda n: n == 1),
+                  ("Other schedules", lambda n: n not in (1, 4, 12))]
+        out = []
+        for title, test in groups:
+            items = [r for r in rows if test(len(r["months"]))]
+            if items:
+                out.append({"title": title, "rows": items})
+        return out
 
     @app.get("/calendar", response_class=HTMLResponse)
-    def calendar_page(request: Request, view: str = "year", year: int = 0, month: int = 0, status: str = "",
-                      auto: str = "1", user: User = Depends(current_user)):
-        readers(user)
+    def calendar_page(request: Request, year: int = 0, auto: str = "1", user: User = Depends(current_user)):
+        admin(user)
         portal = p()
-        today = portal.today
-        view = view if view in VIEWS else "year"
         year = clamp_year(year)
-        month = month if 1 <= month <= 12 else (today.month if year == today.year else 1)
-        status = status if status in FILTERS else ""
         show_auto = auto != "0"
-        occs = portal.calendar_occurrences(year)
-        automated = portal.calendar_automated() if show_auto else []
-        counts = {
-            "needs_decision": sum(1 for o in occs if o["status"] == "needs_decision"),
-            "open": sum(1 for o in occs if o["status"] == "open"),
-            "soon": sum(1 for o in occs if o["status"] in ("open", "planned")
-                        and today.isoformat() <= o["due_date"] <= (today + dt.timedelta(days=30)).isoformat()),
-            "decided": sum(1 for o in occs if o["status"] in DECISIONS),
-            "total": len(occs),
-        }
-        ctx = {"cal_view": view, "program_start": portal.calendar_program_start(), "year": year, "month": month, "status": status, "show_auto": show_auto,
-               "counts": counts, "labels": STATUS_LABELS, "month_name": _cal.month_name[month],
-               "month_abbr": [_cal.month_abbr[m] for m in range(1, 13)], "this_month": today.month if year == today.year else 0}
-        if view == "year":
-            rows: dict[str, dict] = {}
-            for o in occs:
-                row = rows.setdefault(o["activity"], {"id": o["activity"], "title": o["title"], "controls": o["controls"],
-                                                      "cells": [[] for _ in range(12)]})
-                row["cells"][o["due_month"] - 1].append(o)
-            for act in portal.calendar_activities():  # activities with nothing due this year still get a row
-                rows.setdefault(act["id"], {"id": act["id"], "title": act["title"], "controls": act["controls"],
-                                            "cells": [[] for _ in range(12)]})
-            ctx["rows"] = sorted(rows.values(), key=lambda r: r["title"])
-            for a in automated:
-                cells = [set() for _ in range(12)]
-                for run in a["runs"]:
-                    if run[:4] == str(year):
-                        cells[int(run[5:7]) - 1].add(run[:10])
-                a["month_days"] = [len(c) for c in cells]
-            ctx["automated"] = automated
-        elif view == "month":
-            by_day: dict[str, list] = {}
-            for o in occs:
-                by_day.setdefault(o["due_date"], []).append(o)
-            if month == 1 or month == 12:  # occurrences due in the edge weeks of the neighbouring years
-                for o in portal.calendar_occurrences(year - 1 if month == 1 else year + 1):
-                    by_day.setdefault(o["due_date"], []).append(o)
-            auto_by_day: dict[str, list] = {}
-            for a in automated:
-                for day in sorted({r[:10] for r in a["runs"]}):
-                    auto_by_day.setdefault(day, []).append(a["title"])
-            weeks = []
-            for week in _cal.Calendar(firstweekday=0).monthdatescalendar(year, month):
-                weeks.append([{"date": d.isoformat(), "day": d.day, "in_month": d.month == month,
-                               "today": d == today, "due": by_day.get(d.isoformat(), []),
-                               "autos": auto_by_day.get(d.isoformat(), [])} for d in week])
-            ctx["weeks"] = weeks
-            prev_m = dt.date(year, month, 1) - dt.timedelta(days=1)
-            next_m = dt.date(year, month, 28) + dt.timedelta(days=7)
-            ctx["prev"] = {"year": prev_m.year, "month": prev_m.month, "name": _cal.month_abbr[prev_m.month]}
-            ctx["next"] = {"year": next_m.year, "month": next_m.month, "name": _cal.month_abbr[next_m.month]}
-            ctx["automated"] = automated
-        else:
-            if status == "decided":
-                occs = [o for o in occs if o["status"] in DECISIONS]
-            elif status:
-                occs = [o for o in occs if o["status"] == status]
-            ctx["occurrences"] = occs
-            ctx["automated"] = automated
-        return render(request, user, "calendar.html", nav_active="calendar", **ctx)
+        data = portal.calendar_year(year, show_automated=show_auto)
+        cells = [c for a in data["manual"] for c in a["cells"] if c]
+        counts = {"past_due": sum(1 for c in cells if c["past_due"]),
+                  "performed": sum(1 for c in cells if c["status"] == "performed"),
+                  "missed": sum(1 for c in cells if c["status"] == "missed"), "total": len(cells),
+                  "activities": len(data["manual"]), "automated": len(data["automated"])}
+        this_month = portal.today.month if year == portal.today.year else 0
+        return render(request, user, "calendar.html", nav_active="calendar", year=year, show_auto=show_auto,
+                      groups=group_rows(data["manual"]), automated=data["automated"], counts=counts,
+                      months=MONTHS, this_month=this_month, labels=STATUSES, auto_labels=AUTO_STATUSES,
+                      program_start=portal.calendar_program_start())
 
     @app.get("/calendar.csv")
     def calendar_csv(year: int = 0, user: User = Depends(current_user)):
-        readers(user)
+        admin(user)
         year = clamp_year(year)
         rows = p().calendar_export_rows(f"{year}-01-01", f"{year}-12-31")
+        cols = ["occurrence", "activity", "title", "month", "scheduled_due", "moved_to", "status", "past_due",
+                "performed_on", "recorded_by", "recorded_at", "note", "controls"]
         buf = io.StringIO()
-        cols = ["occurrence", "activity", "title", "period", "opens", "due", "controls", "status", "performed_on",
-                "decided_by", "decided_at", "decision_version", "reason"]
         w = csv.writer(buf)
         w.writerow(cols)
         for r in rows:
@@ -122,52 +74,123 @@ def register(app, h) -> None:
         p().events.info("export", "Calendar exported", actor=user.email, year=year)
         return h.attachment(f"grcpal-calendar-{year}.csv", buf.getvalue().encode())
 
+    # ---------------------------------------------------------------- one month of a manual activity
     @app.get("/calendar/o/{key}", response_class=HTMLResponse)
     def calendar_occurrence(request: Request, key: str, user: User = Depends(current_user)):
-        readers(user)
+        admin(user)
         portal = p()
         try:
             occ = portal.calendar_occurrence(key)
         except Invalid as exc:
             raise h.HTTPError(404, str(exc)) from exc
         in_scope = set(portal.catalog.in_scope_criteria)
+        window_start = f"{occ['year']}-{occ['month']:02d}-01"
+        window_end = max(occ["due"], f"{occ['year']}-{occ['month']:02d}-31")
         controls = []
         for cid in occ["controls"]:
             ctl = portal.catalog.control(cid)
             if not ctl:
                 continue
-            note = portal.control_note(cid)
             uploads = [u for u in portal.uploads(control=cid, cycle=None)
-                       if occ["opens"] <= u["uploaded_at"][:10] <= occ["window_end"]]
-            controls.append({"id": cid, "title": ctl["title"], "note": (note or {}).get("text", ""),
+                       if window_start <= u["uploaded_at"][:10] <= window_end]
+            controls.append({"id": cid, "title": ctl["title"], "note": (portal.control_note(cid) or {}).get("text", ""),
                              "kb": [c for c in ctl.get("criteria", []) if c in in_scope and c in portal.kb],
                              "uploads": uploads})
-        requests = [a for a in portal.assignments(cycle=None)
-                    if a.get("task") == occ["activity"] and a.get("period") == occ["period"]]
         return render(request, user, "calendar_occurrence.html", nav_active="calendar", occ=occ,
-                      act=occ["activity_info"], controls=controls, requests=requests, labels=STATUS_LABELS,
-                      decisions=DECISIONS, can_decide=user.is_admin and occ["status"] != "planned")
+                      act=occ["activity_info"], controls=controls, labels=STATUSES,
+                      month_name=_cal.month_name[occ["month"]], window_end=window_end[:7])
 
-    @app.post("/calendar/o/{key}/decide")
-    def calendar_decide(request: Request, key: str, csrf: str = Form(""), decision: str = Form(""),
-                        completed_on: str = Form(""), reason: str = Form(""), user: User = Depends(current_user)):
-        h.check_csrf(request, user.email, csrf)
-        dest = f"/calendar/o/{key}" if len(key) < 90 else "/calendar"
+    @app.post("/calendar/o/{key}")
+    async def calendar_occurrence_save(request: Request, key: str, user: User = Depends(current_user)):
+        form = await request.form()
+        h.check_csrf(request, user.email, form.get("csrf"))
+        dest = f"/calendar/o/{key}" if len(key) < 100 else "/calendar"
         try:
-            p().decide_occurrence(user, key, decision, completed_on, reason)
+            occ = p().update_occurrence(user, key, str(form.get("status", "")), str(form.get("completed_on", "")),
+                                        str(form.get("note", "")), str(form.get("move_to", "")))
         except Forbidden as exc:
             raise h.HTTPError(403, str(exc)) from exc
         except Invalid as exc:
             return back(dest, err=str(exc))
         h.invalidate()
-        return back(dest, msg=f"Recorded: {DECISIONS[decision]}")
+        return back(f"/calendar?year={occ['period'][:4]}", msg=f"Saved: {STATUSES[occ['decision']]}")
 
+    # ---------------------------------------------------------------- activities
+    def activity_page(request, user, act: dict, form: dict | None = None, error: str | None = None):
+        portal = p()
+        selected = set((form or {}).get("controls") or act.get("controls") or [])
+        controls = sorted(portal.catalog.controls, key=lambda c: (c["id"] not in selected, c["id"]))
+        sources = portal.automated_sources()
+        return render(request, user, "calendar_activity.html", nav_active="calendar", act=act, form=form or act,
+                      selected=selected, controls=controls, months=MONTHS, due_days=DUE_DAYS, sources=sources,
+                      page_err=error)
+
+    @app.get("/calendar/a/new", response_class=HTMLResponse)
+    def calendar_activity_new(request: Request, user: User = Depends(current_user)):
+        admin(user)
+        blank = {"id": "new", "title": "", "kind": "manual", "months": [], "due_day": "15", "controls": [],
+                 "owner": "", "instructions": "", "source": "", "status": "active", "has_records": False}
+        return activity_page(request, user, blank)
+
+    @app.get("/calendar/a/{aid}", response_class=HTMLResponse)
+    def calendar_activity(request: Request, aid: str, user: User = Depends(current_user)):
+        admin(user)
+        try:
+            act = p().calendar_activity(aid)
+        except Invalid as exc:
+            raise h.HTTPError(404, str(exc)) from exc
+        return activity_page(request, user, act)
+
+    @app.post("/calendar/a/{aid}")
+    async def calendar_activity_save(request: Request, aid: str, user: User = Depends(current_user)):
+        raw = await request.form()
+        h.check_csrf(request, user.email, raw.get("csrf"))
+        form = {k: str(raw.get(k, "")) for k in ("title", "kind", "due_day", "owner", "instructions", "source")}
+        form["months"] = [str(m) for m in raw.getlist("months")]
+        form["controls"] = [str(c) for c in raw.getlist("controls")]
+        portal = p()
+        try:
+            row = portal.save_activity(user, aid, form)
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            try:
+                act = portal.calendar_activity(aid) if aid != "new" else {"id": "new", "has_records": False,
+                                                                          "status": "active"}
+            except Invalid:
+                raise h.HTTPError(404, "No such activity") from exc
+            merged = {**act, **form, "months": [int(m) for m in form["months"] if m.isdigit()]}
+            return activity_page(request, user, {**act, "id": aid}, merged, str(exc))
+        h.invalidate()
+        return back("/calendar", msg=f"Saved activity: {row['title']}")
+
+    @app.post("/calendar/a/{aid}/status")
+    async def calendar_activity_status(request: Request, aid: str, user: User = Depends(current_user)):
+        form = await request.form()
+        h.check_csrf(request, user.email, form.get("csrf"))
+        action = str(form.get("action", ""))
+        try:
+            if action == "delete":
+                p().delete_activity(user, aid)
+                msg = "Activity deleted"
+            else:
+                p().set_activity_status(user, aid, "retired" if action == "retire" else "active",
+                                        str(form.get("reason", "")))
+                msg = "Activity retired; its history is kept" if action == "retire" else "Activity reactivated"
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(f"/calendar/a/{aid}" if len(aid) < 100 else "/calendar", err=str(exc))
+        h.invalidate()
+        return back("/calendar", msg=msg)
+
+    # ---------------------------------------------------------------- automated run history
     @app.get("/calendar/auto/{source}", response_class=HTMLResponse)
     def calendar_auto(request: Request, source: str, user: User = Depends(current_user)):
-        readers(user)
+        admin(user)
         portal = p()
-        info = next((a for a in portal.calendar_automated() if a["id"] == source), None)
+        info = portal.automated_sources().get(source)
         if not info:
             raise h.HTTPError(404, "Unknown automated activity")
-        return render(request, user, "calendar_auto.html", nav_active="calendar", info=info,
-                      runs=portal.automated_runs(source))
+        return render(request, user, "calendar_auto.html", nav_active="calendar", source=source, info=info,
+                      runs=portal.automated_runs(source), auto_labels=AUTO_STATUSES)

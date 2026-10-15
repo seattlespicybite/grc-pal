@@ -25,6 +25,7 @@ SCHEMA_VERSION = 1
 TABLES = ("users", "cycles", "assignments", "uploads", "comments", "overrides", "audit",
           "reminders", "acks", "config", "events", "jobs", "customcontrols", "checks", "frameworks",
           "aireviews", "aiaudits", "controledits", "controlhistory", "controlnotes", "calendardecisions",
+          "calendaractivities", "calendarversions",
           "sessions", "account_links", "meta")
 # Sign-in sessions and one-time setup/reset links are never backed up: restoring them would revive old
 # sign-ins and used or expired links. After a restore everyone signs in again. "meta" (instance-wide data
@@ -32,7 +33,7 @@ TABLES = ("users", "cycles", "assignments", "uploads", "comments", "overrides", 
 NOT_BACKED_UP = ("sessions", "account_links", "meta")
 _JSON_FIELDS = {"contributors", "points", "detail", "controls", "values", "secrets", "mappings", "evidence",
                 "config", "result", "requirements", "findings", "package", "items", "summary", "assertions",
-                "headers", "steps", "last_test", "edit", "before", "after", "owner_emails", "links"}
+                "headers", "steps", "last_test", "months", "edit", "before", "after", "owner_emails", "links"}
 TENANT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 
 

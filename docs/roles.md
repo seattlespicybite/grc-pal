@@ -37,8 +37,7 @@ the person who defines controls from the people who operate them, which auditors
 | Acknowledge policies | ✓ | ✓ |  |
 | Users and roles | ✓ |  | user list CSV |
 | Start a cycle | ✓ |  |  |
-| Security calendar: view, CSV | ✓ |  | ✓ |
-| Security calendar: record performed, late, not performed or not applicable | ✓ |  |  |
+| Security calendar: view, edit activities, record Performed or Missed, CSV | ✓ |  | (cycle export only) |
 | Audit log and integrity check | ✓ |  | ✓ |
 | Export zip per cycle | ✓ |  | ✓ |
 | Configuration page and Setup guide | ✓ |  |  |

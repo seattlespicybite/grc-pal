@@ -46,7 +46,7 @@ def open_due(ctx, dry_run: bool = False) -> list[str]:
         period = period_label(task, ctx.today)
         title = f"[GRC] {task['title']} ({period})"
         due = ctx.today + dt.timedelta(days=task.get("due_days", 30))
-        controls = sorted(by_task.get(name, []))
+        controls = sorted(set(by_task.get(name, [])) | set(task.get("controls") or []))
         labels = ["grc", f"task:{name}", f"due:{due.isoformat()}", f"owner:{task['owner']}",
                   *[f"control:{c}" for c in controls]]
         if dry_run:

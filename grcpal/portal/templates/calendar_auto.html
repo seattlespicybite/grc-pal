@@ -1,12 +1,12 @@
-{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}{{ info.title }}{% endblock %}
+{% extends "base.html" %}{% block title %}{{ info.title }}{% endblock %}
 {% block content %}
 <div class="mb"><a href="/calendar">‹ Security calendar</a></div>
 <div class="page-head"><div><h1>{{ info.title }}</h1>
-<div class="sub">{{ info.schedule }} · Controls {% for c in info.controls %}<a href="/controls/{{ c }}">{{ c }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</div></div></div>
+<div class="sub">{{ info.schedule }} · Controls {% for c in info.controls %}<a href="/controls/{{ c }}">{{ c }}</a>{% if not loop.last %}, {% endif %}{% endfor %} · <a href="/calendar/a/auto-{{ source }}">Edit activity</a></div></div></div>
 <section class="card table-wrap"><h2>Recent runs</h2>
 {% if runs %}<table><thead><tr><th>Run</th><th>Result</th><th>Findings</th><th>Error</th></tr></thead><tbody>
-{% for r in runs %}<tr><td><a href="/evidence/{{ info.id }}/{{ r.run }}" class="mono">{{ r.run }}</a></td>
-<td>{{ pill(r.status, {'ok': 'Passed', 'findings': 'Findings', 'error': 'Failed'}[r.status]) }}</td><td>{{ r.findings }}</td><td class="sub">{{ r.error or '-' }}</td></tr>{% endfor %}
+{% for r in runs %}<tr><td><a href="/evidence/{{ source }}/{{ r.run }}" class="mono">{{ r.run }}</a></td>
+<td><span class="cal-cell cal-{{ r.status }}">{{ auto_labels[r.status] }}</span></td><td>{{ r.findings }}</td><td class="sub">{{ r.error or '-' }}</td></tr>{% endfor %}
 </tbody></table>{% else %}<div class="empty">No runs yet. Runs appear after the scheduled collection (grcpal collect --all --checks) or Collect now.</div>{% endif %}
-<p class="hint">Each run is stored write-once in the evidence store. A failed run stays in this history; after you fix the cause, the next run is listed above it.</p></section>
+<p class="hint">Passed: the run worked and found nothing to fix. Findings: the run worked and found items to follow up (the control is doing its job). Failed: the run itself broke (for example an expired secret); fix it and run again. Every run is stored write-once.</p></section>
 {% endblock %}

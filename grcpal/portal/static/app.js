@@ -68,4 +68,19 @@
     box.addEventListener('input', build);
     build();
   });
+
+  // Filter a long checkbox list as you type: <input data-filter-list="ID">; items carry data-filter-text.
+  // Ticked items always stay visible.
+  document.querySelectorAll('[data-filter-list]').forEach(function (input) {
+    var list = document.getElementById(input.getAttribute('data-filter-list'));
+    if (!list) return;
+    input.addEventListener('input', function () {
+      var q = input.value.trim().toLowerCase();
+      list.querySelectorAll('[data-filter-text]').forEach(function (item) {
+        var box = item.querySelector('input');
+        var match = !q || item.getAttribute('data-filter-text').toLowerCase().indexOf(q) >= 0;
+        item.hidden = !(match || (box && box.checked));
+      });
+    });
+  });
 })();

@@ -180,9 +180,14 @@ def validate(cat: Catalog, collectors: set[str]) -> tuple[list[str], list[str]]:
                 errors.append(f"task {name}: {role_key} '{task.get(role_key)}' not in roles.yaml")
         if not set(task.get("months", [])) <= set(range(1, 13)):
             errors.append(f"task {name}: months must be 1-12")
+        if str(task.get("due_day", "15")) not in ("1", "15", "last"):
+            errors.append(f"task {name}: due_day must be 1, 15 or last")
+        for cid in task.get("controls", []) or []:
+            if not cat.control(cid):
+                errors.append(f"task {name}: control '{cid}' not in the catalog")
     used_tasks = set(cat.sources("task"))
-    for name in cat.tasks:
-        if name not in used_tasks:
+    for name, task in cat.tasks.items():
+        if name not in used_tasks and not task.get("controls"):
             warnings.append(f"task {name} is not referenced by any control")
 
     for risk in cat.risks:

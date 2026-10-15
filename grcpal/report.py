@@ -40,6 +40,7 @@ def build(catalog, store, today: dt.date | None = None, portal: dict | None = No
     today = today or dt.datetime.now(dt.timezone.utc).date()
     portal = portal or {}
     overrides, portal_tasks, portal_uploads = portal.get("overrides", {}), portal.get("tasks", {}), portal.get("uploads", {})
+    portal_activities = portal.get("activities", {})
     skip = set(portal.get("skip_sources") or ())
     manifests: dict[str, dict | None] = {}
     tasks_done = _task_index(store)
@@ -88,6 +89,9 @@ def build(catalog, store, today: dt.date | None = None, portal: dict | None = No
         if ctl["id"] in portal_uploads:
             items.append({"artifact": "Evidence uploaded in the portal and approved", "via": "portal",
                           "status": "ok", "last": portal_uploads[ctl["id"]][:10], "findings": 0})
+        if ctl["id"] in portal_activities:
+            items.append({"artifact": "Security calendar activity recorded as performed", "via": "calendar",
+                          "status": "ok", "last": portal_activities[ctl["id"]][:10], "findings": 0})
         statuses = {i["status"] for i in items}
         if statuses <= {"not_started", "n/a"}:
             overall = "not_started"

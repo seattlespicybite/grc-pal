@@ -1,55 +1,41 @@
-{% extends "base.html" %}{% from "_macros.html" import when %}{% block title %}{{ occ.title }}{% endblock %}
+{% extends "base.html" %}{% from "_macros.html" import when %}{% block title %}{{ occ.title }}, {{ month_name }} {{ occ.year }}{% endblock %}
 {% block content %}
-<div class="mb"><a href="/calendar?view=year&amp;year={{ occ.due_year }}">‹ Security calendar</a></div>
-<div class="page-head"><div><h1>{{ occ.title }} <span class="pill cal-{{ occ.status }}">{{ labels[occ.status] }}</span></h1>
-<div class="sub">{{ occ.period }} · {{ act.schedule }}</div></div></div>
-
-{% if can_decide and occ.status in ('open', 'needs_decision') or (can_decide and occ.decision) %}
-<section class="card{{ ' cal-decide' if occ.status == 'needs_decision' }}" id="decide">
-<h2>{{ 'Record what happened' if not occ.decision else 'Correct the decision' }}</h2>
-<p class="sub">{% if occ.status == 'needs_decision' %}This was due {{ occ.due_date }} {{ occ.due_time }}. {% endif %}GRC-pal does not decide this for you. Your decision, name and time go to the audit log and cannot be edited; a correction is recorded as a new decision and the earlier one stays visible.</p>
-<form method="post" action="/calendar/o/{{ occ.key }}/decide" class="mt">
-<input type="hidden" name="csrf" value="{{ csrf }}">
-<fieldset class="cal-choices"><legend>Decision</legend>
-{% for key, label in decisions.items() %}<label class="check"><input type="radio" name="decision" value="{{ key }}" required{% if occ.decision and occ.decision.decision == key %} checked{% endif %}> {{ label }}</label>{% endfor %}
-</fieldset>
-<div class="form-row"><div><label for="done">Performed on (for performed and performed late)</label>
-<input id="done" name="completed_on" type="date" max="{{ today }}" value="{{ occ.decision.completed_on if occ.decision else '' }}"></div></div>
-<label for="why">Notes and reason (required for performed late, not performed and not applicable)</label>
-<textarea id="why" name="reason" maxlength="2000" placeholder="For example: Restore environment was unavailable; make-up test performed 2026-09-03. Or: No new vendors were onboarded this quarter."></textarea>
-<div class="actions"><button class="btn" type="submit">Record decision</button></div></form></section>
-{% endif %}
+<div class="mb"><a href="/calendar?year={{ occ.year }}">‹ Security calendar {{ occ.year }}</a></div>
+<div class="page-head"><div><h1>{{ occ.title }}: {{ month_name }} {{ occ.year }}</h1>
+<div class="sub">Due {{ occ.due }}{% if occ.moved %} (moved from {{ occ.planned_due }}){% endif %} · <a href="/calendar/a/{{ act.id }}">Edit activity</a></div></div>
+<span class="cal-cell cal-{{ 'past_due' if occ.past_due else occ.status }}">{{ 'Past due' if occ.past_due else labels[occ.status] }}</span></div>
 
 <div class="grid g2">
-<div>
-<section class="card"><h2>This occurrence</h2><dl class="kv">
-<dt>Opens</dt><dd>{{ occ.opens }}</dd>
-<dt>Due</dt><dd>{{ occ.due_date }} {{ occ.due_time }}</dd>
-<dt>Status</dt><dd><span class="pill cal-{{ occ.status }}">{{ labels[occ.status] }}</span>{% if occ.decision %} <span class="sub">by {{ occ.decision.by }}, {{ when(occ.decision.at) }}{% if occ.decision.completed_on %}; performed {{ occ.decision.completed_on }}{% endif %}</span>{% endif %}</dd>
-<dt>Owner role</dt><dd>{{ act.owner or '-' }}</dd></dl>
-{% if act.goal %}<p class="mt">{{ act.goal }}</p>{% endif %}</section>
+<section class="card"><h2>Record</h2>
+<form method="post" action="/calendar/o/{{ occ.key }}"><input type="hidden" name="csrf" value="{{ csrf }}">
+<fieldset class="cal-choices"><legend>Status</legend>
+{% for k, v in labels.items() %}<label class="check"><input type="radio" name="status" value="{{ k }}" required{% if occ.status == k %} checked{% endif %}> {{ v }}</label>{% endfor %}</fieldset>
+<div class="form-row"><div><label for="done">Performed on</label><input id="done" name="completed_on" type="date" max="{{ today }}" value="{{ occ.completed_on }}"></div>
+<div><label for="move">Due date (change it to move this month's activity)</label><input id="move" name="move_to" type="date" value="{{ occ.due }}"></div></div>
+<label for="note">Note (required for Missed)</label>
+<textarea id="note" name="note" maxlength="2000" placeholder="What was done, or why it was missed and what happens next">{{ occ.note }}</textarea>
+<div class="actions"><button class="btn" type="submit">Save</button></div>
+<p class="hint">Every save is kept below and in the audit log. The original due date ({{ occ.planned_due }}) stays on record.</p></form></section>
 
-<section class="card"><h2>Steps and evidence expected</h2>
-{% if act.checklist %}<ol class="cal-list">{% for item in act.checklist %}<li>{{ item }}</li>{% endfor %}</ol>{% else %}<div class="empty">No checklist for this activity.</div>{% endif %}</section>
-
-<section class="card table-wrap"><h2>Decision history</h2>
-{% if occ.history %}<table><thead><tr><th>#</th><th>Decision</th><th>Performed</th><th>By</th><th>When</th><th>Notes</th></tr></thead><tbody>
-{% for h in occ.history %}<tr><td>{{ h.version }}</td><td><span class="pill cal-{{ h.decision }}">{{ labels[h.decision] }}</span>{% if h.supersedes %}<div class="sub">replaced {{ labels.get(h.supersedes, h.supersedes) }}</div>{% endif %}</td>
-<td>{{ h.completed_on or '-' }}</td><td>{{ h.by }}</td><td>{{ when(h.at) }}</td><td class="cal-note">{{ h.reason or '-' }}</td></tr>{% endfor %}
-</tbody></table>{% else %}<div class="empty">No decision recorded yet.</div>{% endif %}</section>
+<section class="card"><h2>Steps and expected evidence</h2>
+{% if act.instructions %}<div class="note cal-note">{{ act.instructions }}</div>{% else %}<div class="empty">No steps written yet. <a href="/calendar/a/{{ act.id }}">Add them</a>.</div>{% endif %}
+{% if act.owner %}<p class="sub mt">Owner: {{ act.owner }}</p>{% endif %}</section>
 </div>
 
-<div>
+<div class="grid g2">
 <section class="card"><h2>Linked controls</h2>
 {% for c in controls %}<div class="cal-ctl"><a href="/controls/{{ c.id }}"><b>{{ c.id }}</b> {{ c.title }}</a>
-{% if c.note %}<div class="note mt-s cal-note">{{ c.note }}</div>{% else %}<div class="sub mt-s"><a href="/controls/{{ c.id }}#notes">Add "How we meet this control"</a></div>{% endif %}
+{% if c.note %}<div class="note mt-s cal-note">{{ c.note }}</div>{% endif %}
 <div class="sub mt-s">{% for crit in c.kb %}<a href="/kb/{{ crit }}">Evidence guide {{ crit }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</div>
-<div class="mt-s"><b class="sub">Evidence uploaded {{ occ.opens }} to {{ occ.window_end }}</b>
+<div class="mt-s"><b class="sub">Evidence uploaded {{ occ.year }}-{{ '%02d' % occ.month }} to {{ window_end }}</b>
 {% if c.uploads %}<ul class="files">{% for u in c.uploads %}<li><a href="/evidence/{{ u.evidence_run }}">{{ u.filename }}</a> <span class="sub">{{ u.uploaded_by }}, {{ u.uploaded_at[:10] }} · {{ u.status }}</span></li>{% endfor %}</ul>
 {% else %}<div class="sub">None yet. <a href="/controls/{{ c.id }}#upload">Upload on the control</a></div>{% endif %}</div></div>
-{% else %}<div class="empty">This activity is not linked to a control.</div>{% endfor %}</section>
+{% else %}<div class="empty">No linked controls. <a href="/calendar/a/{{ act.id }}">Link controls</a>.</div>{% endfor %}</section>
 
-{% if requests %}<section class="card"><h2>Evidence requests</h2><ul class="files">
-{% for a in requests %}<li><a href="/assignments/{{ a.RowKey }}">{{ a.label.splitlines()[0] }}</a> <span class="sub">{{ a.assignee }} · due {{ a.due }} · {{ a.status }}</span></li>{% endfor %}</ul></section>{% endif %}
-</div></div>
+<section class="card table-wrap"><h2>History</h2>
+{% if occ.history %}<table><thead><tr><th>When</th><th>By</th><th>Status</th><th>Details</th></tr></thead><tbody>
+{% for r in occ.history %}<tr><td class="nowrap">{{ when(r.at) }}</td><td>{{ r.by }}</td><td>{{ labels.get(r.decision, r.decision) }}<div class="sub">was {{ labels.get(r.supersedes, r.supersedes) or 'Planned' }}</div></td>
+<td class="cal-note">{% if r.completed_on %}Performed {{ r.completed_on }}. {% endif %}{% if r.moved_to %}Due moved to {{ r.moved_to }}. {% endif %}{{ r.reason }}</td></tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty">Nothing recorded yet.</div>{% endif %}</section>
+</div>
 {% endblock %}

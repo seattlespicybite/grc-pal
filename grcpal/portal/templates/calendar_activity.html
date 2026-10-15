@@ -1,0 +1,46 @@
+{% extends "base.html" %}{% block title %}{{ 'New activity' if act.id == 'new' else act.title }}{% endblock %}
+{% block content %}
+<div class="mb"><a href="/calendar">‹ Security calendar</a></div>
+<div class="page-head"><div><h1>{{ 'New activity' if act.id == 'new' else 'Edit activity' }}</h1>
+<div class="sub">{% if act.id == 'new' %}Add something that must happen on a schedule, or follow a collector or check.{% else %}Changes apply from this month on; months already past and anything recorded never change.{% endif %}</div></div>
+{% if act.status == 'retired' %}<span class="pill cancelled">Retired</span>{% endif %}</div>
+
+<form method="post" action="/calendar/a/{{ act.id }}" class="card"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="grid g2">
+<div>
+<label for="title">Activity name</label><input id="title" class="cal-wide" name="title" required maxlength="120" value="{{ form.title }}">
+{% if act.id == 'new' %}<fieldset class="cal-choices mt"><legend>Type</legend>
+<label class="check"><input type="radio" name="kind" value="manual"{% if form.kind != 'automated' %} checked{% endif %}> Manual (you record each month)</label>
+<label class="check"><input type="radio" name="kind" value="automated"{% if form.kind == 'automated' %} checked{% endif %}> Automated (follows a collector or check)</label></fieldset>
+<div data-show-when="kind=automated"><label for="source">Collector or check</label><select id="source" name="source">
+{% for sid, s in sources.items() %}<option value="{{ sid }}"{% if form.source == sid %} selected{% endif %}>{{ s.title }}</option>{% endfor %}</select></div>
+{% else %}<input type="hidden" name="kind" value="{{ act.kind }}"><p class="sub mt">Type: {{ 'Automated, follows ' ~ act.source if act.kind == 'automated' else 'Manual' }}</p>{% endif %}
+<label for="owner">Owner (for information)</label><input id="owner" class="cal-wide" name="owner" maxlength="120" value="{{ form.owner }}" placeholder="For example: IT lead">
+<label for="instructions">Steps and expected evidence</label>
+<textarea id="instructions" name="instructions" rows="7" maxlength="4000" placeholder="What to do, and the evidence to keep for the auditor">{{ form.instructions }}</textarea>
+</div>
+<div>
+{% if act.kind != 'automated' %}<div{% if act.id == 'new' %} data-show-when="kind=manual"{% endif %}>
+<fieldset class="cal-choices"><legend>Months it is due</legend><div class="cal-months">
+{% for m in months %}<label class="cal-month"><input type="checkbox" name="months" value="{{ loop.index }}"{% if loop.index in form.months %} checked{% endif %}> {{ m }}</label>{% endfor %}</div></fieldset>
+<fieldset class="cal-choices mt"><legend>Due day</legend>
+{% for k, v in due_days.items() %}<label class="check"><input type="radio" name="due_day" value="{{ k }}"{% if (form.due_day or '15')|string == k %} checked{% endif %}> {{ v }}</label>{% endfor %}</fieldset></div>{% endif %}
+<fieldset class="cal-choices mt"><legend>Linked controls (tick all that apply)</legend>
+<input type="search" class="mt-s cal-wide" placeholder="Filter, for example IAM or vendor" aria-label="Filter controls" data-filter-list="ctl-list">
+<div class="cal-picker" id="ctl-list">
+{% for c in controls %}<label class="cal-pick" data-filter-text="{{ c.id }} {{ c.title }}"><input type="checkbox" name="controls" value="{{ c.id }}"{% if c.id in selected %} checked{% endif %}> <b>{{ c.id }}</b> {{ c.title }}</label>{% endfor %}
+</div></fieldset>
+</div></div>
+<div class="actions"><button class="btn" type="submit"{% if act.status == 'retired' %} disabled{% endif %}>Save activity</button></div>
+</form>
+
+{% if act.id != 'new' %}<section class="card"><h2>Retire or delete</h2>
+<p class="sub">Retire hides the activity from this month on and keeps everything recorded (auditors need the history). Delete is only possible while nothing has been recorded{% if act.kind == 'automated' %}; automated activities can only be retired{% endif %}.</p>
+<div class="actions">
+<form method="post" action="/calendar/a/{{ act.id }}/status"><input type="hidden" name="csrf" value="{{ csrf }}">
+{% if act.status == 'retired' %}<button class="btn ghost" name="action" value="reactivate" type="submit">Reactivate</button>
+{% else %}<button class="btn ghost" name="action" value="retire" type="submit">Retire</button>{% endif %}</form>
+{% if act.kind == 'manual' and not act.has_records %}<form method="post" action="/calendar/a/{{ act.id }}/status" data-confirm="Delete this activity? This cannot be undone.">
+<input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn danger" name="action" value="delete" type="submit">Delete</button></form>{% endif %}
+</div></section>{% endif %}
+{% endblock %}
