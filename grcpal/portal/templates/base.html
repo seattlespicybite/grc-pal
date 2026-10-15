@@ -38,7 +38,8 @@
       <div class="nav-sep">Administration</div>
       {% if user.is_admin %}{% if view != 'all' %}<a href="/frameworks" class="{{ 'active' if path == '/frameworks' or path.startswith('/frameworks/new') }}">Frameworks in use</a>{% endif %}
       <a href="/settings" class="{{ 'active' if path.startswith('/settings') }}">Configuration</a>
-      <a href="/setup" class="{{ 'active' if path.startswith('/setup') }}">Setup guide</a>{% endif %}
+      <a href="/setup" class="{{ 'active' if path.startswith('/setup') }}">Setup guide</a>
+      <a href="/backups" class="{{ 'active' if path.startswith('/backups') }}">Backups</a>{% endif %}
       <a href="/cycles" class="{{ 'active' if path.startswith('/cycles') }}">Cycles and export</a>
       <a href="/logs" class="{{ 'active' if path.startswith('/logs') or path.startswith('/jobs') }}">Logs</a>
       <a href="/audit" class="{{ 'active' if path.startswith('/audit') }}">Audit log</a>{% endif %}

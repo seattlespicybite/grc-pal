@@ -26,6 +26,7 @@ Portal administration (uses GRCPAL_TABLES_URL or GRCPAL_SQLITE)
     grcpal backup create acme.grcbak --key-file backup.key   whole-instance encrypted backup
     grcpal backup verify acme.grcbak --key-file backup.key   prove a backup is complete and unchanged
     grcpal backup kit --out recovery-kit.json              backup key + app key, for a password manager
+    grcpal backup run-due                                  hourly: queued "Back up now" and the schedule from the Backups page
     grcpal backup restore acme.grcbak --kit recovery-kit.json   restore into an empty instance (or --into DIR)
 """
 from __future__ import annotations
@@ -383,6 +384,10 @@ def cmd_backup(args) -> int:
             print("Next: grcpal backup kit --out recovery-kit.json, and keep that file in a password manager, "
                   "apart from the backups. Without the key a backup cannot be read.", file=sys.stderr)
             return 0
+        if args.action == "run-due":
+            done = _admin_portal(args).run_due_backups()
+            print(json.dumps({"ok": all(d.get("verified") for d in done), "backups": done}, indent=2))
+            return 0 if all(d.get("verified") for d in done) else 2
         kit = backup.load_kit(Path(args.kit).read_text()) if getattr(args, "kit", None) else None
         try:
             key = kit["key"] if kit else backup.resolve_key(args.key_file)
@@ -542,7 +547,7 @@ def main(argv: list[str] | None = None) -> int:
     # allow_abbrev=False: "--key <value>" must fail, never be read as --key-file (keys stay out of shell history)
     bk = sub.add_parser("backup", help="encrypted backup of the whole instance (tables, evidence, inbox, config)",
                         allow_abbrev=False)
-    bk.add_argument("action", choices=["create", "verify", "restore", "keygen", "kit"])
+    bk.add_argument("action", choices=["create", "verify", "restore", "keygen", "kit", "run-due"])
     bk.add_argument("file", nargs="?", help="backup file (.grcbak) to write, check or restore")
     bk.add_argument("--key-file", help="file holding the backup key (default: GRCPAL_BACKUP_KEY, then "
                                        "keys/backup.key next to the database)")

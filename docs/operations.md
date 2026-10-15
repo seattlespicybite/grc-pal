@@ -123,6 +123,35 @@ grcpal backup verify acme-2026-10.grcbak
 - **Not included on purpose:** sign-in sessions and one-time setup/reset links. After a restore,
   everyone signs in again with their existing accounts.
 
+### Backups page (admins)
+
+**Administration → Backups** does the same without a command line:
+
+- **Back up now** to any configured location. On a VM it runs at once (see Background jobs); on Azure
+  it is queued for the backup job and starts within about 10 minutes, because the portal scales to zero.
+- **Schedule**: every day (default 02:00 UTC), every Sunday or off. Keeps 7 daily, 4 weekly and
+  12 monthly backups plus the last 3 made before updates; older ones are removed after each new
+  backup, but never the newest one that passed its check. Azure keeps backups write-once and its
+  storage lifecycle rule removes old ones.
+- Each backup shows where it is (the path on the server), its size and whether it passed its check.
+  **Check** re-verifies it; **Download** saves a copy (recorded in the audit log).
+- **Recovery kit**: a banner asks for it until an admin has downloaded it once.
+- The page works only when the instance holds one organization (one instance per customer). With more,
+  whole-instance backups stay on the command line, so no admin can download another organization's data.
+
+Locations are set on the server, never typed in the browser:
+
+| Setting | Meaning |
+| --- | --- |
+| `GRCPAL_BACKUP_DIR` | Folder for backups (default: `backups/` next to the database) |
+| `GRCPAL_BACKUP_DIR_HOST` | What that folder is called on the host, shown on the page (Docker) |
+| `GRCPAL_BACKUP_DIR_2`, `_LABEL`, `_HOST` | Optional second location, e.g. a mounted network share |
+| `GRCPAL_BACKUP_CONTAINER` | Azure: blob container for backups (default `backups`) |
+| `GRCPAL_BACKUP_KEY` / `GRCPAL_BACKUP_KEY_FILE` | The backup key (Azure secret) or its file; on a VM it is created on first use |
+
+The schedule runs from `grcpal backup run-due`, called every hour by the VM timer or the Azure backup
+job. It also starts any queued "Back up now".
+
 ### Restore
 
 Restore checks the whole file first and writes nothing unless it is intact. It only fills an

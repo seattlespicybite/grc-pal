@@ -313,3 +313,6 @@ label.check, label.toggle { display: flex; gap: 8px; align-items: center; font-w
 .cal-ctl { padding: 10px 0; border-bottom: 1px solid var(--border); } .cal-ctl:last-child { border-bottom: 0; }
 .cal-note { white-space: pre-line; }
 .files { list-style: none; margin: 4px 0 0; padding: 0; } .files li { padding: 3px 0; overflow-wrap: anywhere; }
+
+/* Backups */
+.backup-warn { border-left: 4px solid var(--warn); }

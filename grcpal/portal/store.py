@@ -191,6 +191,12 @@ class TenantStore:
             raise ValueError("tenant must be 1-40 lowercase letters, digits or hyphens")
         self._base, self.tenant, self._p = base, tenant, f"{tenant}|"
 
+    @property
+    def backend(self):
+        """The raw store with every tenant. Operator tools only (whole-instance backup and restore); the
+        Backups page uses it only after checking that this instance holds a single organization."""
+        return self._base
+
     def _in(self, entity: dict) -> dict:
         return {**entity, "PartitionKey": self._p + entity["PartitionKey"]}
 

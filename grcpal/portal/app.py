@@ -852,7 +852,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     from types import SimpleNamespace
 
-    from grcpal.portal import routes_accounts, routes_calendar, routes_extra
+    from grcpal.portal import routes_accounts, routes_backups, routes_calendar, routes_extra
 
     if mode == "local":
         routes_accounts.register(app, SimpleNamespace(p=p, templates=templates, HTTPError=_HTTPError,
@@ -865,6 +865,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     routes_calendar.register(app, SimpleNamespace(
         p=p, current_user=current_user, need=need, check_csrf=check_csrf, render=render, back=back,
         invalidate=invalidate, HTTPError=_HTTPError, attachment=_attachment))
+    routes_backups.register(app, SimpleNamespace(p=p, current_user=current_user, need=need, check_csrf=check_csrf,
+                                                 render=render, back=back))
     # Literal paths registered later (e.g. /controls/new) must win over parameter routes (/controls/{id}).
     literal = [r for r in app.router.routes if getattr(r, "path", "") in ("/controls/new", "/frameworks/new")]
     for r in literal:

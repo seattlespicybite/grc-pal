@@ -15,6 +15,14 @@ All notable changes are listed here. The project follows [semantic versioning](h
 - Backups of SQLite installs are read from a point-in-time copy, so rows written during a backup never
   mix in.
 - The first-run sign-in page shows the restore command next to `create-admin`.
+- **Backups page** (Administration → Backups, admins only): back up now, daily or weekly schedule,
+  retention (7 daily, 4 weekly, 12 monthly, 3 before updates; never the newest verified one), every
+  backup checked right after it is written, Check and Download per backup, recovery kit download with a
+  reminder banner. Locations come from server settings (`GRCPAL_BACKUP_DIR`, optional second location,
+  Azure container), never from the browser. Works only when the instance holds one organization.
+  Every action is audited (`backup.requested`, `backup.schedule`, `backup.download`, `backup.verify`,
+  `backup.kit_export`, `backup.retention_delete`).
+- `grcpal backup run-due`: the hourly runner for the schedule and queued requests (VM timer, Azure job).
 
 ### Fixed
 - `sessions` and `account_links` (local sign-in sessions and one-time setup/reset links) were missing from

@@ -404,6 +404,28 @@ def from_env(evidence_dir: str, create: bool = False) -> Instance:
     return Instance(base, areas)
 
 
+def instance_for(base, evidence) -> Instance:
+    """The instance behind a running portal: its raw store and its EvidenceStore's storage."""
+    if evidence.account_url:
+        from azure.identity import DefaultAzureCredential
+        from azure.storage.blob import BlobServiceClient
+
+        from grcpal import configbundle
+
+        svc = BlobServiceClient(evidence.account_url, credential=DefaultAzureCredential())
+        return Instance(base, {"evidence": BlobArea(svc.get_container_client(evidence.container_name)),
+                               "inbox": BlobArea(svc.get_container_client("inbox")),
+                               "config": BlobArea(svc.get_container_client(configbundle.CONTAINER))})
+    root = Path(evidence.root)
+    return Instance(base, {"evidence": LocalArea(root), "inbox": LocalArea(root.parent / "inbox"),
+                           "config": LocalArea(root.parent / "config")})
+
+
+def tenants_in(base) -> set[str]:
+    """Organizations that have data in this instance (from users and audit records)."""
+    return {_tenant(r) for t in ("users", "audit") for r in base.list_prefix(t, "")}
+
+
 def folder_instance(folder: Path) -> Instance:
     """A new, separate data folder laid out like a VM install: grcpal.db, evidence/, inbox/, config/."""
     folder = Path(folder)

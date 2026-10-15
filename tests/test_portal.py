@@ -156,7 +156,7 @@ def test_dev_login_first_user_becomes_admin(tmp_path, monkeypatch):
 
 
 # ================================================================ pages and roles
-ADMIN_PAGES = ["/", "/controls", "/controls/IAM-04", "/criteria", "/criteria?open=CC6", "/criteria/CC6.1", "/criteria/P5.1",
+ADMIN_PAGES = ["/backups", "/", "/controls", "/controls/IAM-04", "/criteria", "/criteria?open=CC6", "/criteria/CC6.1", "/criteria/P5.1",
                "/controls/IAM-02?from=CC6.1", "/controls/IAM-02?from=../../evil", "/controls/IAM-02/definition", "/work",
                "/reviews", "/evidence", "/overrides", "/audit", "/audit?verify=1&action=user.", "/users", "/cycles",
                "/policies", "/policies/information-security-policy", "/dev/outbox",
