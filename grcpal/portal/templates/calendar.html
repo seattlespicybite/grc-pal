@@ -1,0 +1,67 @@
+{% extends "base.html" %}{% block title %}Security calendar{% endblock %}
+{% macro cal_pill(o) -%}<span class="pill cal-{{ o.status }}">{{ labels[o.status] }}</span>{%- endmacro %}
+{% set q_auto = '' if show_auto else '&auto=0' %}
+{% block content %}
+<div class="page-head"><div><h1>Security calendar</h1>
+<div class="sub">Every recurring compliance activity due in {{ year }}, and what was recorded for it. GRC-pal never marks an activity missed on its own: past-due activities wait for an admin's decision. Activities due before the first audit cycle started ({{ program_start }}) are not shown.</div></div>
+<div class="filters m0"><a class="btn ghost small" href="/calendar?view={{ cal_view }}&amp;year={{ year - 1 }}&amp;month={{ month }}{{ q_auto }}">‹ {{ year - 1 }}</a>
+<a class="btn ghost small" href="/calendar?view={{ cal_view }}&amp;year={{ year + 1 }}&amp;month={{ month }}{{ q_auto }}">{{ year + 1 }} ›</a>
+<a class="btn ghost small" href="/calendar.csv?year={{ year }}">Export CSV</a></div></div>
+
+<div class="grid g4 mb">
+<a class="stat stat-link" href="/calendar?view=list&amp;year={{ year }}&amp;status=needs_decision{{ q_auto }}"><div class="n attention">{{ counts.needs_decision }}</div><div class="l">Need a decision (past due, not recorded)</div></a>
+<a class="stat stat-link" href="/calendar?view=list&amp;year={{ year }}&amp;status=open{{ q_auto }}"><div class="n accepted">{{ counts.open }}</div><div class="l">Open now</div></a>
+<div class="stat"><div class="n findings">{{ counts.soon }}</div><div class="l">Due in the next 30 days</div></div>
+<a class="stat stat-link" href="/calendar?view=list&amp;year={{ year }}&amp;status=decided{{ q_auto }}"><div class="n ok">{{ counts.decided }} / {{ counts.total }}</div><div class="l">Recorded this year</div></a>
+</div>
+
+<div class="filters">
+<nav class="tabs" aria-label="Calendar view">
+<a href="/calendar?view=year&amp;year={{ year }}{{ q_auto }}" class="{{ 'on' if cal_view == 'year' }}"{% if cal_view == 'year' %} aria-current="page"{% endif %}>Year</a>
+<a href="/calendar?view=month&amp;year={{ year }}&amp;month={{ month }}{{ q_auto }}" class="{{ 'on' if cal_view == 'month' }}"{% if cal_view == 'month' %} aria-current="page"{% endif %}>Month</a>
+<a href="/calendar?view=list&amp;year={{ year }}{{ q_auto }}" class="{{ 'on' if cal_view == 'list' }}"{% if cal_view == 'list' %} aria-current="page"{% endif %}>List</a></nav>
+<a class="btn ghost small" href="/calendar?view={{ cal_view }}&amp;year={{ year }}&amp;month={{ month }}&amp;status={{ status }}&amp;auto={{ '0' if show_auto else '1' }}">{{ 'Hide' if show_auto else 'Show' }} automated evidence</a>
+<span class="grow"></span>
+<span class="legend"><span class="pill cal-performed">Performed</span> <span class="pill cal-performed_late">Performed late</span> <span class="pill cal-needs_decision">Needs decision</span> <span class="pill cal-not_performed">Not performed</span> <span class="pill cal-not_applicable">Not applicable</span> <span class="pill cal-open">Open</span> <span class="pill cal-planned">Planned</span></span>
+</div>
+
+{% if cal_view == 'year' %}
+<section class="card table-wrap"><table class="cal-year"><thead><tr><th>Activity</th>
+{% for m in month_abbr %}<th class="c{{ ' now' if loop.index == this_month }}">{{ m }}</th>{% endfor %}</tr></thead><tbody>
+{% for r in rows %}<tr><td><b>{{ r.title }}</b><div class="sub">{{ r.controls|join(', ') or 'No linked control' }}</div></td>
+{% for cell in r.cells %}<td class="c{{ ' now' if loop.index == this_month }}">{% for o in cell %}<a href="/calendar/o/{{ o.key }}" class="cal-chip cal-{{ o.status }}" title="{{ o.title }}, due {{ o.due_date }}: {{ labels[o.status] }}">{{ o.due_date[8:10] }}</a>{% endfor %}</td>{% endfor %}</tr>
+{% else %}<tr><td colspan="13" class="empty">No recurring activities for the frameworks in use.</td></tr>{% endfor %}
+{% if show_auto and automated %}<tr class="cal-group"><td colspan="13">Automated evidence (days with a run)</td></tr>
+{% for a in automated %}<tr><td><a href="/calendar/auto/{{ a.id }}">{{ a.title }}</a><div class="sub">{{ a.schedule }} · {{ a.controls|join(', ') }}</div></td>
+{% for n in a.month_days %}<td class="c{{ ' now' if loop.index == this_month }}">{% if n %}<span class="sub">{{ n }}</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}{% endif %}
+</tbody></table>
+<p class="hint">Each mark is a due date; open it to record what happened, see linked controls, their evidence and the evidence guide.</p></section>
+
+{% elif cal_view == 'month' %}
+<section class="card"><div class="row-between mb"><a class="btn ghost small" href="/calendar?view=month&amp;year={{ prev.year }}&amp;month={{ prev.month }}{{ q_auto }}">‹ {{ prev.name }}</a>
+<h2 class="m0">{{ month_name }} {{ year }}</h2>
+<a class="btn ghost small" href="/calendar?view=month&amp;year={{ next.year }}&amp;month={{ next.month }}{{ q_auto }}">{{ next.name }} ›</a></div>
+<div class="table-wrap"><div class="cal-month" role="table" aria-label="{{ month_name }} {{ year }}">
+{% for d in ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] %}<div class="cal-dow" role="columnheader">{{ d }}</div>{% endfor %}
+{% for week in weeks %}{% for d in week %}<div class="cal-day{{ ' out' if not d.in_month }}{{ ' today' if d.today }}" role="cell">
+<span class="cal-dn">{{ d.day }}</span>
+{% for o in d.due %}<a class="cal-ev cal-{{ o.status }}" href="/calendar/o/{{ o.key }}">{{ o.title }}<span class="sr"> · {{ labels[o.status] }}</span></a>{% endfor %}
+{% if d.autos %}<span class="cal-auto" title="{{ d.autos|join(', ') }}">⚙ {{ d.autos|length }} automated run{{ 's' if d.autos|length != 1 }}</span>{% endif %}
+</div>{% endfor %}{% endfor %}
+</div></div></section>
+
+{% else %}
+<section class="card"><div class="filters">
+<nav class="tabs" aria-label="Status">{% for key, label in [('', 'All'), ('needs_decision', 'Needs decision'), ('open', 'Open'), ('planned', 'Planned'), ('decided', 'Recorded')] %}
+<a href="/calendar?view=list&amp;year={{ year }}&amp;status={{ key }}{{ q_auto }}" class="{{ 'on' if status == key }}">{{ label }}</a>{% endfor %}</nav></div>
+<div class="table-wrap">{% if occurrences %}<table><thead><tr><th>Due</th><th>Activity</th><th>Controls</th><th>Status</th><th>Recorded by</th></tr></thead><tbody>
+{% for o in occurrences %}<tr><td class="nowrap">{{ o.due_date }} <span class="sub">{{ o.due_time }}</span></td>
+<td><a href="/calendar/o/{{ o.key }}">{{ o.title }}</a><div class="sub">{{ o.period }}</div></td>
+<td class="sub">{{ o.controls|join(', ') }}</td><td>{{ cal_pill(o) }}{% if o.decision and o.decision.completed_on %}<div class="sub">on {{ o.decision.completed_on }}</div>{% endif %}</td>
+<td class="sub">{% if o.decision %}{{ o.decision.by }}<div>{{ o.decision.at[:10] }}</div>{% else %}-{% endif %}</td></tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty">Nothing matches this filter.</div>{% endif %}</div></section>
+{% if show_auto and automated %}<section class="card table-wrap"><h2>Automated evidence</h2><table><thead><tr><th>Activity</th><th>Schedule</th><th>Controls</th><th>Last run</th></tr></thead><tbody>
+{% for a in automated %}<tr><td><a href="/calendar/auto/{{ a.id }}">{{ a.title }}</a></td><td class="sub">{{ a.schedule }}</td><td class="sub">{{ a.controls|join(', ') }}</td>
+<td class="sub">{{ (a.runs[-1][:10] if a.runs else 'Never') }}</td></tr>{% endfor %}</tbody></table></section>{% endif %}
+{% endif %}
+{% endblock %}

@@ -173,6 +173,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         ctx.update(fw_in_use=in_use, view=view, view_fw=in_use.get(view), library_owner=portal.library_owner(),request=request, user=user, csrf=csrf_token(user.email), today=portal.today.isoformat(),
                    cycle=portal.active_cycle(), org=portal.org, request_id=request_id.get(),
                    review_count=len(portal.reviewable(user)),
+                   calendar_due=portal.needs_decision_count() if user.is_admin else 0,
                    my_open=sum(1 for a in portal.assignments(user=user, mine=True) if a["status"] in ("open", "returned")),
                    flash=request.query_params.get("msg"), error=request.query_params.get("err"))
         return templates.TemplateResponse(request, name, ctx)
@@ -851,7 +852,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     from types import SimpleNamespace
 
-    from grcpal.portal import routes_accounts, routes_extra
+    from grcpal.portal import routes_accounts, routes_calendar, routes_extra
 
     if mode == "local":
         routes_accounts.register(app, SimpleNamespace(p=p, templates=templates, HTTPError=_HTTPError,
@@ -861,6 +862,9 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         p=p, current_user=current_user, need=need, check_csrf=check_csrf, render=render, back=back,
         health=health, status_of=status_of, invalidate=invalidate, templates=templates, HTTPError=_HTTPError,
         safe_dest=safe_dest, attachment=_attachment))
+    routes_calendar.register(app, SimpleNamespace(
+        p=p, current_user=current_user, need=need, check_csrf=check_csrf, render=render, back=back,
+        invalidate=invalidate, HTTPError=_HTTPError, attachment=_attachment))
     # Literal paths registered later (e.g. /controls/new) must win over parameter routes (/controls/{id}).
     literal = [r for r in app.router.routes if getattr(r, "path", "") in ("/controls/new", "/frameworks/new")]
     for r in literal:

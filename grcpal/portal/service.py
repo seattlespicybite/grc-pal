@@ -25,6 +25,7 @@ from grcpal.evidence import EvidenceStore, utcnow
 from grcpal.portal import notify
 from grcpal.portal.auditlog import AuditLog
 from grcpal.portal.accounts import AccountsMixin
+from grcpal.portal.calendar import CalendarMixin
 from grcpal.portal.features import FeaturesMixin
 from grcpal.portal.auth import ROLES, SYSTEM, AuthError, Identity, User, bootstrap_admins, group_role
 from grcpal.portal.mailer import ConsoleMailer, Mailer, Message
@@ -57,7 +58,7 @@ def _rk() -> str:
     return f"{utcnow():%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:10]}"
 
 
-class Portal(FeaturesMixin, AccountsMixin):
+class Portal(FeaturesMixin, CalendarMixin, AccountsMixin):
     def __init__(self, catalog, store, evidence: EvidenceStore, mailer: Mailer | None = None,
                  today: dt.date | None = None, public_url: str | None = None, jobs_sync: bool | None = None) -> None:
         self.base_catalog, self.store, self.evidence = catalog, store, evidence
@@ -876,6 +877,9 @@ class Portal(FeaturesMixin, AccountsMixin):
         for a in self.store.list("assignments", "a"):
             if a.get("task") and a["status"] == "approved" and a.get("approved_at") > tasks.get(a["task"], ""):
                 tasks[a["task"]] = a["approved_at"]
+        for name, done in self.completed_tasks().items():  # recorded on the security calendar
+            if done > tasks.get(name, ""):
+                tasks[name] = done
         uploads: dict[str, str] = {}
         for u in self.store.list("uploads", "u"):
             if u["status"] == "approved":
@@ -944,6 +948,9 @@ class Portal(FeaturesMixin, AccountsMixin):
         table("users", self.users())
         table("policy_acknowledgments", [r for p in self.catalog.policies for r in self.store.list("acks", p["id"])])
         table("audit_log", [r for r in self.log.records() if cycle["start"] <= r["at"][:10] and r["at"] <= end])
+        table("calendar_occurrences", self.calendar_export_rows(cycle["start"], cycle["end"]))
+        table("calendar_decisions", [{k: v for k, v in r.items() if k != "PartitionKey"} for r in self.calendar_decisions()
+                                     if cycle["start"] <= r["due_date"] <= cycle["end"]])
         table("control_definition_changes", [{k: v for k, v in r.items() if k not in ("PartitionKey", "RowKey")}
                                              for r in self.control_definition_history()])
         table("implementation_notes", sorted(({k: v for k, v in r.items() if k not in ("PartitionKey", "RowKey")}
@@ -963,6 +970,8 @@ class Portal(FeaturesMixin, AccountsMixin):
             f"Exported by {actor.email} at {_now()}\n\n"
             "uploads_and_reviews.csv is the full population of portal evidence for the cycle with reviewer decisions.\n"
             "Each upload's sha256 matches the file under evidence/ and the write-once evidence store.\n"
+            "calendar_occurrences.csv lists every scheduled activity due in the cycle and what an admin recorded for it;\n"
+            "calendar_decisions.csv keeps every decision, including ones later corrected.\n"
             "audit_chain_verification.json shows whether the tamper-evident audit log verified at export time.\n"
             "implementation_notes.csv holds every version of each control's 'How we meet this control' notes.\n"
             "MANIFEST.csv lists the SHA-256 of every file in this archive.\n").encode()

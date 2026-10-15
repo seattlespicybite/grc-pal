@@ -4,6 +4,25 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Added
+- **Security calendar** (`/calendar`, admins and auditors): every recurring activity from
+  `catalog/tasks.yaml` with its due dates, in Year, Month and List views, plus the dates collectors and
+  checks actually ran (hide them with one click). Only activities whose controls map to a framework in
+  use (for SOC 2, an in-scope criterion) are shown, so Privacy or ISO-only activities stay hidden while
+  they are off. Occurrences are computed from the schedule, so a missed scheduled job cannot lose one;
+  occurrences due before the first audit cycle started are not shown.
+- **Decisions, never automatic**: a past-due occurrence shows **Needs decision** until an admin records
+  Performed (with the date), Performed late, Not performed (exception) or Not applicable (reason
+  required for the last three). Decisions are append-only: a correction is a new version and the earlier
+  one stays visible. Each is in the audit log (`calendar.decision`). Performed decisions count as task
+  evidence for control status. New `calendardecisions` table, included in backups.
+- Occurrence page: steps and expected evidence, linked controls with their implementation notes,
+  evidence-guide links and the evidence uploaded during the occurrence's window, related requests and
+  the decision history. Automated activity page: recent runs with Passed, Findings or Failed.
+- Calendar CSV (`/calendar.csv`) and, in the cycle export, `calendar_occurrences.csv` (the population of
+  scheduled activities in the cycle) and `calendar_decisions.csv` (every decision, including corrected
+  ones). CSV cells starting with `= + - @` are prefixed with a quote.
+
 ## [0.2.0] - 2026-10-14 - SOC 2 focus
 
 This release makes GRC-pal a SOC 2 Type 2 tool first. Other frameworks stay available but out of

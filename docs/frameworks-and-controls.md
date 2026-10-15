@@ -88,6 +88,34 @@ July and October."* It is written for the next person who runs the program and f
 - **Export:** the cycle export includes `implementation_notes.csv` with every version.
 - Notes are plain text (up to 5,000 characters). Do not put passwords or other secrets in them.
 
+## Security calendar
+
+**Calendar** (admins and auditors) shows every recurring activity from `catalog/tasks.yaml` (access
+reviews, DR test, risk assessment, ...) with its due dates for the year, in Year, Month and List views.
+Automated evidence (collectors and custom checks) is shown as the days it actually ran; **Hide automated
+evidence** removes it. Only activities linked to a control that maps to a framework in use appear (for
+SOC 2, an in-scope criterion), so Privacy activities stay hidden while Privacy is out of scope.
+
+GRC-pal never marks an activity missed by itself. After the due date an activity shows **Needs
+decision** until an admin opens it and records one of:
+
+| Decision | When | Needs |
+| --- | --- | --- |
+| Performed | Done on or before the due date | The date |
+| Performed late | Done after the due date | The date and a reason |
+| Not performed (exception) | Did not happen; the auditor will see an exception | A reason |
+| Not applicable | Nothing to do this time (for example, no new vendors this quarter) | A justification |
+
+A decision cannot be edited. Recording a new one replaces it on the calendar, and both stay in the
+history and the audit log. The occurrence page links each control's "How we meet this control" notes,
+its evidence guide and the evidence uploaded while the activity was open.
+
+Activities due before your first audit cycle started are not shown: set the cycle start date on
+**Cycles and export** to the first day of your observation period. Editing schedules in the portal,
+any date and time, weekly and "2nd Tuesday" rules, scheduled evidence pulls and reminder emails are
+planned next; until then the schedule comes from `catalog/tasks.yaml` (`months`, `due_days`, and an
+optional `due_time` such as `"10:00"`, default 17:00).
+
 ## Knowledge base
 
 The **Knowledge base** tab has one article per SOC 2 criterion with a section per point of focus:
