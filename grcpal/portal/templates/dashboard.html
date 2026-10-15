@@ -10,12 +10,12 @@
 </div>
 <div class="grid g2 mt-l">
   <section class="card"><h2>By category</h2>
-  {% for cat, name in category_names.items() %}{% set c = by_cat.get(cat, {}) %}{% set total = c.values()|sum %}
+  {% for cat, name in category_names.items() if by_cat.get(cat) %}{% set c = by_cat[cat] %}{% set total = c.values()|sum %}
     <div class="mb"><div class="row-between"><a href="/controls?category={{ cat }}"><b>{{ name }}</b></a>
       <span class="sub">{{ c.get('ok', 0) + c.get('accepted', 0) }} of {{ total }} operating</span></div>
       <svg class="bar" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label="{{ name }} status">{% set ns = namespace(x=0) %}{% for s in ['ok', 'accepted', 'findings', 'attention', 'not_started'] %}{% if c.get(s) %}{% set w = 100 * c[s] / total %}<rect class="fill-{{ s }}" x="{{ ns.x|round(2) }}" y="0" width="{{ w|round(2) }}" height="10"/>{% set ns.x = ns.x + w %}{% endif %}{% endfor %}</svg></div>
   {% endfor %}
-  <div class="sub">A control counts in every category whose criteria it supports.</div></section>
+  <div class="sub">Categories in this report's scope. A control counts in every category whose criteria it supports.</div></section>
   <section class="card"><h2>Needs attention</h2>
   {% if attention %}<table><tbody>{% for c in attention %}<tr><td><a href="/controls/{{ c.id }}"><b>{{ c.id }}</b></a> {{ c.title }}</td><td>{{ pill(c.status) }}</td></tr>{% endfor %}</tbody></table>
   {% else %}<div class="empty">Nothing needs attention.</div>{% endif %}</section>

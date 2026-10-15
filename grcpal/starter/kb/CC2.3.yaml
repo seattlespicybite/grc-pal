@@ -1,0 +1,104 @@
+criterion: CC2.3
+title: Communication with external parties
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  Customers, vendors and other outside parties know what you commit to, what they are responsible for, and
+  how to contact you about security problems. Evidence is customer contracts and terms, a security page or
+  trust center, a way to report vulnerabilities, and incident notification procedures.
+auditor_approach:
+  - Reads customer agreements, terms of service or a master services agreement for security and confidentiality commitments.
+  - Checks for a published way to contact you about security issues and incidents.
+  - Inspects any customer notifications sent in the period (incidents, significant changes).
+points:
+  - id: CC2.3-PF01
+    what_auditor_tests: >
+      Whether relevant information is communicated to customers and other outside parties.
+    evidence_standard:
+      - Customer-facing documents describing security commitments.
+    good_examples:
+      - Trust or security page; standard MSA security exhibit.
+    common_mistakes:
+      - Commitments made in sales questionnaires that are not reflected in contracts or practice.
+    frequency: Reviewed annually.
+  - id: CC2.3-PF02
+    what_auditor_tests: >
+      Whether outside parties can contact you (support, security reports, complaints).
+    evidence_standard:
+      - Published contact channels and how they are monitored.
+    good_examples:
+      - security@ mailbox routed to a ticket queue; support portal.
+    common_mistakes:
+      - Security mailbox that no one monitors.
+    frequency: Ongoing; auditors may test a sample of inbound reports.
+  - id: CC2.3-PF03
+    what_auditor_tests: >
+      Whether important external matters (major customer issues, regulatory notices) reach leadership or the board.
+    evidence_standard:
+      - Leadership or board reporting that includes external matters.
+    good_examples:
+      - Board minutes noting a significant customer incident and the response.
+    common_mistakes:
+      - External complaints handled only at support level, never escalated.
+    frequency: As they occur; at least annually in reporting.
+  - id: CC2.3-PF04
+    what_auditor_tests: >
+      Whether outside parties have a separate channel for sensitive reports, such as vulnerabilities or ethics concerns.
+    evidence_standard:
+      - Vulnerability disclosure or security contact policy.
+    good_examples:
+      - SECURITY.md or security.txt with a reporting address and expected response time.
+    common_mistakes:
+      - Researchers can only report through general support.
+    frequency: Reviewed annually.
+  - id: CC2.3-PF05
+    what_auditor_tests: >
+      Whether external communication methods fit the audience and purpose.
+    evidence_standard:
+      - Examples of customer communications (status page, emails, documentation).
+    good_examples:
+      - Public status page for availability; release notes for changes.
+    common_mistakes:
+      - Outages communicated only to customers who happen to ask.
+    frequency: Ongoing.
+  - id: CC2.3-PF06
+    what_auditor_tests: >
+      Whether confidentiality commitments, and changes to them, are communicated to customers and vendors.
+    evidence_standard:
+      - Confidentiality clauses in customer and vendor contracts; notice of changes.
+    good_examples:
+      - Data processing addendum; vendor NDA template.
+    common_mistakes:
+      - Privacy or confidentiality terms changed with no customer notice.
+    frequency: On change and contract renewal.
+  - id: CC2.3-PF07
+    what_auditor_tests: >
+      Whether the system description, its boundaries and objectives are communicated to those who need them.
+    evidence_standard:
+      - System description or product documentation available to customers.
+    good_examples:
+      - SOC 2 report shared under NDA; architecture overview on the trust page.
+    common_mistakes:
+      - Customers unaware of which services are covered by the report.
+    frequency: Annually with the report.
+  - id: CC2.3-PF08
+    what_auditor_tests: >
+      Whether customers are told what security responsibilities remain theirs (complementary user entity controls).
+    evidence_standard:
+      - Documentation of customer responsibilities.
+    good_examples:
+      - Shared responsibility page; CUEC list in the system description and customer onboarding guide.
+    common_mistakes:
+      - CUECs listed in the report but never told to customers.
+    frequency: Reviewed annually.
+  - id: CC2.3-PF09
+    what_auditor_tests: >
+      Whether outside parties know how to report failures and incidents, and how you will notify them.
+    evidence_standard:
+      - Incident notification commitments and procedure; any notifications sent in the period.
+    good_examples:
+      - Contract clause on breach notification timeline plus the notification template in the incident plan.
+    common_mistakes:
+      - Notification timeline in contracts shorter than what the incident plan allows.
+    frequency: Event driven; plan reviewed annually.

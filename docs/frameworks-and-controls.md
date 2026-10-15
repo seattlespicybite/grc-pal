@@ -31,7 +31,8 @@ coverage per requirement, and the AI mock audit can run against any framework.
 
 Most organizations start with one framework. An admin chooses which frameworks are **in use** on
 the **Frameworks** page (**Turn on** / **Turn off**), or with the `GRCPAL_FRAMEWORKS` setting
-(Configuration > Organization, one ID per line; empty means all). Each change is in the audit log
+(Configuration > Organization, one ID per line; empty means SOC 2 only, the default for a new
+installation). Each change is in the audit log
 (`framework.on`, `framework.off`), and at least one framework stays on.
 
 - **One framework in use** (for example only SOC 2): the portal is a single-framework tool. The
@@ -61,6 +62,48 @@ from the **Controls** list and **Back to controls list** keeps your filters. The
 filtered by SOC 2 family, criterion and evidence type.
 
 Criterion titles are short paraphrases for navigation; the AICPA publication is authoritative.
+
+### Report scope and deferred categories
+
+`catalog/scope.yaml` lists the categories tested in the next report. The starter scope is
+**Security, Availability and Confidentiality**; Processing Integrity and Privacy are listed under
+`deferred_categories`. Controls that serve only deferred categories are hidden from the
+**Controls** list (the count of hidden controls is shown with a **show** link), and the dashboard
+shows only in-scope categories. Choosing a deferred category in the list filter shows its controls.
+To add a category to the report, move it to `in_scope_categories` through a pull request; that
+history is scope-change evidence.
+
+## Implementation notes: "How we meet this control"
+
+Every control page has a **How we meet this control** box for the organization's own explanation:
+which policy section covers it, which system or procedure operates it, when it happens. For
+example: *"Covered by Information Security Policy section 6. Access reviews run in January, April,
+July and October."* It is written for the next person who runs the program and for the auditor.
+
+- **Who can edit:** admins, and the control's owner for their own controls. Auditors and other
+  control owners can read but not edit. The rule is checked on the server, not only hidden in the page.
+- **History:** every save is a new version; earlier versions stay visible under **Earlier versions**.
+- **Audit:** each save writes `control.note` to the audit log with the version, length and SHA-256
+  of the text (not the text itself).
+- **Export:** the cycle export includes `implementation_notes.csv` with every version.
+- Notes are plain text (up to 5,000 characters). Do not put passwords or other secrets in them.
+
+## Knowledge base
+
+The **Knowledge base** tab has one article per SOC 2 criterion with a section per point of focus:
+**what the auditor tests**, the **evidence standard**, **good examples**, **common mistakes**, and
+**how often and sampling**. Every Security, Availability and Confidentiality criterion is covered.
+Each point of focus on a control page, each criterion page and each evidence request links to the
+matching section, so a control owner can see what good evidence looks like before uploading.
+
+- Articles are guidance only; the auditor decides what is sufficient. Each article shows
+  **Draft** until a person has reviewed it (`status: reviewed`, `reviewed_by`, `last_reviewed`).
+- Articles are YAML files in `starter/kb/<criterion>.yaml`. To adapt one, put a file with the same
+  name in your program repository's `kb/` folder; it replaces the starter article. Text is plain
+  (no HTML or Markdown) and shown escaped.
+- `grcpal validate` checks every article (known criterion and point-of-focus IDs, required fields,
+  reviewer details on reviewed articles) and warns about in-scope points of focus without guidance.
+- Articles are written in GRC-pal's own words and do not reproduce the AICPA text.
 
 ## Changing a control (control library owner)
 

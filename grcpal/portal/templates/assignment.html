@@ -12,6 +12,7 @@
 <dt>Target</dt><dd>{{ a.target_type }} {{ a.target_id }}</dd></dl>
 {% if a.instructions %}<h3 class="mt">Instructions</h3><div class="note">{{ a.instructions }}</div>{% endif %}
 <h3 class="mt">Evidence we are looking for</h3><ul class="list">{% for w in wanted %}<li>{{ w }}</li>{% endfor %}</ul>
+{% if guides %}<p class="sub mt-s">What good evidence looks like: {% for label, url in guides %}<a href="{{ url }}">{{ label }}</a>{{ ', ' if not loop.last }}{% endfor %} (knowledge base)</p>{% endif %}
 {% if user.is_admin and a.status not in ('approved', 'cancelled') %}
 <details class="mt"><summary>Send a reminder</summary><form method="post" action="/assignments/{{ a.RowKey }}/remind" class="mt-s">
 <input type="hidden" name="csrf" value="{{ csrf }}"><label>Personal note (optional)<textarea name="note" maxlength="1000"></textarea></label>

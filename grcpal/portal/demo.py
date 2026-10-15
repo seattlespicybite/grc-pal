@@ -105,6 +105,17 @@ def seed(portal) -> bool:
     portal.upload(ADMIN2, "vendor-soc2-review-2026.csv",
                   b"vendor,report_period,exceptions,cuecs_confirmed\nMicrosoft,2025-10-01..2026-09-30,0,yes\n"
                   b"GitHub,2025-07-01..2026-06-30,1,yes\n", "Annual vendor SOC 2 review", control_id="CUS-01")
+    # Implementation notes: how each control is met here, kept for the next person and the auditor.
+    for cid, text in [
+        ("IAM-02", "Covered by Information Security Policy section 6 (Access control).\nMFA is enforced by the "
+                   "Entra ID Conditional Access policy 'Require MFA - all users'; break-glass accounts are excluded "
+                   "and reviewed quarterly under IAM-05."),
+        ("BCP-03", "Satisfied by the annual disaster recovery test held every November. The engineering lead "
+                   "restores the production database to a clean subscription and records recovery time against "
+                   "the 4-hour RTO in the DR test report (Business Continuity Plan section 4)."),
+        ("GOV-01", "Policies live in /policies. The executive sponsor approves the annual review through a pull "
+                   "request in January; the merged PR is the approval evidence.")]:
+        portal.save_control_note(ADMIN, cid, text)
     portal.events.warning("collector", "Collector entra_mfa skipped: Microsoft Entra ID is not connected in the demo",
                           actor="demo-seed", collector="entra_mfa")
     from grcpal import report

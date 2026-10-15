@@ -1,0 +1,189 @@
+criterion: CC6.1
+title: Logical access security over protected information assets
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  You know what systems and data you have, only the right people and services can reach them, everyone
+  proves who they are before they get in, and sensitive data is encrypted with keys you control. This is
+  usually the most tested criterion in a SOC 2 report: expect the auditor to inspect configurations directly
+  and to sample users, systems and keys.
+auditor_approach:
+  - Inspects identity provider settings (MFA, password and session rules, conditional access) as of a date in the period, and asks how changes to them are controlled.
+  - Compares the system inventory with what is actually running in the cloud accounts to see whether anything in scope is missing.
+  - Samples in-scope systems and checks that each one uses central sign-in (SSO) or has an equivalent documented control.
+  - Inspects encryption settings for production data stores and how encryption keys are stored and who can use them.
+  - Asks for the population of service accounts, API keys and secrets and checks how they are stored and rotated.
+points:
+  - id: CC6.1-PF01
+    what_auditor_tests: >
+      Whether there is a current inventory of the systems, applications and data stores in scope, with an owner
+      for each, and whether it is complete compared to what is really deployed.
+    evidence_standard:
+      - Inventory export dated inside the observation period, showing system name, owner, environment and data classification.
+      - Shows how the inventory is kept current (automated cloud export, or a review record with date and reviewer).
+      - Covers every in-scope cloud account or subscription named in the system description.
+    good_examples:
+      - Monthly export of Azure resources or AWS Config inventory stored as write-once evidence.
+      - Asset register with owner and classification columns plus the quarterly review issue that approved it.
+      - Intune or MDM device list export for endpoints that can reach production.
+    common_mistakes:
+      - Inventory created once for the audit and never updated; dates show it was built the week before fieldwork.
+      - Production subscriptions or SaaS tools in the system description that are missing from the inventory.
+      - No named owner, so nobody can show who approves access to the system.
+    frequency: Continuous or monthly export; formal review at least quarterly. Auditors usually inspect one or two point-in-time exports and reconcile them to live systems.
+  - id: CC6.1-PF02
+    what_auditor_tests: >
+      Whether access to in-scope systems goes through controlled paths (identity provider, role-based access) and
+      whether default or shared accounts are disabled or tightly controlled.
+    evidence_standard:
+      - Configuration showing that in-scope applications use the central identity provider.
+      - Role or group definitions that map job functions to access levels.
+      - List of local, default or shared accounts with justification and owner, or proof they are disabled.
+    good_examples:
+      - Entra ID enterprise applications export showing SSO for each in-scope app.
+      - Azure RBAC role assignment export at subscription scope with groups instead of individual users.
+      - Database user list showing only named or service identities, with the default admin disabled.
+    common_mistakes:
+      - Applications with their own local logins that bypass SSO and MFA, not mentioned anywhere.
+      - Shared admin accounts with a password known to several engineers.
+      - Access granted directly to individuals instead of through roles, which makes reviews unreliable.
+    frequency: Configuration inspected at least once in the period; role design reviewed annually or when systems change.
+  - id: CC6.1-PF03
+    what_auditor_tests: >
+      Whether every person and system is uniquely identified before access, and whether authentication strength
+      matches the risk (MFA for remote and privileged access as a minimum).
+    evidence_standard:
+      - Identity provider policy showing MFA enforcement and which users or apps are excluded, with reasons.
+      - Report of users and their MFA registration status as of a date in the period.
+      - Password or passphrase policy settings, if passwords are still used anywhere.
+    good_examples:
+      - Conditional Access policy export ("require MFA for all users") with the exclusion list.
+      - Entra ID authentication methods report showing MFA registration for all enabled users.
+      - Screenshot or export of the identity provider password policy with the capture date visible.
+    common_mistakes:
+      - MFA enforced only for admins while regular users can reach customer data with a password alone.
+      - Large or undocumented exclusion groups, such as break-glass accounts with no monitoring.
+      - Evidence screenshots without a visible date or tenant name, which auditors cannot rely on.
+    frequency: Point-in-time configuration plus a population report; auditors may test a sample of users from the report.
+  - id: CC6.1-PF04
+    what_auditor_tests: >
+      Whether production is separated from other environments and the internet so that a compromise of one area
+      does not give open access to customer data.
+    evidence_standard:
+      - Network diagram that matches the current environment and shows production boundaries.
+      - Firewall, security group or network security group rules for production showing restricted inbound access.
+      - Evidence that development and test cannot reach production data directly.
+    good_examples:
+      - Architecture diagram in the repository updated within the period, with its pull request approval.
+      - Export of Azure NSG or AWS security group rules with no unrestricted inbound management ports.
+      - Separate subscriptions or accounts for production and non-production with distinct access groups.
+    common_mistakes:
+      - Diagram that is years old and no longer matches the deployed architecture.
+      - Management ports (SSH, RDP, database) open to the internet "temporarily".
+      - Developers using production credentials from test environments.
+    frequency: Diagram reviewed annually or on major change; rule exports at least once in the period.
+  - id: CC6.1-PF05
+    what_auditor_tests: >
+      Whether all ways into the environment (VPN, bastion, admin consoles, APIs, remote access tools) are known
+      and protected.
+    evidence_standard:
+      - List of external entry points for production with the control that protects each one.
+      - Configuration of the remote administration path, such as bastion or just-in-time access, requiring MFA.
+    good_examples:
+      - Azure Bastion or AWS Systems Manager Session Manager configuration with sign-in through the identity provider.
+      - Conditional Access policy covering the cloud admin portals.
+      - External attack surface scan or exposed services report reviewed by security.
+    common_mistakes:
+      - A forgotten jump box or vendor remote-support tool that bypasses the normal path.
+      - Public storage endpoints not counted as entry points.
+    frequency: Reviewed at least annually and when infrastructure changes.
+  - id: CC6.1-PF06
+    what_auditor_tests: >
+      Whether access to sensitive data is limited to people and services that need it, beyond just the ability
+      to sign in to a system.
+    evidence_standard:
+      - Data classification and where confidential data is stored.
+      - Permissions on those data stores showing who and what can read and change them.
+    good_examples:
+      - Storage account or bucket access policy export showing no anonymous or public access.
+      - Database role grants showing read access to customer tables limited to the application identity and a small support group.
+      - Data inventory linking each confidential data store to the group allowed to access it.
+    common_mistakes:
+      - Everyone in engineering can query production customer data "for troubleshooting".
+      - Public or anonymous read access left on a storage container used for exports.
+    frequency: At least once in the period, plus whenever new data stores are created.
+  - id: CC6.1-PF07
+    what_auditor_tests: >
+      Whether the identification and authentication settings are owned and changes to them are controlled, so
+      MFA cannot be quietly switched off.
+    evidence_standard:
+      - Who can change identity provider security settings (privileged role assignments).
+      - Audit log or alerting showing changes to authentication policies are recorded and reviewed.
+    good_examples:
+      - List of Global Administrator and Conditional Access Administrator assignments with a business owner.
+      - Alert rule on changes to Conditional Access policies routed to the security team, plus a sample alert.
+    common_mistakes:
+      - Many permanent global administrators instead of just-in-time elevation.
+      - Policy changes made with no ticket, approval or log review.
+    frequency: Privileged role list at least quarterly (usually with access reviews); change alerts continuous.
+  - id: CC6.1-PF08
+    what_auditor_tests: >
+      Whether non-human credentials (service accounts, API keys, deployment secrets, certificates) are stored
+      securely, owned and rotated.
+    evidence_standard:
+      - Population of service principals, API keys and secrets for production with owner and expiry.
+      - Secrets are kept in a vault, not in code, chat or documents.
+      - Secret scanning or another check that catches secrets committed to repositories.
+    good_examples:
+      - Key Vault or Secrets Manager inventory export with expiry dates.
+      - GitHub secret scanning enabled on all repositories, with the alert history for the period.
+      - Service principal list with owners and credential expiry.
+    common_mistakes:
+      - Long-lived keys with no expiry created years ago by someone who has left.
+      - Connection strings in configuration files in the repository.
+      - No owner for service accounts, so nobody reviews them.
+    frequency: Inventory at least quarterly; secret scanning continuous.
+  - id: CC6.1-PF09
+    what_auditor_tests: >
+      Whether confidential data is encrypted at rest and in transit where it is stored and moved.
+    evidence_standard:
+      - Encryption-at-rest settings for production databases, storage and backups.
+      - Transport security settings (minimum TLS version, HTTPS only) for public endpoints and internal links that carry customer data.
+    good_examples:
+      - Azure Policy or AWS Config compliance report showing encryption enabled on all in-scope resources.
+      - TLS scan of public endpoints showing TLS 1.2 or higher only.
+      - Storage account setting "secure transfer required" enabled.
+    common_mistakes:
+      - Relying on the default "encrypted by the provider" statement without showing it applies to every data store.
+      - Old endpoints that still accept TLS 1.0 or plain HTTP.
+    frequency: Configuration compliance continuously monitored or checked at least quarterly.
+  - id: CC6.1-PF10
+    what_auditor_tests: >
+      Whether encryption keys are protected from loss and misuse: who can use or delete them, and whether
+      deletion can be recovered.
+    evidence_standard:
+      - Key store configuration (soft delete, purge protection, access policies or RBAC).
+      - List of identities that can manage or use the keys.
+    good_examples:
+      - Key Vault properties showing soft delete and purge protection enabled.
+      - Key Vault RBAC assignments limited to the application identity and a small admin group.
+      - Key rotation policy or rotation history for customer-managed keys.
+    common_mistakes:
+      - Broad "Owner" access on the subscription that silently includes key deletion rights.
+      - No recovery protection, so an accidental or malicious delete is permanent.
+    frequency: Configuration at least once in the period; access list reviewed with quarterly access reviews.
+  - id: CC6.1-PF11
+    what_auditor_tests: >
+      Whether new systems, major architecture changes and new vendors are assessed for security before they
+      hold or process customer data.
+    evidence_standard:
+      - Procedure requiring a security review before new systems or major changes go live.
+      - Population of new systems or major changes in the period and the review record for each.
+    good_examples:
+      - Security review issue template with risks, decisions and approver, linked from the change.
+      - Architecture decision records in the repository approved by the security lead.
+    common_mistakes:
+      - New SaaS tools adopted by a team without any security review.
+      - Reviews done after go-live, which auditors treat as an exception.
+    frequency: Event driven; auditors sample from the population of new systems or major changes in the period.

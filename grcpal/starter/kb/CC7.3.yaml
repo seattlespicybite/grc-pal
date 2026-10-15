@@ -1,0 +1,43 @@
+criterion: CC7.3
+title: Security events are evaluated to identify incidents
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  Security events are reviewed, and there is a defined way to decide whether an event is a security
+  incident. That decision starts the incident response process.
+auditor_approach:
+  - Reads the incident response plan's definitions and triage criteria.
+  - Samples security events or alerts and checks they were evaluated and, where needed, escalated.
+  - Requests the population of incidents in the period (it may be zero) and inspects each one.
+points:
+  - id: CC7.3-PF01
+    what_auditor_tests: >
+      Whether identified incidents are responded to under the incident plan.
+    evidence_standard:
+      - Incident tickets in the period with response steps, or statement of no incidents with the event log reviewed.
+    good_examples:
+      - Incident issues with timeline, actions and closure.
+    common_mistakes:
+      - Incidents handled in chat with no record.
+    frequency: Event driven.
+  - id: CC7.3-PF02
+    what_auditor_tests: >
+      Whether detected events are communicated to and reviewed by the right people.
+    evidence_standard:
+      - Alert routing and evidence of review.
+    good_examples:
+      - Security alerts routed to an on-call rotation with acknowledgment times.
+    common_mistakes:
+      - Alerts go to one person's inbox only.
+    frequency: Ongoing.
+  - id: CC7.3-PF03
+    what_auditor_tests: >
+      Whether there are procedures to analyze events and classify incidents by severity.
+    evidence_standard:
+      - Incident classification criteria and severity levels in the plan.
+    good_examples:
+      - Incident plan with severity table and examples.
+    common_mistakes:
+      - No definition of what counts as an incident.
+    frequency: Plan reviewed annually.

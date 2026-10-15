@@ -1,6 +1,7 @@
 # GRC-pal: notes for Claude
 
-Open-source SOC 2 / ISO 27001 compliance automation and evidence portal. Python 3.11+, FastAPI,
+Open-source SOC 2 Type 2 compliance automation and evidence portal (SOC 2 first; ISO 27001 and other
+frameworks are available but off by default). Python 3.11+, FastAPI,
 server-rendered Jinja2, vanilla JS. AGPL-3.0. Owner: seattlespicybite (not a professional developer:
 explain choices in plain words, keep changes small, never leave the test suite red).
 
@@ -40,7 +41,9 @@ explain choices in plain words, keep changes small, never leave the test suite r
 | --- | --- |
 | CLI | `grcpal/cli.py` |
 | Catalog (controls, criteria, roles, tasks, policies) | `grcpal/catalog.py`, `grcpal/starter/catalog/*.yaml`, `grcpal/starter/policies/` |
-| Frameworks (SOC 2 built in, ISO 27001 file, custom) | `grcpal/frameworks.py`, `grcpal/starter/frameworks/` |
+| Frameworks (SOC 2 built in, ISO 27001 file, custom; SOC 2 only by default) | `grcpal/frameworks.py`, `grcpal/starter/frameworks/` |
+| Knowledge base (evidence guidance per criterion and point of focus) | `grcpal/kb.py`, `grcpal/starter/kb/*.yaml`, routes `/kb` in `routes_extra.py`, tests `tests/test_kb.py` |
+| Implementation notes per control | `features.py` (`save_control_note`), table `controlnotes`, `control.html` `#notes` |
 | Collectors (Entra, Intune, Azure, AWS, GCP, GitHub) | `grcpal/collectors/*.py` (register in `NAMES` and `PLATFORMS`), clients in `grcpal/clients.py`, `grcpal/integrations/` |
 | Evidence store (write-once, SHA-256 manifests, tenant namespace) | `grcpal/evidence.py` |
 | Health report | `grcpal/report.py` |
@@ -90,6 +93,10 @@ explain choices in plain words, keep changes small, never leave the test suite r
 - New portal page: route in `routes_extra.register` (use `h.need`, `h.check_csrf`, `h.render`), logic in
   `features.py`, template extends `base.html`, add the path to the admin-pages render test.
 - New framework: YAML file in `starter/frameworks/` (`id`, `name`, `requirements: [{id,title,group}]`).
+- Knowledge base article: `starter/kb/<criterion>.yaml` (format in `grcpal/kb.py`), plain text, our own
+  words (never AICPA text), `status: draft` until a person reviews it; `tests/test_kb.py` must stay green.
+- Product focus: SOC 2 Type 2 (Security, Availability, Confidentiality). Do not add ISO or other
+  framework features unless asked.
 
 ## Test fixtures
 - `tests/test_portal.py::make_portal(tmp_path, tenant="acme", people=(...))` builds a portal with users

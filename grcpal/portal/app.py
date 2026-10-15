@@ -251,8 +251,11 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             return RedirectResponse("/work", status_code=303)
         portal, data = p(), health()
         cats: dict = {}
+        in_scope = set(portal.catalog.in_scope_criteria)
         for c in data["controls"]:
             for crit in c["criteria"]:
+                if crit not in in_scope:  # deferred categories are not part of this report
+                    continue
                 cat = portal.catalog.criteria[crit]["category"]
                 cats.setdefault(cat, {}).setdefault(c["status"], set()).add(c["id"])
         by_cat = {k: {s: len(v) for s, v in d.items()} for k, d in cats.items()}
@@ -266,7 +269,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     @app.get("/controls", response_class=HTMLResponse)
     def controls(request: Request, q: str = "", status: str = "", category: str = "", owner: str = "",
                  sort: str = "id", framework: str = "", family: str = "", criterion: str = "", evidenced: str = "",
-                 user: User = Depends(current_user)):
+                 deferred: str = "", user: User = Depends(current_user)):
         from grcpal import frameworks as fw_mod
         from grcpal.collectors import disabled_sources
         from grcpal.portal import soc2
@@ -286,6 +289,12 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         visible = portal.visible_controls(user)
         if visible is not None:
             rows = [c for c in rows if c["id"] in visible]
+        # controls that serve only categories deferred from the report stay out of the way unless asked for
+        out_of_scope = [c for c in rows if c["criteria"] and not c["in_scope"]]
+        deferred_hidden = 0
+        if not (deferred or category):
+            deferred_hidden = len(out_of_scope)
+            rows = [c for c in rows if not (c["criteria"] and not c["in_scope"])]
         if q:
             ql = q.lower()
             rows = [c for c in rows if ql in c["id"].lower() or ql in c["title"].lower()]
@@ -315,7 +324,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         return render(request, user, "controls.html", rows=rows, q=q, status=status, category=category,
                       owner=owner, sort=sort, owners=sorted(portal.catalog.roles), framework=framework,
                       frameworks=fws, columns=columns, refs=refs, how=how, soc2_on=soc2_on, family=family,
-                      criterion=criterion, evidenced=evidenced, families=[(f, soc2.FAMILY_NAMES.get(f, f)) for f in fam_ids],
+                      criterion=criterion, evidenced=evidenced, deferred=bool(deferred), deferred_hidden=deferred_hidden,
+                      families=[(f, soc2.FAMILY_NAMES.get(f, f)) for f in fam_ids],
                       crit_options=crit_options, hits={criterion} if criterion else (set(crit_options) if family else set()),
                       list_qs=_list_query(str(request.url.query)))
 
@@ -358,6 +368,9 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                       history=portal.control_history(control_id, 50) if user.sees_everything else [],
                       can_upload=portal.can_upload_control(user, control_id),
                       can_comment=portal.can_comment(user, [control_id]),
+                      kb_ready={crit for crit, pt in points if (portal.kb.get(crit) and portal.kb[crit].point(pt["id"]))},
+                      note=portal.control_note(control_id), note_history=portal.control_note_history(control_id)[1:20],
+                      can_note=portal.can_edit_control_note(user, control_id), note_max=portal.NOTE_MAX,
                       wanted=wanted, how=how, trail=trail, list_qs=list_qs,
                       def_history=portal.control_definition_history(control_id) if user.sees_everything else [],
                       nav_active="framework" if trail else "",
@@ -379,6 +392,19 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             return back(f"/controls/{control_id}#upload", err=str(exc))
         invalidate()
         return back(f"/controls/{control_id}#submissions", msg="Evidence uploaded and sent for review")
+
+    @app.post("/controls/{control_id}/note")
+    def control_note_save(request: Request, control_id: str, text: str = Form(""), csrf: str = Form(""),
+                          user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        portal = p()
+        if not portal.catalog.control(control_id) or not portal.can_see_control(user, control_id):
+            raise _HTTPError(404, "Control not found, or it is not assigned to you")
+        try:
+            portal.save_control_note(user, control_id, text)
+        except (Invalid, Forbidden) as exc:
+            return back(f"/controls/{control_id}#notes", err=str(exc))
+        return back(f"/controls/{control_id}#notes", msg="Implementation notes saved")
 
     @app.post("/controls/{control_id}/remind")
     def control_remind(request: Request, control_id: str, note: str = Form(""), csrf: str = Form(""),
@@ -485,6 +511,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                       prev=prev, prev_uploads=portal.uploads(assignment=prev["RowKey"], cycle=None) if prev else [],
                       prev_comments=portal.comments(assignment=prev["RowKey"]) if prev else [],
                       wanted=portal.evidence_wanted(a["controls"]), cycle_name=portal.cycle_name(a["cycle"]),
+                      guides=_guide_links(portal, a),
                       can_upload=portal.can_upload(user, a), can_comment=portal.can_comment(user, a["controls"]),
                       max_mb=MAX_UPLOAD_BYTES // (1024 * 1024))
 
@@ -855,7 +882,21 @@ def _same_site(origin, allowed) -> bool:
             and origin.scheme == allowed.scheme)
 
 
-LIST_FILTERS = ("q", "status", "category", "owner", "sort", "framework", "family", "criterion", "evidenced")
+def _guide_links(portal, a: dict) -> list[tuple[str, str]]:
+    """Knowledge base links for an evidence request: the exact point of focus, or the in-scope criteria
+    of its controls. Built only from known ids, never from request input."""
+    cat = portal.catalog
+    if a.get("target_type") == "point":
+        crit = str(a.get("target_id", "")).split("-PF")[0]
+        if crit in cat.criteria:
+            return [(a["target_id"], f"/kb/{crit}#{a['target_id']}")]
+    in_scope = set(cat.in_scope_criteria)
+    crits = dict.fromkeys(x for c in a.get("controls", []) for x in (cat.control(c) or {}).get("criteria", [])
+                          if x in in_scope)
+    return [(x, f"/kb/{x}") for x in crits]
+
+
+LIST_FILTERS = ("q", "status", "category", "owner", "sort", "framework", "family", "criterion", "evidenced", "deferred")
 
 
 def _list_query(raw: str) -> str:

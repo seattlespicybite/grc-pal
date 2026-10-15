@@ -326,7 +326,7 @@ controls:
   - id: DAT-03
     title: Device and media disposal
     description: Devices are wiped through Intune or destroyed with a certificate before disposal or reissue.
-    criteria: [CC6.4, CC6.5]
+    criteria: [CC6.4, CC6.5, C1.2]
     owner: it-lead
     frequency: event
     type: manual

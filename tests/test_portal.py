@@ -160,7 +160,7 @@ ADMIN_PAGES = ["/", "/controls", "/controls/IAM-04", "/criteria", "/criteria?ope
                "/controls/IAM-02?from=CC6.1", "/controls/IAM-02?from=../../evil", "/controls/IAM-02/definition", "/work",
                "/reviews", "/evidence", "/overrides", "/audit", "/audit?verify=1&action=user.", "/users", "/cycles",
                "/policies", "/policies/information-security-policy", "/dev/outbox",
-               "/controls?status=not_started&category=privacy&sort=owner"]
+               "/controls?status=not_started&category=privacy&sort=owner", "/kb", "/kb/CC6.1", "/kb/CC1.2", "/kb/P5.1"]
 
 
 @pytest.mark.parametrize("path", ADMIN_PAGES)
@@ -842,6 +842,26 @@ def test_controls_list_soc2_filters(env):
     assert "IAM-02</b>" not in auto
 
 
+def test_starter_scope_is_security_availability_confidentiality_and_deferred_controls_hidden(env):
+    portal, client = env
+    scope = portal.base_catalog.scope
+    assert scope["in_scope_categories"] == ["security", "availability", "confidentiality"]
+    assert set(scope["deferred_categories"]) == {"processing_integrity", "privacy"}
+    cats = {portal.catalog.criteria[c]["category"] for c in portal.catalog.in_scope_criteria}
+    assert cats == {"security", "availability", "confidentiality"}
+    as_(client, ADMIN)
+    page = client.get("/controls").text
+    assert ">PI-01</b>" not in page and ">PRV-01</b>" not in page and ">IAM-02</b>" in page
+    assert "deferred controls hidden" in page and 'href="/controls?deferred=1"' in page
+    shown = client.get("/controls?deferred=1").text
+    assert ">PI-01</b>" in shown and ">PRV-01</b>" in shown
+    # choosing a deferred category on purpose shows its controls
+    assert ">PRV-01</b>" in client.get("/controls?category=privacy").text
+    # the dashboard shows only categories in the report scope
+    dash = client.get("/").text
+    assert "<b>Confidentiality</b>" in dash and "<b>Privacy</b>" not in dash and "<b>Processing Integrity</b>" not in dash
+
+
 def test_admin_edits_request_people_due_date_and_access_follows(env):
     portal, client = env
     a = assign(portal, "HR-01", CONTRIB)
@@ -1048,3 +1068,66 @@ def test_local_addresses_count_as_the_same_site(env, monkeypatch):
     r = client.post(f"/assignments/{a['RowKey']}/remind", data={"csrf": t}, headers={"Origin": "http://localhost"},
                     follow_redirects=False)
     assert r.status_code == 403
+
+
+# ================================================================ implementation notes per control
+def test_control_notes_versioned_audited_and_permissioned(env):
+    portal, client = env
+    assert portal.control_note("IAM-02") is None
+    n1 = portal.save_control_note(ADMIN, "IAM-02", "  Covered by Information Security Policy section 6.  ")
+    assert n1["version"] == 1 and n1["text"] == "Covered by Information Security Policy section 6."
+    n2 = portal.save_control_note(ADMIN, "IAM-02", "Section 6 of the InfoSec policy; quarterly review in Jan/Apr/Jul/Oct.")
+    assert n2["version"] == 2 and portal.control_note("IAM-02")["text"].startswith("Section 6")
+    history = portal.control_note_history("IAM-02")
+    assert [h["version"] for h in history] == [2, 1] and history[1]["by"] == ADMIN.email
+    entry = [e for e in portal.log.records() if e["action"] == "control.note"][-1]
+    assert entry["target"] == "IAM-02" and entry["detail"]["version"] == 2 and len(entry["detail"]["sha256"]) == 64
+    assert "Section 6" not in json.dumps(entry["detail"])  # the audit log keeps a fingerprint, not the text
+    # the control owner may write notes on their own controls; others and auditors may not
+    assert portal.save_control_note(HR, "GOV-02", "Org chart exported from the HR system each quarter.")["version"] == 1
+    for who, cid in ((CONTRIB, "IAM-02"), (HR, "IAM-02"), (AUDITOR, "IAM-02")):
+        with pytest.raises(Forbidden):
+            portal.save_control_note(who, cid, "not allowed")
+    with pytest.raises(Invalid):
+        portal.save_control_note(ADMIN, "NOPE-99", "unknown control")
+    with pytest.raises(Invalid):
+        portal.save_control_note(ADMIN, "IAM-02", "x" * 5001)
+
+
+def test_control_notes_page_escapes_text_and_hides_form_from_auditors(env):
+    portal, client = env
+    as_(client, ADMIN)
+    t = csrf(client, "/controls/IAM-02")
+    r = client.post("/controls/IAM-02/note", data={"csrf": t, "text": "<script>alert(1)</script> see policy §6"},
+                    follow_redirects=False)
+    assert r.status_code == 303 and "msg=" in r.headers["location"]
+    page = client.get("/controls/IAM-02").text
+    assert "How we meet this control" in page and "&lt;script&gt;alert(1)&lt;/script&gt; see policy §6" in page
+    assert "<script>alert(1)" not in page and 'action="/controls/IAM-02/note"' in page
+    # a bad CSRF token is refused
+    bad = client.post("/controls/IAM-02/note", data={"csrf": "x", "text": "y"}, follow_redirects=False)
+    assert bad.status_code in (400, 403)
+    as_(client, AUDITOR)
+    page = client.get("/controls/IAM-02").text
+    assert "see policy §6" in page and 'action="/controls/IAM-02/note"' not in page
+
+
+def test_control_notes_stay_inside_their_tenant(tmp_path, monkeypatch):
+    monkeypatch.delenv("GRCPAL_TENANT", raising=False)
+    shared = SqliteStore()
+    acme = make_portal(tmp_path, "acme", shared)
+    globex = make_portal(tmp_path, "globex", shared, people=(User("boss@globex.example", "Boss", "admin"),))
+    acme.save_control_note(ADMIN, "IAM-02", "acme-only implementation detail")
+    assert globex.control_note("IAM-02") is None and globex.control_note_history("IAM-02") == []
+
+
+def test_cycle_export_includes_every_version_of_implementation_notes(env):
+    portal, _ = env
+    portal.save_control_note(ADMIN, "IAM-02", "First version")
+    portal.save_control_note(ADMIN, "IAM-02", "Second version")
+    blob = portal.export_cycle(AUDITOR, portal.active_cycle()["RowKey"])
+    with zipfile.ZipFile(io.BytesIO(blob)) as z:
+        rows = list(csv.DictReader(io.StringIO(z.read("implementation_notes.csv").decode())))
+        assert [(r["control"], r["version"], r["text"]) for r in rows] == [("IAM-02", "1", "First version"),
+                                                                              ("IAM-02", "2", "Second version")]
+        assert "implementation_notes.csv" in z.read("MANIFEST.csv").decode()

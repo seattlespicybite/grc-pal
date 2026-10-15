@@ -261,6 +261,49 @@ def register(app, h) -> None:
             raise h.HTTPError(404, "Job not found")
         return render(request, user, "jobs.html", rows=[], job=job, refresh=job["status"] in ("queued", "running"))
 
+    # ================================================================ knowledge base
+    @app.get("/kb", response_class=HTMLResponse)
+    def kb_index(request: Request, user: User = Depends(current_user)):
+        """Evidence guidance for every SOC 2 criterion, grouped by family. Open to every signed-in role."""
+        from grcpal import kb as kb_mod
+        from grcpal.portal import soc2
+
+        portal = p()
+        articles, cat = portal.kb, portal.catalog
+        in_scope = set(cat.in_scope_criteria)
+        groups: dict[str, dict] = {}
+        for cid in soc2.ordered_criteria(cat, in_scope_only=False):
+            fam = soc2.family_of(cid)
+            a = articles.get(cid)
+            pts = cat.points_of_focus.get(cid, [])
+            g = groups.setdefault(fam, {"id": fam, "name": soc2.FAMILY_NAMES.get(fam, fam), "rows": [], "in_scope": False})
+            g["in_scope"] = g["in_scope"] or cid in in_scope
+            g["rows"].append({"id": cid, "title": (a.title if a else cat.criteria[cid]["title"]),
+                              "status": a.status if a else "missing", "points": len(pts),
+                              "written": len(pts) - len(kb_mod.missing_points(cat, articles, [cid]))})
+        scoped = [r for g in groups.values() if g["in_scope"] for r in g["rows"]]
+        counts = {s: sum(1 for r in scoped if r["status"] == s) for s in ("reviewed", "draft", "missing")}
+        return render(request, user, "kb.html", groups=list(groups.values()), counts=counts)
+
+    @app.get("/kb/{crit_id}", response_class=HTMLResponse)
+    def kb_article(request: Request, crit_id: str, user: User = Depends(current_user)):
+        from grcpal.portal import soc2
+
+        portal = p()
+        cat = portal.catalog
+        if crit_id not in cat.criteria:  # only known ids; nothing from the path reaches the file system
+            raise h.HTTPError(404, "No such criterion")
+        article = portal.kb.get(crit_id)
+        order = soc2.ordered_criteria(cat, in_scope_only=crit_id in cat.in_scope_criteria)
+        prev_id, next_id, _ = soc2.neighbours(order, crit_id)
+        controls = [cat.control(c) for c in cat.coverage().get(crit_id, []) if portal.can_see_control(user, c)]
+        sections = [{"pf": pf, "guide": article.point(pf["id"]) if article else None}
+                    for pf in cat.points_of_focus.get(crit_id, [])]
+        return render(request, user, "kb_article.html", crit_id=crit_id, crit=cat.criteria[crit_id], article=article,
+                      sections=sections, controls=controls, prev_id=prev_id, next_id=next_id,
+                      in_scope=crit_id in cat.in_scope_criteria,
+                      family_name=soc2.FAMILY_NAMES.get(soc2.family_of(crit_id), ""))
+
     # ================================================================ frameworks
     @app.get("/frameworks", response_class=HTMLResponse)
     def frameworks(request: Request, user: User = Depends(current_user)):

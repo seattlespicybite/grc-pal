@@ -1,0 +1,53 @@
+criterion: CC5.2
+title: General controls over technology
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  The technology your controls rely on is itself controlled: infrastructure is monitored and hardened,
+  security management (access, logging) is in place, and how you acquire, build and maintain software is
+  controlled. These are often called IT general controls (ITGCs).
+auditor_approach:
+  - Identifies which controls depend on technology and checks that the supporting IT controls are in place.
+  - Tests infrastructure, security management and development controls, often through the CC6, CC7 and CC8 tests.
+points:
+  - id: CC5.2-PF01
+    what_auditor_tests: >
+      Whether you know which business controls depend on technology and the IT controls supporting them.
+    evidence_standard:
+      - Mapping of automated controls to the systems they run on.
+    good_examples:
+      - Control catalog showing each automated control's source system and collector.
+    common_mistakes:
+      - Relying on an automated report without controlling the system that produces it.
+    frequency: Annually.
+  - id: CC5.2-PF02
+    what_auditor_tests: >
+      Whether infrastructure controls (monitoring, configuration, capacity) are established.
+    evidence_standard:
+      - Infrastructure monitoring and configuration standards in operation.
+    good_examples:
+      - Azure Policy compliance dashboard and monitoring alerts.
+    common_mistakes:
+      - Monitoring configured but alerts going to an unwatched mailbox.
+    frequency: Ongoing.
+  - id: CC5.2-PF03
+    what_auditor_tests: >
+      Whether security management controls (access, authentication, logging) are established.
+    evidence_standard:
+      - Security management controls in operation, as tested under CC6 and CC7.
+    good_examples:
+      - MFA enforcement, privileged access management and central logging.
+    common_mistakes:
+      - Logging enabled for production but not for the identity provider.
+    frequency: Ongoing.
+  - id: CC5.2-PF04
+    what_auditor_tests: >
+      Whether acquisition, development and maintenance of technology is controlled.
+    evidence_standard:
+      - Change management, secure development and vendor selection controls in operation.
+    good_examples:
+      - Pull request reviews, CI security checks and vendor reviews before purchase.
+    common_mistakes:
+      - Tools bought by teams with no security review.
+    frequency: Ongoing.

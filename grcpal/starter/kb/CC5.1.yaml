@@ -1,0 +1,73 @@
+criterion: CC5.1
+title: Control activities are selected to reduce risk
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  Your controls are chosen because of your risks, not copied from a list. You can show the link from risk
+  to control, a sensible mix of preventive and detective, automated and manual controls, and that conflicting
+  duties are separated.
+auditor_approach:
+  - Traces a sample of risks to the controls that address them.
+  - Reviews segregation of duties in key processes (code change, access granting, evidence review).
+points:
+  - id: CC5.1-PF01
+    what_auditor_tests: >
+      Whether controls are linked to the risk assessment.
+    evidence_standard:
+      - Mapping between risks and controls.
+    good_examples:
+      - Risk register column listing control IDs that mitigate each risk.
+    common_mistakes:
+      - Controls with no risk, risks with no controls.
+    frequency: Annually with the risk assessment.
+  - id: CC5.1-PF02
+    what_auditor_tests: >
+      Whether controls consider the organization's specifics (size, technology, regulation).
+    evidence_standard:
+      - Control descriptions tailored to the actual environment.
+    good_examples:
+      - Control descriptions naming the actual tools (Entra ID, GitHub, Azure) and owners.
+    common_mistakes:
+      - Template controls that describe tools and teams you do not have.
+    frequency: Reviewed annually.
+  - id: CC5.1-PF03
+    what_auditor_tests: >
+      Whether the business processes relevant to the system are identified and controlled.
+    evidence_standard:
+      - System description listing key processes (onboarding, change, support, incident).
+    good_examples:
+      - Process list in the system description, each with linked controls.
+    common_mistakes:
+      - Customer support access to production not identified as a process.
+    frequency: Annually.
+  - id: CC5.1-PF04
+    what_auditor_tests: >
+      Whether the control set mixes types (preventive and detective, automated and manual).
+    evidence_standard:
+      - Control list with type and nature.
+    good_examples:
+      - GRC-pal controls tagged automated, hybrid or manual.
+    common_mistakes:
+      - Only detective controls, so problems are found but never prevented.
+    frequency: Annually.
+  - id: CC5.1-PF05
+    what_auditor_tests: >
+      Whether controls are applied at the right level (organization, process, system).
+    evidence_standard:
+      - Controls covering entity-level and system-level risks.
+    good_examples:
+      - Entity controls (policy, risk) plus system controls (MFA, branch protection).
+    common_mistakes:
+      - Only technical controls, no governance controls.
+    frequency: Annually.
+  - id: CC5.1-PF06
+    what_auditor_tests: >
+      Whether incompatible duties are separated, or compensating controls exist where separation is impossible.
+    evidence_standard:
+      - Segregation of duties analysis for key processes and evidence it is enforced.
+    good_examples:
+      - Branch protection requiring a reviewer other than the author; access requests approved by a manager, not the requester.
+    common_mistakes:
+      - A single admin who can grant themselves access and approve their own changes, with no compensating review.
+    frequency: Reviewed annually; enforced continuously.

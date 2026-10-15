@@ -1,0 +1,77 @@
+criterion: CC1.3
+title: Structures, reporting lines, authorities and responsibilities
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  The organization is set up so that it is clear who is responsible for what, who reports to whom, and who
+  may approve which actions. Security has named owners. For SOC 2 this is usually an org chart, role
+  descriptions and the system description's list of people and third parties involved.
+auditor_approach:
+  - Inspects the org chart as of a date in the period and compares it with the people named in the system description.
+  - Reads job descriptions or role definitions for key security and operations roles.
+  - Checks that approval authorities (who may approve access, changes, vendors) are defined and match practice.
+points:
+  - id: CC1.3-PF01
+    what_auditor_tests: >
+      Whether the structure considered includes all parts of the organization that support the in-scope system,
+      including subsidiaries, offshore teams and outsourced functions.
+    evidence_standard:
+      - System description listing the teams, locations and third parties that operate the system.
+      - Org chart covering those teams.
+    good_examples:
+      - System description section "People" listing engineering, support and IT, with locations.
+      - Org chart export from the HR system dated inside the period.
+    common_mistakes:
+      - An offshore support team or managed service provider with production access missing from the description.
+    frequency: Reviewed annually and when the organization changes.
+  - id: CC1.3-PF02
+    what_auditor_tests: >
+      Whether reporting lines are defined and current.
+    evidence_standard:
+      - Org chart with manager relationships, dated inside the observation period.
+    good_examples:
+      - Quarterly org chart export stored as evidence.
+      - HR system report of employees and their managers.
+    common_mistakes:
+      - Org chart from last year with people who have left.
+    frequency: Quarterly or after significant reorganization.
+  - id: CC1.3-PF03
+    what_auditor_tests: >
+      Whether authorities and responsibilities are defined and limited, for example who can approve access,
+      changes, payments or vendors.
+    evidence_standard:
+      - Role descriptions or a responsibility matrix for key processes.
+      - Approval authorities that match how approvals actually happen in tickets and pull requests.
+    good_examples:
+      - RACI table for access, change, incident and vendor processes in the policy set.
+      - Branch protection rules showing which teams can approve production code.
+    common_mistakes:
+      - Policies name a role (for example "Change Advisory Board") that does not exist in practice.
+    frequency: Reviewed annually.
+  - id: CC1.3-PF04
+    what_auditor_tests: >
+      Whether security responsibilities are assigned to named people, with someone accountable for the overall program.
+    evidence_standard:
+      - Policy or appointment naming the person responsible for information security.
+      - Role definitions for control owners.
+    good_examples:
+      - Information security policy section naming the security lead and executive sponsor.
+      - GRC-pal roles file listing the owner of each control area.
+    common_mistakes:
+      - Security is "everyone's job" with no accountable owner.
+      - Control owners listed who no longer work at the company.
+    frequency: Reviewed annually and on staff changes.
+  - id: CC1.3-PF05
+    what_auditor_tests: >
+      Whether responsibilities shared with outside parties (cloud providers, vendors, customers) are understood
+      and documented.
+    evidence_standard:
+      - Vendor inventory with the services each provides to the system.
+      - Description of responsibilities split with subservice organizations and customers (CUECs and CSOCs).
+    good_examples:
+      - Vendor list with criticality and the controls you rely on them for.
+      - System description section on complementary user entity controls.
+    common_mistakes:
+      - Relying on a cloud provider's SOC 2 without listing which of their controls you depend on.
+    frequency: Reviewed annually and when vendors change.

@@ -271,3 +271,9 @@ label.check, label.toggle { display: flex; gap: 8px; align-items: center; font-w
 .nav-bar-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .role-library { background: #7c5cc4; color: #fff; }
 .def-form input:not([type=checkbox]), .def-form select, .def-form textarea { width: 100%; }
+
+/* knowledge base */
+.pill.kb-reviewed { color: var(--ok); } .pill.kb-draft { color: var(--warn); } .pill.kb-missing { color: var(--idle); }
+.kb-text { white-space: pre-wrap; line-height: 1.6; }
+.kb-point { scroll-margin-top: 16px; }
+.kb-point h3 { font-size: 14px; }

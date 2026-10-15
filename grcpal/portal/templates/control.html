@@ -30,6 +30,16 @@
 {% if how.hidden %}<p class="sub">Not shown: {{ how.hidden|join(', ') }} (not connected for this organization).</p>{% endif %}
 {% if ctl.links %}<h3 class="mt">Reference documents</h3><ul class="list">{% for l in ctl.links %}<li><a href="{{ l.url }}" rel="noopener noreferrer" target="_blank">{{ l.name }}</a></li>{% endfor %}</ul>{% endif %}</section>
 
+<section class="card" id="notes"><div class="row-between"><h2 class="m0">How we meet this control</h2>{% if note %}<span class="sub">Version {{ note.version }} · {{ note.by }} · {{ note.at[:10] }}</span>{% endif %}</div>
+<p class="sub">Where this control is documented and how it operates here: policy sections, procedures, schedules, systems. Written for the next person who runs the program and for the auditor. Do not put passwords or other secrets here.</p>
+{% if note and note.text %}<div class="note mt-s">{{ note.text }}</div>{% else %}<div class="empty mt-s">No implementation notes yet.</div>{% endif %}
+{% if can_note %}<details class="mt"><summary>{{ 'Edit notes' if note else 'Add notes' }}</summary><form method="post" action="/controls/{{ ctl.id }}/note" class="mt-s">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<label for="note-text">Notes (each save keeps the earlier version)</label><textarea id="note-text" name="text" rows="6" maxlength="{{ note_max }}" placeholder="For example: Covered by Information Security Policy section 6. Access reviews run in January, April, July and October; the IT lead exports the Entra ID group list.">{{ note.text if note else '' }}</textarea>
+<button class="btn small mt-s" type="submit">Save notes</button></form></details>{% endif %}
+{% if note_history %}<details class="mt"><summary>Earlier versions ({{ note_history|length }})</summary>
+{% for h in note_history %}<div class="mt-s"><div class="sub">Version {{ h.version }} · {{ h.by }} · {{ h.at[:16]|replace('T', ' ') }}</div><div class="note">{{ h.text or '(cleared)' }}</div></div>{% endfor %}</details>{% endif %}</section>
+
 <section class="card" id="upload"><h2>Upload evidence</h2>
 {% if can_upload %}{{ upload_form('/controls/' ~ ctl.id ~ '/upload', csrf, max_mb) }}
 {% else %}<div class="empty">{% if user.is_auditor %}Auditors have read-only access.{% else %}You are not assigned to this control.{% endif %}</div>{% endif %}
@@ -137,8 +147,9 @@
 {% endif %}
 
 {% if points %}<section class="card"><h2>Points of focus</h2>
-<table><thead><tr><th>Point</th><th>Status</th><th>Note</th></tr></thead><tbody>
-{% for crit, pt in points %}<tr><td>{% if user.sees_everything %}<a href="/criteria/{{ crit }}">{{ pt.id }}</a>{% else %}<span class="mono">{{ pt.id }}</span>{% endif %} {{ pt.point }}</td><td>{{ pill(pt.status) }}</td><td class="sub">{{ pt.note or '' }}</td></tr>{% endfor %}
+<p class="sub">Each point links to its evidence guidance in the knowledge base: what the auditor tests, what good evidence looks like, and common mistakes.</p>
+<table><thead><tr><th>Point</th><th>Status</th><th>Note</th><th>Guidance</th></tr></thead><tbody>
+{% for crit, pt in points %}<tr><td>{% if user.sees_everything %}<a href="/criteria/{{ crit }}">{{ pt.id }}</a>{% else %}<span class="mono">{{ pt.id }}</span>{% endif %} {{ pt.point }}</td><td>{{ pill(pt.status) }}</td><td class="sub">{{ pt.note or '' }}</td><td class="nowrap"><a href="/kb/{{ crit }}#{{ pt.id }}">{{ 'Evidence guide' if crit in kb_ready else 'Guide (not written yet)' }}</a></td></tr>{% endfor %}
 </tbody></table></section>{% endif %}
 
 {% if ctl.edited and ctl.edited.starter_changed and user.sees_everything %}<div class="flash err" role="status">The starter definition of {{ ctl.id }} changed in a GRC-pal update after it was edited here. Your version is still in use; compare it with the starter text {% if is_lib %}and edit or reset it{% endif %} below.</div>{% endif %}

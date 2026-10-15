@@ -206,6 +206,51 @@ class FeaturesMixin:
             rows = [r for r in rows if r["control"] == control_id]
         return sorted(rows, key=lambda r: (r["control"], r["version"]), reverse=bool(control_id))
 
+    # ================================================================ implementation notes
+    NOTE_MAX = 5000
+
+    def can_edit_control_note(self, user, control_id: str) -> bool:
+        """Admins, and control owners for the controls they own. Auditors never."""
+        return user.is_admin or (user.is_contributor and control_id in self.owned_controls(user.email))
+
+    def save_control_note(self, actor, control_id: str, text: str) -> dict:
+        """Save how the organization meets a control. Every save is a new version; earlier ones are kept."""
+        if not self.catalog.control(control_id):
+            raise self._invalid("Unknown control")
+        if not self.can_edit_control_note(actor, control_id):
+            raise self._forbidden("Only admins and the control's owner can edit its implementation notes")
+        text = (text or "").replace("\r\n", "\n").strip()
+        if len(text) > self.NOTE_MAX:
+            raise self._invalid(f"Notes can be at most {self.NOTE_MAX} characters")
+        current = self.control_note(control_id)
+        version = (current["version"] if current else 0) + 1
+        row = {"PartitionKey": "n", "RowKey": f"{control_id}~{version:05d}", "control": control_id,
+               "version": version, "text": text, "by": actor.email, "at": _now()}
+        self.store.insert("controlnotes", row)
+        self.audit(actor, "control.note", control_id, {"controls": [control_id], "version": version,
+                                                       "length": len(text),
+                                                       "sha256": hashlib.sha256(text.encode()).hexdigest()})
+        return row
+
+    def control_note_history(self, control_id: str) -> list[dict]:
+        rows = [r for r in self.store.list("controlnotes", "n") if r["control"] == control_id]
+        return sorted(rows, key=lambda r: r["version"], reverse=True)
+
+    def control_note(self, control_id: str) -> dict | None:
+        history = self.control_note_history(control_id)
+        return history[0] if history else None
+
+    @property
+    def kb(self) -> dict:
+        """Knowledge base articles (starter kit plus the program repository's kb/ folder), loaded once."""
+        if getattr(self, "_kb_cache", None) is None:
+            from grcpal import kb as kb_mod
+            self._kb_cache = kb_mod.load(self.base_catalog.base)
+        return self._kb_cache
+
+    def reload_kb(self) -> None:
+        self._kb_cache = None
+
     @property
     def frameworks(self) -> dict:
         """Every framework GRC-pal knows (built in, files, custom), whether or not this client uses it."""
@@ -213,10 +258,10 @@ class FeaturesMixin:
 
     @property
     def frameworks_in_use(self) -> dict:
-        """Frameworks switched on for this client (GRCPAL_FRAMEWORKS). Empty setting means all of them."""
+        """Frameworks switched on for this client (GRCPAL_FRAMEWORKS). Empty setting means SOC 2 only."""
         known = self.frameworks
-        chosen = [f for f in self.settings.list("GRCPAL_FRAMEWORKS") if f in known]
-        return {f: known[f] for f in chosen} if chosen else known
+        chosen = [f for f in self.settings.list("GRCPAL_FRAMEWORKS") if f in known] or ["soc2"]
+        return {f: known[f] for f in chosen}
 
     def program_view(self, requested: str = "") -> str:
         """The framework the portal shows: the only one in use, the one the person picked, or "all"."""

@@ -5,16 +5,18 @@ organization: Example Co   # your organization's name
 report_type: SOC 2 Type 2
 first_window_months: 3
 
-# Categories tested in the next report. Controls for all five exist in the
-# catalog; only these are required to have full coverage by `grcpal validate`.
+# Categories tested in the next report. Security is always included. Controls for all five
+# categories exist in the catalog; only these must have full coverage in `grcpal validate`,
+# and controls that serve only deferred categories are hidden from the portal lists.
 in_scope_categories:
   - security
-  - availability
-  - confidentiality
-  - processing_integrity   # remove if customers do not rely on processing accuracy; tailor PI-01 to PI-05
-  - privacy                # remove if you do not collect personal data from individuals; tailor PRV-01 to PRV-06
+  - availability           # remove if you make no uptime or recovery commitments to customers
+  - confidentiality        # remove if you hold no customer data marked confidential
 
-deferred_categories: []
+# Kept in the catalog, not tested in this report. Move one up when customers ask for it.
+deferred_categories:
+  - processing_integrity   # customers rely on processing accuracy (tailor PI-01 to PI-05)
+  - privacy                # you collect personal data from individuals (tailor PRV-01 to PRV-06)
 
 # Assumed technology stack. Collectors are enabled per platform below.
 platforms:

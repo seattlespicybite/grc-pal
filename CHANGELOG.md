@@ -4,7 +4,23 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-14 - SOC 2 focus
+
+This release makes GRC-pal a SOC 2 Type 2 tool first. Other frameworks stay available but out of
+the way until an admin turns them on.
+
 ### Added
+- **Knowledge base** tab (`/kb`): one article per SOC 2 criterion with a section per point of focus:
+  what the auditor tests, evidence standard, good examples, common mistakes, frequency and sampling.
+  38 articles cover every Security, Availability and Confidentiality criterion and all 214 of their
+  points of focus. Articles are YAML in `starter/kb/` (a program repository's `kb/` folder can replace
+  one), plain text, shown escaped, and marked **Draft** until a reviewer is recorded.
+  Linked from control pages (per point of focus), criterion pages and evidence requests.
+  `grcpal validate` checks articles and warns about in-scope points of focus without guidance.
+- **How we meet this control**: implementation notes on every control. Admins and the control's
+  owner can edit; every save is a new version (earlier ones stay visible) and is recorded in the audit
+  log (`control.note`, with version, length and SHA-256). New `controlnotes` table, included in
+  backups. The cycle export adds `implementation_notes.csv`. Demo data includes sample notes.
 - `grcpal backup keygen | create | verify`: one encrypted file (AES-256-GCM, authenticated chunks) with every
   table for every tenant, all evidence, the HR inbox and the published configuration. A manifest holds the
   SHA-256 of every file, row counts, app and schema versions, and the audit-chain check of each tenant.
@@ -41,6 +57,16 @@ All notable changes are listed here. The project follows [semantic versioning](h
   option, HTTPS, first sign-in, cron jobs for collection, recurring activities, reminders and backups.
 
 ### Changed
+- **SOC 2 only by default.** An empty `GRCPAL_FRAMEWORKS` setting now means SOC 2 only (was: every
+  framework). ISO/IEC 27001 keeps its data and mappings; turn it on from the Frameworks page.
+  *Upgrade note:* an existing installation that left the setting empty and uses ISO 27001 should turn
+  ISO 27001 back on (Frameworks page) or set `GRCPAL_FRAMEWORKS` to `soc2` and `iso27001`.
+- **Starter scope** is Security, Availability and Confidentiality. Processing Integrity and Privacy
+  move to `deferred_categories`; their controls stay in the catalog.
+- Controls list hides controls that serve only deferred categories (count and **show** link
+  displayed; choosing a deferred category shows them). Dashboard category tiles show in-scope
+  categories only.
+- DAT-03 (device and media disposal) now also maps to C1.2 (disposal of confidential information).
 - Creating or changing custom controls and custom frameworks now needs the control library owner
   (was: any admin).
 

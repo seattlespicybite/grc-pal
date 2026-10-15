@@ -18,6 +18,8 @@ program repository for the audit period.
 | `users.csv` | Who had which role, how they got it, when they were last seen |
 | `policy_acknowledgments.csv` | Who acknowledged which policy version and when (with the policy hash) |
 | `audit_log.csv` | Every change in the period, hash-chained |
+| `control_definition_changes.csv` | Every version of a changed control definition, with author, reason and before/after |
+| `implementation_notes.csv` | Every version of each control's "How we meet this control" notes, with author and time; each save is also in the audit log with the SHA-256 of the text |
 | `audit_chain_verification.json` | Result of recomputing the chain at export time |
 | `control_status.json` | Control health at export time, including the computed status behind any override |
 | `evidence/` | Every uploaded file |

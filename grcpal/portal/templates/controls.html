@@ -2,7 +2,7 @@
 {% block content %}
 {% set single = columns|length == 1 %}
 <div class="page-head"><div><h1>{{ 'My controls' if user.is_contributor else (columns[0].name.split(' (')[0].split(':')[0] ~ ' controls' if single else 'Controls') }}</h1>
-<div class="sub">{{ rows|length }} controls shown{% if criterion %} · filtered to {{ criterion }}{% elif family %} · filtered to {{ family }}{% endif %}</div></div>
+<div class="sub">{{ rows|length }} controls shown{% if criterion %} · filtered to {{ criterion }}{% elif family %} · filtered to {{ family }}{% endif %}{% if deferred_hidden %} · {{ deferred_hidden }} deferred controls hidden (<a href="/controls?deferred=1">show</a>){% elif deferred %} · including deferred categories (<a href="/controls">hide</a>){% endif %}</div></div>
 {% if user.is_admin and user.email == library_owner %}<a class="btn small" href="/controls/new">New custom control</a>{% endif %}</div>
 <form class="filters" method="get" action="/controls" role="search">
   <input name="q" value="{{ q }}" placeholder="Search ID or title" aria-label="Search">

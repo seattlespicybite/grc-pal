@@ -1,0 +1,93 @@
+criterion: CC1.4
+title: Attract, develop and retain competent people
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  The people who run the system are qualified, checked before they join, trained to keep their skills
+  current, and evaluated. Typical evidence is background checks, security awareness training records,
+  job descriptions with required skills and performance reviews.
+auditor_approach:
+  - Samples new hires from the period and checks background checks were completed before or shortly after start, per policy.
+  - Samples employees and checks security awareness training was completed within the required time.
+  - Inspects job descriptions for key roles and a sample of completed performance reviews.
+points:
+  - id: CC1.4-PF01
+    what_auditor_tests: >
+      Whether expectations for competence are defined, typically in job descriptions and hiring practices.
+    evidence_standard:
+      - Job descriptions for key roles listing required skills and responsibilities.
+      - Hiring process description (interviews, references).
+    good_examples:
+      - Job descriptions in the HR system for engineers and IT staff, with last-updated dates.
+    common_mistakes:
+      - No job descriptions for senior or founder roles that hold the most access.
+    frequency: Reviewed when roles change; auditors inspect a sample.
+  - id: CC1.4-PF02
+    what_auditor_tests: >
+      Whether competence is evaluated and gaps are addressed, usually through periodic performance reviews.
+    evidence_standard:
+      - Performance review policy and completion records for the period.
+    good_examples:
+      - HR system report of completed annual reviews, with a sample review (content redacted).
+    common_mistakes:
+      - Reviews planned but not completed during the period.
+    frequency: Annually or semi-annually; auditors sample employees.
+  - id: CC1.4-PF03
+    what_auditor_tests: >
+      Whether the organization has practices to recruit, develop and keep qualified staff.
+    evidence_standard:
+      - Description of recruiting, onboarding and development practices.
+    good_examples:
+      - Onboarding checklist and training budget or development plan policy.
+    common_mistakes:
+      - Nothing written; practices exist only informally.
+    frequency: Reviewed annually.
+  - id: CC1.4-PF04
+    what_auditor_tests: >
+      Whether key roles have a backup so the program continues if someone leaves or is unavailable.
+    evidence_standard:
+      - List of key roles with a named backup or succession approach.
+    good_examples:
+      - Roles file listing a deputy for the security lead and for production operations.
+      - Runbooks that let a second engineer perform critical tasks.
+    common_mistakes:
+      - One person holds all admin access and all knowledge, with no backup (also a segregation of duties risk).
+    frequency: Reviewed annually.
+  - id: CC1.4-PF05
+    what_auditor_tests: >
+      Whether background checks are performed for new hires and contractors, as allowed by local law, before
+      they get access to sensitive systems.
+    evidence_standard:
+      - Background check policy stating who is checked, what is checked and when.
+      - Completion records for the population of hires in the period, with completion date versus start date.
+    good_examples:
+      - Background check vendor report (results redacted) listing candidate and completion date, reconciled to new hires.
+    common_mistakes:
+      - Checks completed after access was granted, contrary to the policy.
+      - Contractors excluded with no documented reason.
+    frequency: At hire; auditors sample new hires from the observation period.
+  - id: CC1.4-PF06
+    what_auditor_tests: >
+      Whether technical staff have the skills needed for the systems they run.
+    evidence_standard:
+      - Role requirements for technical positions and evidence of relevant experience or certifications.
+    good_examples:
+      - Job descriptions listing required cloud or security skills; certification records for key staff.
+    common_mistakes:
+      - New technologies adopted with no training for the people operating them.
+    frequency: Reviewed annually.
+  - id: CC1.4-PF07
+    what_auditor_tests: >
+      Whether staff receive training to stay current, including security awareness for everyone and
+      role-specific training (for example secure development) for engineers.
+    evidence_standard:
+      - Training completion records for the whole population with dates.
+      - Training content or course list for the period.
+    good_examples:
+      - Security awareness platform completion export reconciled to the HR roster.
+      - Secure coding training records for engineers.
+    common_mistakes:
+      - New hires not trained within the required time (often 30 days).
+      - Completion export missing contractors or part-time staff.
+    frequency: At hire and annually; auditors sample from the population.

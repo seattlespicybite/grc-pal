@@ -31,6 +31,7 @@
       <a href="/controls" class="{{ 'active' if path.startswith('/controls') and not in_framework }}">{{ 'My controls' if user.is_contributor else 'Controls' }}</a>
       {% if user.sees_everything %}<a href="/evidence" class="{{ 'active' if path.startswith('/evidence') }}">Evidence store</a>{% endif %}
       <a href="/policies" class="{{ 'active' if path.startswith('/policies') }}">Policies</a>
+      <a href="/kb" class="{{ 'active' if path.startswith('/kb') }}">Knowledge base</a>
       {% if user.sees_everything %}<a href="/overrides" class="{{ 'active' if path.startswith('/overrides') }}">Overrides</a>
       <a href="/ai" class="{{ 'active' if path.startswith('/ai') }}">AI assistant</a>
       <div class="nav-sep">Administration</div>

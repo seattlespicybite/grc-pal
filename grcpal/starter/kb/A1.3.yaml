@@ -1,0 +1,50 @@
+criterion: A1.3
+title: Recovery plans are tested
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  Having a business continuity plan and backups is not enough: you prove they work by testing them. The
+  auditor wants to see that a test happened inside the observation period, that it measured something real
+  (recovery time, data completeness), and that problems found were fixed.
+auditor_approach:
+  - Asks for the business continuity and disaster recovery test reports dated inside the observation period.
+  - Checks that the test compares results with the recovery objectives (RTO and RPO) stated in your plan.
+  - Inspects backup restore test records and checks that restored data was verified, not just that a job succeeded.
+  - Follows up on any failed test or gap and looks for the remediation ticket and its closure.
+points:
+  - id: A1.3-PF01
+    what_auditor_tests: >
+      Whether the business continuity or disaster recovery plan was exercised during the period, by whom, and
+      whether lessons learned were turned into actions.
+    evidence_standard:
+      - Test report dated inside the observation period with scenario, participants, timeline and results.
+      - Comparison of achieved recovery time and data loss with the RTO and RPO in the plan.
+      - List of issues found, each with an owner, ticket and completion date.
+      - Updated plan version if the test changed anything.
+    good_examples:
+      - Tabletop exercise report for a region outage, with attendee list and action items tracked in the issue tracker.
+      - Failover test of the production database to a secondary region, with timestamps for each step.
+      - Pull request updating the continuity plan after the test, approved by the plan owner.
+    common_mistakes:
+      - Annual test scheduled for the month after the observation period ends, so there is no test in the period.
+      - Report that says "test successful" with no times, scope or participants.
+      - Action items from the test left open with no owner.
+    frequency: At least annually and inside the observation period. Plan the date when you set the period. For a 3 to 6 month first period, schedule the test early.
+  - id: A1.3-PF02
+    what_auditor_tests: >
+      Whether backups can actually be restored and the restored data is complete and usable, not only that
+      backup jobs report success.
+    evidence_standard:
+      - Restore test record with date, system, backup point used, who performed it and how the data was checked.
+      - Proof of the check, such as row counts, checksums or an application smoke test against the restored copy.
+      - Time taken to restore compared with the RTO.
+    good_examples:
+      - Quarterly restore of the production database to an isolated environment, with row counts compared to production at the backup time.
+      - Automated restore test pipeline output stored as write-once evidence.
+      - Restore test issue closed with screenshots of the restored application and the timing.
+    common_mistakes:
+      - Backup job success logs presented as restore tests.
+      - Restores tested only on a small test database instead of production-sized data.
+      - Restored copy left running with customer data and no access control or deletion afterwards.
+    frequency: Quarterly is common for production databases; at least annually for every critical data store. Auditors usually test every occurrence in the period because the population is small.

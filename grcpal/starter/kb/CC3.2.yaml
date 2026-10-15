@@ -1,0 +1,95 @@
+criterion: CC3.2
+title: Risks are identified and analyzed
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  You run a documented risk assessment at least once a year: list what could go wrong (threats,
+  vulnerabilities, vendor risks), estimate likelihood and impact, decide how to respond, and get leadership
+  sign-off. This is one of the most common sources of SOC 2 exceptions when it is missing or out of period.
+auditor_approach:
+  - Inspects the risk assessment performed during the period, with date, participants and approval.
+  - Checks that it covers internal, external, technology, vendor and fraud risks and that each risk has a rating and a response.
+  - Traces a sample of risk responses to the controls or actions that address them.
+points:
+  - id: CC3.2-PF01
+    what_auditor_tests: >
+      Whether the assessment covers all relevant parts of the organization and system, not only infrastructure.
+    evidence_standard:
+      - Risk register covering business processes, people, technology and third parties in scope.
+    good_examples:
+      - Risk register with categories (people, process, technology, vendor, legal) and an owner per risk.
+    common_mistakes:
+      - Risk list limited to a handful of technical threats.
+    frequency: At least annually and inside the observation period.
+  - id: CC3.2-PF02
+    what_auditor_tests: >
+      Whether internal factors (staffing, new systems) and external factors (threat landscape, regulation, economy) are considered.
+    evidence_standard:
+      - Risk assessment notes showing the factors considered.
+    good_examples:
+      - Risk workshop agenda covering threat intelligence and business changes, with notes.
+    common_mistakes:
+      - No evidence of what inputs were considered.
+    frequency: Annually.
+  - id: CC3.2-PF03
+    what_auditor_tests: >
+      Whether the right levels of management take part.
+    evidence_standard:
+      - Participants list and leadership approval of the risk assessment.
+    good_examples:
+      - Risk assessment issue with participants from engineering, operations and leadership, approved by the executive sponsor.
+    common_mistakes:
+      - Assessment completed by one person with no leadership review.
+    frequency: Annually.
+  - id: CC3.2-PF04
+    what_auditor_tests: >
+      Whether each risk's significance is estimated using a consistent method.
+    evidence_standard:
+      - Defined scoring method (likelihood and impact scales) and scores in the register.
+    good_examples:
+      - 1 to 5 likelihood and impact scales documented in the risk policy, applied to every risk.
+    common_mistakes:
+      - Scores without a defined scale, or all risks rated "medium".
+    frequency: Annually.
+  - id: CC3.2-PF05
+    what_auditor_tests: >
+      Whether a response (mitigate, accept, transfer, avoid) is decided for each significant risk, with an owner.
+    evidence_standard:
+      - Risk treatment decision, owner and target date for each risk above tolerance.
+      - Formal acceptance by an authorized person for accepted risks.
+    good_examples:
+      - Risk register columns for treatment, linked controls and residual risk; acceptance signed by the executive sponsor.
+    common_mistakes:
+      - Risks above tolerance left untreated with no acceptance.
+    frequency: Annually and when new risks are identified.
+  - id: CC3.2-PF06
+    what_auditor_tests: >
+      Whether the criticality of information assets is assessed and threats and vulnerabilities identified for them.
+    evidence_standard:
+      - Asset or data inventory with criticality; threats mapped to critical assets.
+    good_examples:
+      - Data inventory with classification feeding the risk register.
+    common_mistakes:
+      - Risk assessment not connected to the actual systems in scope.
+    frequency: Annually.
+  - id: CC3.2-PF07
+    what_auditor_tests: >
+      Whether risks from vendors and partners are part of the assessment.
+    evidence_standard:
+      - Vendor risk entries or vendor risk assessments considered in the overall assessment.
+    good_examples:
+      - Risk register entry for dependence on the cloud provider, linked to the vendor review.
+    common_mistakes:
+      - Vendors assessed separately but never reflected in overall risk.
+    frequency: Annually.
+  - id: CC3.2-PF08
+    what_auditor_tests: >
+      Whether technical vulnerabilities in system components are identified and feed the risk process.
+    evidence_standard:
+      - Vulnerability scanning and configuration assessment outputs considered in risk decisions.
+    good_examples:
+      - Vulnerability scan summary attached to the risk assessment; critical findings tracked as risks.
+    common_mistakes:
+      - Scanning results never reviewed against risk.
+    frequency: Continuous scanning; summarized at least annually in the risk assessment.

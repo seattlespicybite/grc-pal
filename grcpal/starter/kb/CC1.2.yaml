@@ -1,0 +1,65 @@
+criterion: CC1.2
+title: Board or leadership oversight of internal control
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  Someone above day-to-day management (a board, an audit committee or, in a small private company, the
+  executive team acting in that role) oversees the security program and receives regular reports on it.
+  Auditors want to see who that is, what they were told, and that they could challenge it.
+auditor_approach:
+  - Asks who provides oversight and reads a charter, bylaws or written description of that responsibility.
+  - Inspects minutes or presentations from oversight meetings in the period that covered security, risk and audit results.
+  - For small companies without an independent board, reads how leadership compensates (for example an outside adviser or investor board seat).
+points:
+  - id: CC1.2-PF01
+    what_auditor_tests: >
+      Whether the oversight body and its responsibility for security and internal control are written down.
+    evidence_standard:
+      - Board or committee charter, or a governance document naming who oversees the security program.
+      - Shows what they are expected to review and how often.
+    good_examples:
+      - Board charter section on risk and information security oversight.
+      - Governance section of the information security policy naming the executive sponsor and the leadership review.
+    common_mistakes:
+      - Oversight assumed but never written down anywhere.
+      - Charter that mentions financial oversight only, not security or technology risk.
+    frequency: Reviewed annually.
+  - id: CC1.2-PF02
+    what_auditor_tests: >
+      Whether at least some overseers have enough security, technology or risk knowledge to understand and
+      challenge what management reports.
+    evidence_standard:
+      - Short description of who on the board or leadership brings security or technology expertise, or the outside adviser used.
+    good_examples:
+      - Board member bios showing technology or security background.
+      - Engagement letter with an external security adviser who reports to the board.
+    common_mistakes:
+      - No one with relevant expertise and no adviser, so oversight is a formality.
+    frequency: Reviewed annually or when the board changes.
+  - id: CC1.2-PF03
+    what_auditor_tests: >
+      Whether oversight is independent enough from the people who run the controls; in small companies, how
+      that limitation is handled.
+    evidence_standard:
+      - Board composition showing independent members, or a documented explanation of compensating measures.
+    good_examples:
+      - Board with investor and independent directors receiving security reports from the CTO.
+      - Written note that the founder-led board is not independent, with an annual review by an outside adviser as compensation.
+    common_mistakes:
+      - The security lead reports only to themselves; nobody independent ever sees the results.
+    frequency: Annually.
+  - id: CC1.2-PF04
+    what_auditor_tests: >
+      Whether overseers actually receive and discuss information about security controls, risks, incidents and
+      audit findings during the period.
+    evidence_standard:
+      - Minutes, agenda or slides from oversight meetings in the period with a security or compliance item.
+      - Evidence that issues raised were followed up.
+    good_examples:
+      - Quarterly board deck with a security metrics slide and the minutes recording questions and actions.
+      - Annual management review of the security program signed by the CEO.
+    common_mistakes:
+      - Minutes that say "security update provided" with no content.
+      - The only oversight meeting falls outside the observation period.
+    frequency: At least annually and inside the observation period; quarterly is common.

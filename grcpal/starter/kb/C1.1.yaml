@@ -1,0 +1,33 @@
+criterion: C1.1
+title: Confidential information is identified and protected
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  You know which information is confidential (customer data, employee data, trade secrets), where it lives,
+  and you protect it for as long as you keep it: classification, access restrictions, encryption, and
+  protection against accidental loss or deletion.
+auditor_approach:
+  - Inspects the classification policy and the data inventory showing where confidential data is stored.
+  - Inspects protections over confidential data stores (encryption, access, backup).
+points:
+  - id: C1.1-PF01
+    what_auditor_tests: >
+      Whether confidential information is identified when received or created, and where it is kept.
+    evidence_standard:
+      - Classification policy and data inventory listing confidential data stores.
+    good_examples:
+      - Data inventory with classification column; customer contract terms defining confidential information.
+    common_mistakes:
+      - Confidential data in places not listed (support tickets, analytics, logs).
+    frequency: Reviewed annually and when data stores change.
+  - id: C1.1-PF02
+    what_auditor_tests: >
+      Whether confidential information is protected against loss or destruction while retained.
+    evidence_standard:
+      - Backup, soft delete and encryption settings for confidential data stores.
+    good_examples:
+      - Storage soft delete and versioning enabled; database backups with retention matching the retention schedule.
+    common_mistakes:
+      - A single administrator can permanently delete data and its backups.
+    frequency: Configuration at least once in the period.

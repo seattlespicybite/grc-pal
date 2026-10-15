@@ -1,0 +1,64 @@
+criterion: CC6.8
+title: Unauthorized or malicious software is prevented or detected
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  Only approved software runs in your environment, endpoints and servers have malware protection, and
+  unauthorized changes to software or configuration are detected. Evidence is endpoint protection coverage,
+  software installation restrictions and change detection.
+auditor_approach:
+  - Compares the device and server inventory with endpoint protection coverage.
+  - Inspects software installation restrictions and change detection mechanisms.
+points:
+  - id: CC6.8-PF01
+    what_auditor_tests: >
+      Whether installing software is restricted to approved software or authorized people.
+    evidence_standard:
+      - Policy and technical controls limiting software installation.
+    good_examples:
+      - Standard users without local admin rights; Company Portal for approved apps.
+    common_mistakes:
+      - Everyone is a local administrator.
+    frequency: Configuration at least once in the period.
+  - id: CC6.8-PF02
+    what_auditor_tests: >
+      Whether unauthorized changes to software and configuration are detected.
+    evidence_standard:
+      - Configuration drift detection or file integrity monitoring with alerts reviewed.
+    good_examples:
+      - Azure Policy or AWS Config drift alerts; infrastructure as code with drift checks.
+    common_mistakes:
+      - Manual console changes in production with nothing detecting them.
+    frequency: Continuous.
+  - id: CC6.8-PF03
+    what_auditor_tests: >
+      Whether a defined change process is used for software and configuration (tested in detail under CC8.1).
+    evidence_standard:
+      - Change management process applied to production software.
+    good_examples:
+      - Branch protection and CI/CD pipeline as the only path to production.
+    common_mistakes:
+      - Direct deployments from developer laptops.
+    frequency: Ongoing.
+  - id: CC6.8-PF04
+    what_auditor_tests: >
+      Whether anti-malware protection is installed, up to date and monitored on endpoints and servers.
+    evidence_standard:
+      - Endpoint protection coverage report reconciled to the device and server inventory.
+      - Signature or engine status and alert handling.
+    good_examples:
+      - Defender for Endpoint device inventory showing active protection on all devices.
+    common_mistakes:
+      - Coverage gaps on Linux servers or contractor devices.
+    frequency: Continuous with periodic coverage reports.
+  - id: CC6.8-PF05
+    what_auditor_tests: >
+      Whether files and software from outside are scanned before use.
+    evidence_standard:
+      - Email and download scanning; dependency and container image scanning.
+    good_examples:
+      - Email attachment scanning enabled; Dependabot or container image scanning in CI.
+    common_mistakes:
+      - Third-party packages pulled into production builds with no scanning.
+    frequency: Continuous.

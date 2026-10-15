@@ -946,6 +946,9 @@ class Portal(FeaturesMixin, AccountsMixin):
         table("audit_log", [r for r in self.log.records() if cycle["start"] <= r["at"][:10] and r["at"] <= end])
         table("control_definition_changes", [{k: v for k, v in r.items() if k not in ("PartitionKey", "RowKey")}
                                              for r in self.control_definition_history()])
+        table("implementation_notes", sorted(({k: v for k, v in r.items() if k not in ("PartitionKey", "RowKey")}
+                                              for r in self.store.list("controlnotes", "n")),
+                                             key=lambda r: (r["control"], r["version"])))
         files["audit_chain_verification.json"] = json.dumps(self.log.verify(), indent=2).encode()
         files["cycle.json"] = json.dumps({k: v for k, v in cycle.items() if k != "PartitionKey"}, indent=2).encode()
         if control_status is not None:
@@ -961,6 +964,7 @@ class Portal(FeaturesMixin, AccountsMixin):
             "uploads_and_reviews.csv is the full population of portal evidence for the cycle with reviewer decisions.\n"
             "Each upload's sha256 matches the file under evidence/ and the write-once evidence store.\n"
             "audit_chain_verification.json shows whether the tamper-evident audit log verified at export time.\n"
+            "implementation_notes.csv holds every version of each control's 'How we meet this control' notes.\n"
             "MANIFEST.csv lists the SHA-256 of every file in this archive.\n").encode()
         manifest = io.StringIO()
         mw = csv.writer(manifest)

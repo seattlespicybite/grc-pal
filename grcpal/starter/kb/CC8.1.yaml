@@ -1,0 +1,168 @@
+criterion: CC8.1
+title: Changes are authorized, designed, tested, approved and implemented
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  Every change to production (code, infrastructure, configuration) goes through a controlled path: it is
+  tracked, reviewed by someone other than the author, tested, approved and deployed through a pipeline.
+  Emergency changes have a defined fast path with review afterwards. Auditors pull the population of
+  production changes and sample them, so the pipeline and pull request history are your best evidence.
+auditor_approach:
+  - Requests the complete population of production changes in the period (deployments or merged pull requests) and checks how it was generated.
+  - Samples changes and checks for a ticket or description, peer review by someone other than the author, passing tests and approval before deployment.
+  - Inspects branch protection and pipeline settings to confirm the controls cannot be bypassed, and checks who can bypass them.
+  - Samples emergency changes and checks for after-the-fact review.
+points:
+  - id: CC8.1-PF01
+    what_auditor_tests: >
+      Whether changes are managed through the whole life cycle, from request to deployment.
+    evidence_standard:
+      - Change management policy and the tooling that enforces it.
+    good_examples:
+      - Change policy describing pull request, review, CI and deployment stages; pipeline definition in the repository.
+    common_mistakes:
+      - Policy describes a process (change board) the team does not use.
+    frequency: Policy reviewed annually.
+  - id: CC8.1-PF02
+    what_auditor_tests: >
+      Whether changes are authorized before work is done or deployed.
+    evidence_standard:
+      - Link from each sampled change to an authorized ticket, issue or roadmap item.
+    good_examples:
+      - Pull request referencing an issue that was prioritized by the product owner.
+    common_mistakes:
+      - Changes with no ticket or description of why they were made.
+    frequency: Every change; sampled.
+  - id: CC8.1-PF03
+    what_auditor_tests: >
+      Whether changes are designed and developed following secure development practices.
+    evidence_standard:
+      - Secure development guidelines and design review for significant changes.
+    good_examples:
+      - Architecture decision records for major features; secure coding checklist in the pull request template.
+    common_mistakes:
+      - Large changes merged without any design discussion.
+    frequency: Significant changes; sampled.
+  - id: CC8.1-PF04
+    what_auditor_tests: >
+      Whether changes are documented.
+    evidence_standard:
+      - Pull request description, linked ticket and release notes.
+    good_examples:
+      - Pull request template requiring summary, testing notes and risk.
+    common_mistakes:
+      - Empty pull request descriptions.
+    frequency: Every change.
+  - id: CC8.1-PF05
+    what_auditor_tests: >
+      Whether changes are tracked so a complete population exists.
+    evidence_standard:
+      - Complete list of production changes in the period from the source system, with how it was produced.
+    good_examples:
+      - GitHub API export of merged pull requests to the main branch, stored by a GRC-pal collector.
+    common_mistakes:
+      - Infrastructure changes made in the cloud console that never appear in the change list.
+    frequency: Continuous; population pulled for the audit.
+  - id: CC8.1-PF06
+    what_auditor_tests: >
+      Whether software and systems are configured according to defined settings during deployment.
+    evidence_standard:
+      - Infrastructure as code or configuration management used for production.
+    good_examples:
+      - Bicep or Terraform templates applied by the pipeline.
+    common_mistakes:
+      - Snowflake servers configured by hand.
+    frequency: Ongoing.
+  - id: CC8.1-PF07
+    what_auditor_tests: >
+      Whether changes are tested before deployment.
+    evidence_standard:
+      - CI test results for sampled changes; test environment usage.
+    good_examples:
+      - Required CI status checks passing before merge, visible on each pull request.
+    common_mistakes:
+      - Status checks not required, so failing builds can be merged.
+    frequency: Every change; sampled.
+  - id: CC8.1-PF08
+    what_auditor_tests: >
+      Whether changes are approved by someone other than the author before deployment.
+    evidence_standard:
+      - Approving review by a person other than the author for each sampled change.
+      - Branch protection settings and the list of people who can bypass them.
+    good_examples:
+      - Branch protection requiring one approving review, dismissing stale approvals, applying to admins.
+    common_mistakes:
+      - Administrators can bypass branch protection and did so without review.
+      - Approval given after the merge.
+    frequency: Every change; sampled.
+  - id: CC8.1-PF09
+    what_auditor_tests: >
+      Whether deployment is controlled, so only approved changes reach production.
+    evidence_standard:
+      - Deployment pipeline as the only path to production; who has direct production write access.
+    good_examples:
+      - Deployment environment protection rules; production credentials available only to the pipeline.
+    common_mistakes:
+      - Engineers can deploy from their laptops.
+    frequency: Configuration inspected; deployments sampled.
+  - id: CC8.1-PF10
+    what_auditor_tests: >
+      Whether the impact of system changes on security and controls is identified and evaluated.
+    evidence_standard:
+      - Risk or security consideration recorded for significant changes.
+    good_examples:
+      - Security review label required on pull requests touching authentication or data storage.
+    common_mistakes:
+      - Security-relevant changes treated like any other change.
+    frequency: Significant changes.
+  - id: CC8.1-PF11
+    what_auditor_tests: >
+      Whether changes needed to fix incidents are identified and go through change control.
+    evidence_standard:
+      - Incident-related changes linked to incidents and following the process.
+    good_examples:
+      - Hotfix pull request linked to the incident ticket.
+    common_mistakes:
+      - Incident fixes applied directly in production with no record.
+    frequency: Event driven.
+  - id: CC8.1-PF12
+    what_auditor_tests: >
+      Whether baseline configurations exist and are maintained.
+    evidence_standard:
+      - Baseline configuration definitions and their change history.
+    good_examples:
+      - Baseline templates in the repository with approved changes.
+    common_mistakes:
+      - Baseline documented once and never updated.
+    frequency: Reviewed annually and on change.
+  - id: CC8.1-PF13
+    what_auditor_tests: >
+      Whether emergency changes have a defined process with review after the fact.
+    evidence_standard:
+      - Emergency change procedure and the population of emergency changes with post-implementation review.
+    good_examples:
+      - Emergency label on pull requests with retrospective approval within 2 business days.
+    common_mistakes:
+      - Many changes labeled emergency to skip review.
+    frequency: Event driven; sampled.
+  - id: CC8.1-PF14
+    what_auditor_tests: >
+      Whether confidential data is protected during development and testing (no production data in test without safeguards).
+    evidence_standard:
+      - Policy on test data and evidence of synthetic or masked data in non-production.
+    good_examples:
+      - Seed scripts generating synthetic data; masking job for any production copy.
+    common_mistakes:
+      - Production database copied to a developer environment.
+    frequency: Reviewed annually; enforced continuously.
+  - id: CC8.1-PF15
+    what_auditor_tests: >
+      Whether patches are managed through a defined, timely process.
+    evidence_standard:
+      - Patch policy with timelines and evidence of patching for operating systems, dependencies and images.
+    good_examples:
+      - Automatic OS updates for managed services; Dependabot pull requests merged within SLA.
+    common_mistakes:
+      - Base images not rebuilt for months.
+    frequency: Ongoing; auditors sample patches or vulnerabilities.
