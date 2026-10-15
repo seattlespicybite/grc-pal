@@ -224,3 +224,40 @@ def test_cli_kit_and_restore(tmp_path, monkeypatch, capsys):
     assert cli.main(ev + ["backup", "restore", str(out), "--kit", str(kit)]) == 2
     actions = [r["action"] for r in AuditLog(TenantStore(SqliteStore(str(tmp_path / "src" / "grcpal.db")), "acme")).records()]
     assert "backup.kit_export" in actions and "backup.restore" not in actions
+
+
+def test_backup_from_an_older_version_without_newer_tables_restores(tmp_path, key, made):
+    """Found by the upgrade test: a 0.2.0 backup has no calendardecisions table; it must still restore."""
+    import tarfile
+
+    _, good, _ = made
+    members = {}
+    with good.open("rb") as f, tarfile.open(fileobj=backup._DecryptReader(f, key), mode="r|") as tar:
+        for m in tar:
+            members[m.name] = tar.extractfile(m).read()
+    manifest = json.loads(members.pop("manifest.json"))
+    for table in ("calendardecisions", "controlnotes"):  # tables a newer version added
+        members.pop(f"tables/{table}.jsonl")
+        manifest["tables"].pop(table)
+        manifest["table_sha256"].pop(table)
+    members["manifest.json"] = json.dumps(manifest).encode()
+    old = tmp_path / "old.grcbak"
+    write_raw(old, key, members)
+    assert backup.verify(old, key)["ok"]
+    result = backup.restore(old, key, backup.folder_instance(tmp_path / "restored"))
+    assert result["ok"]
+
+
+def test_a_table_listed_in_the_manifest_but_missing_is_still_caught(tmp_path, key, made):
+    import tarfile
+
+    _, good, _ = made
+    members = {}
+    with good.open("rb") as f, tarfile.open(fileobj=backup._DecryptReader(f, key), mode="r|") as tar:
+        for m in tar:
+            members[m.name] = tar.extractfile(m).read()
+    members.pop("tables/users.jsonl")
+    cut = tmp_path / "cut.grcbak"
+    write_raw(cut, key, members)
+    report = backup.verify(cut, key)
+    assert not report["ok"] and "table users is missing" in report["problems"]

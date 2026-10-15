@@ -617,13 +617,20 @@ def verify(path: Path, key: bytes) -> dict:
         raise BackupError("The backup file is incomplete (no manifest)")
 
     problems: list[str] = []
-    for table in BACKUP_TABLES:
-        want = manifest.get("table_sha256", {}).get(table)
+    # The tables the backup says it has. A backup from an older version lacks tables added since; those simply
+    # start empty after a restore. (Tables are never removed, and unknown table names are rejected above.)
+    listed_tables = manifest.get("table_sha256", {})
+    if not listed_tables:
+        problems.append("the manifest lists no tables")
+    for table, want in listed_tables.items():
         got = seen.get(f"tables/{table}.jsonl")
-        if want is None or got is None:
+        if got is None:
             problems.append(f"table {table} is missing")
         elif got[0] != want or table_lines.get(table) != manifest["tables"].get(table):
             problems.append(f"table {table} does not match the manifest")
+    for name in seen:
+        if name.startswith("tables/") and name[7:-6] not in listed_tables:
+            problems.append(f"{name} is not listed in the manifest")
     listed = {f["name"]: f for f in manifest.get("files", [])}
     for name, f in listed.items():
         if name not in seen:
@@ -695,6 +702,7 @@ def restore(path: Path, key: bytes, inst: Instance, accept_audit_problems: bool 
         except (tarfile.TarError, ValueError, EOFError) as exc:
             raise BackupError(f"The backup file is damaged ({type(exc).__name__}); the restore stopped") from None
 
+    from grcpal import migrations
     from grcpal.portal.auditlog import AuditLog
 
     with Path(path).open("rb") as f:
@@ -706,7 +714,11 @@ def restore(path: Path, key: bytes, inst: Instance, accept_audit_problems: bool 
                    {"file": Path(path).name, "sha256": file_sha, "from_version": m.get("app_version"),
                     "schema_version": m.get("schema_version"), "backup_created": m.get("created"),
                     "accepted_audit_problems": bool(report["problems"])})
-        r = log.verify()
+    # the rows are at the backup's data model; bring them up to this version's (recorded in each audit log)
+    migrations.set_version(inst.base, int(m.get("schema_version", 1)))
+    upgraded = migrations.migrate(inst.base, audit=migrations.audit_all(inst.base))
+    for t in m.get("tenants", []):
+        r = AuditLog(TenantStore(inst.base, t)).verify()
         audit[t] = {"ok": r["ok"], "records": r["records"]}
     warnings = []
     if m.get("settings_key_id") and m["settings_key_id"] != _settings_key_id():
@@ -717,7 +729,7 @@ def restore(path: Path, key: bytes, inst: Instance, accept_audit_problems: bool 
     return {"ok": all(a["ok"] for a in audit.values()), "backup_id": m["backup_id"],
             "from_version": m.get("app_version"), "schema_version": m.get("schema_version"),
             "created": m.get("created"), "tenants": m.get("tenants"), "rows": rows, "files": files,
-            "audit": audit, "warnings": warnings}
+            "audit": audit, "migrations_applied": upgraded, "warnings": warnings}
 
 
 def summary(report: dict) -> dict:

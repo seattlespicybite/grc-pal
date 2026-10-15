@@ -180,8 +180,26 @@ test VM) and keep the JSON result as evidence (SOC 2 A1.3); also open the latest
 ## Upgrades
 
 Pin a version: set the image tag (`--image ghcr.io/seattlespicybite/grc-pal:0.2.0`) and the
-`GRCPAL_VERSION` repository variable to the same release. Read the CHANGELOG first. Upgrades never
-rewrite stored evidence; data model changes are additive.
+`GRCPAL_VERSION` repository variable to the same release. Read the CHANGELOG first.
+
+### What an update may change
+
+| Release | Example | Data model | Going back to the previous version |
+| --- | --- | --- | --- |
+| Patch (0.2.1) | Bug and security fixes | Never changes | Start the previous image |
+| Minor (0.3.0) | Features, design changes | Only adds (new fields, rows, tables) | Start the previous image: it still reads the data |
+| Major (1.0, 2.0) | Larger changes | May clean up what an earlier release announced | Restore the backup taken before the update |
+
+- **Evidence is never changed by an update.** Migrations only get the table store.
+- **Migrations run when the portal starts** (and on `grcpal migrate`), in order, once each. Each one is
+  recorded in every organization's audit log (`system.migration`) and in the instance's data model
+  history. `grcpal migrate --check` shows the version and anything pending.
+- **An older version refuses to start only when it can no longer read the data** (after a major
+  update), with a message saying to start the newer version again or restore the pre-update backup.
+- **CI proves it on every change:** it installs the previous release, loads demo data, takes a backup
+  with it, upgrades to the new code and checks that every row, every evidence file and every audit
+  chain is unchanged, that the portal starts, and that the old backup restores
+  (`deploy/ci/upgrade_check.py`). The release workflow refuses a tag that breaks the version rules.
 
 ## Local administration
 

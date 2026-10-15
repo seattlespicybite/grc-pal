@@ -22,7 +22,9 @@ explain choices in plain words, keep changes small, never leave the test suite r
   | catalog, frameworks, collectors, evidence, report, tasks, checks | `tests/test_framework.py` |
   | service, auth, store, audit log, uploads, users, routes in `app.py` | `tests/test_portal.py` |
   | settings, integrations, AI, logs, frameworks page, `routes_extra.py` | `tests/test_features.py` |
-  | backup, `store.TABLES`, `SCHEMA_VERSION` | `tests/test_backup.py` |
+  | backup, restore, `store.TABLES` | `tests/test_backup.py tests/test_restore.py` |
+  | Backups page, locations, retention | `tests/test_backups_page.py` |
+  | migrations, `SCHEMA_VERSION`, `RELEASES` | `tests/test_migrations.py` |
   | templates, `app.js`, `app.css` | `tests/test_portal.py -k render` (also checks strict CSP), then the full suite |
 - Show diffs or changed parts only; do not paste whole files or full test output back.
 - Done means: full suite green, pyflakes clean, docs/CHANGELOG updated if behavior changed.
@@ -48,7 +50,9 @@ explain choices in plain words, keep changes small, never leave the test suite r
 | Collectors (Entra, Intune, Azure, AWS, GCP, GitHub) | `grcpal/collectors/*.py` (register in `NAMES` and `PLATFORMS`), clients in `grcpal/clients.py`, `grcpal/integrations/` |
 | Evidence store (write-once, SHA-256 manifests, tenant namespace) | `grcpal/evidence.py` |
 | Health report | `grcpal/report.py` |
-| Backup file (.grcbak: encrypt, create, verify) | `grcpal/backup.py` |
+| Backup file (.grcbak: encrypt, create, verify, restore, recovery kit) | `grcpal/backup.py` |
+| Backup locations, retention, schedule; Backups page rules | `grcpal/backup_store.py`, `grcpal/portal/backups.py`, `routes_backups.py` |
+| Data model versions, migrations, release rules, upgrade test | `grcpal/migrations.py`, `deploy/ci/upgrade_check.py` |
 | Settings registry (Configuration page, Setup guide, encryption) | `grcpal/settings.py` (`SCHEMA`), validators in `grcpal/integrations/` |
 | Custom checks (HTTP, TLS, command) and SSRF guard | `grcpal/checks.py` |
 | AI review and mock audit | `grcpal/ai/providers.py`, `grcpal/ai/review.py` |
@@ -85,6 +89,10 @@ explain choices in plain words, keep changes small, never leave the test suite r
    and refused after their `access_until` date. Passwords and tokens are stored only as hashes (`accounts.py`).
 8. Keep `Referrer-Policy: same-origin` (no-referrer makes browsers send `Origin: null` and breaks forms).
 9. No real organization names, emails or secrets in code, tests or fixtures. Use `example.com`.
+10. Data model changes go through `grcpal/migrations.py`: additive only, numbered, `SCHEMA_VERSION` = 1 +
+    number of migrations, never in a patch release, `breaking=True` only in a major release. Migrations get
+    the table store only (never evidence). Add `"X.Y.Z": SCHEMA_VERSION` to `RELEASES` in every release.
+    New tables need no migration but must be in `store.TABLES` (a test scans for them).
 
 ## Patterns to copy
 - New integration: section in `settings.SCHEMA` with help text -> validator in `grcpal/integrations/` ->

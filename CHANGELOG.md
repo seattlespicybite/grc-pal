@@ -23,14 +23,14 @@ All notable changes are listed here. The project follows [semantic versioning](h
   Every action is audited (`backup.requested`, `backup.schedule`, `backup.download`, `backup.verify`,
   `backup.kit_export`, `backup.retention_delete`).
 - `grcpal backup run-due`: the hourly runner for the schedule and queued requests (VM timer, Azure job).
-
-### Fixed
-- `sessions` and `account_links` (local sign-in sessions and one-time setup/reset links) were missing from
-  the table registry, so Azure Table Storage never created them, and `account_links` was not a valid Azure
-  table name. Both are now registered (Azure names drop underscores) and are deliberately never backed up:
-  restoring them would revive old sign-ins and used links. A test now fails if code uses an unregistered table.
-
-### Added
+- **Safe data model upgrades**: numbered, additive migrations (`grcpal/migrations.py`) run once each when
+  the portal starts or with `grcpal migrate`, recorded in every audit log (`system.migration`). Migrations
+  never get access to evidence. An older version refuses to start only on data it can no longer read.
+  Restoring an older backup upgrades it right away.
+- **Upgrade test in CI**: installs the previous release, loads demo data and a backup made with it, upgrades
+  to the new code and checks every row, evidence file and audit chain is unchanged, the portal starts and the
+  old backup restores. The release workflow checks the version rules (data model changes only in minor or
+  major releases).
 - **Security calendar** (`/calendar`, admins and auditors): every recurring activity from
   `catalog/tasks.yaml` with its due dates, in Year, Month and List views, plus the dates collectors and
   checks actually ran (hide them with one click). Only activities whose controls map to a framework in
@@ -48,6 +48,14 @@ All notable changes are listed here. The project follows [semantic versioning](h
 - Calendar CSV (`/calendar.csv`) and, in the cycle export, `calendar_occurrences.csv` (the population of
   scheduled activities in the cycle) and `calendar_decisions.csv` (every decision, including corrected
   ones). CSV cells starting with `= + - @` are prefixed with a quote.
+
+### Fixed
+- A backup made by an older version (without tables added since, such as the calendar) failed `verify` and
+  could not be restored. Found by the new upgrade test.
+- `sessions` and `account_links` (local sign-in sessions and one-time setup/reset links) were missing from
+  the table registry, so Azure Table Storage never created them, and `account_links` was not a valid Azure
+  table name. Both are now registered (Azure names drop underscores) and are deliberately never backed up:
+  restoring them would revive old sign-ins and used links. A test now fails if code uses an unregistered table.
 
 ## [0.2.0] - 2026-10-14 - SOC 2 focus
 

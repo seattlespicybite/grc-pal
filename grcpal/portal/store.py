@@ -25,10 +25,11 @@ SCHEMA_VERSION = 1
 TABLES = ("users", "cycles", "assignments", "uploads", "comments", "overrides", "audit",
           "reminders", "acks", "config", "events", "jobs", "customcontrols", "checks", "frameworks",
           "aireviews", "aiaudits", "controledits", "controlhistory", "controlnotes", "calendardecisions",
-          "sessions", "account_links")
+          "sessions", "account_links", "meta")
 # Sign-in sessions and one-time setup/reset links are never backed up: restoring them would revive old
-# sign-ins and used or expired links. After a restore everyone signs in again.
-NOT_BACKED_UP = ("sessions", "account_links")
+# sign-ins and used or expired links. After a restore everyone signs in again. "meta" (instance-wide data
+# model version, see grcpal/migrations.py) is recorded in the backup manifest and set again by restore.
+NOT_BACKED_UP = ("sessions", "account_links", "meta")
 _JSON_FIELDS = {"contributors", "points", "detail", "controls", "values", "secrets", "mappings", "evidence",
                 "config", "result", "requirements", "findings", "package", "items", "summary", "assertions",
                 "headers", "steps", "last_test", "edit", "before", "after", "owner_emails", "links"}
@@ -112,7 +113,8 @@ class SqliteStore:
         return SqliteStore(path)
 
     def is_empty(self) -> bool:
-        return self._db.execute("SELECT 1 FROM entities LIMIT 1").fetchone() is None
+        """No application data (the instance-wide meta row does not count)."""
+        return self._db.execute("SELECT 1 FROM entities WHERE tbl != 'meta' LIMIT 1").fetchone() is None
 
     def close(self) -> None:
         self._db.close()
@@ -180,7 +182,8 @@ class TableStore:
         return [_decode(dict(e)) for e in items]
 
     def is_empty(self) -> bool:
-        return not any(next(iter(c.list_entities(results_per_page=1)), None) for c in self._clients.values())
+        return not any(next(iter(c.list_entities(results_per_page=1)), None)
+                       for name, c in self._clients.items() if name != "meta")
 
 
 class TenantStore:

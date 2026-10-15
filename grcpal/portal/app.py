@@ -57,7 +57,13 @@ def portal_from_env() -> Portal:
     if os.getenv("GRCPAL_ENV", "").lower() == "production" and not os.getenv("GRCPAL_TABLES_URL"):
         event("GRCPAL_TABLES_URL is not set: portal data is in a local SQLite file and is lost when the "
               "container restarts", 30)
-    portal = Portal(Catalog.load(base), store_mod.from_env(), EvidenceStore(os.getenv("GRCPAL_EVIDENCE_DIR", "evidence")),
+    store = store_mod.from_env()
+    from grcpal import migrations
+
+    applied = migrations.migrate(store.backend, audit=migrations.audit_all(store.backend))  # refuses too-new data
+    if applied:
+        event("data model upgraded", migrations=applied)
+    portal = Portal(Catalog.load(base), store, EvidenceStore(os.getenv("GRCPAL_EVIDENCE_DIR", "evidence")),
                     mailer=mailer_mod.from_env())
     if os.getenv("GRCPAL_DEMO") == "1":
         from grcpal.portal.demo import seed

@@ -211,11 +211,17 @@ def _portal(cat, evidence, required: bool = False):
         if required:
             raise SystemExit("Set GRCPAL_TABLES_URL (Azure Table Storage) or GRCPAL_SQLITE (local file) first")
         return None
+    from grcpal import migrations
     from grcpal.portal import mailer
     from grcpal.portal.service import Portal
     from grcpal.portal.store import from_env
 
-    portal = Portal(cat, from_env(), evidence)  # applies email settings saved in the portal, then the environment
+    store = from_env()
+    try:
+        migrations.migrate(store.backend, audit=migrations.audit_all(store.backend))
+    except migrations.SchemaError as exc:
+        raise SystemExit(str(exc)) from None
+    portal = Portal(cat, store, evidence)  # applies email settings saved in the portal, then the environment
     try:
         # scheduled jobs exit when done, so send synchronously instead of in the background
         sync_mailer = mailer.from_settings(portal.settings, sync=True)
@@ -446,6 +452,24 @@ def _audit_all_tenants(args, action: str, detail: dict) -> None:
         AuditLog(TenantStore(inst.base, t)).append("cli", action, "backup", detail)
 
 
+def cmd_migrate(args) -> int:
+    """Show or apply data model migrations (the portal also applies them when it starts)."""
+    from grcpal import migrations
+    from grcpal.portal.store import from_env
+
+    base = from_env().backend
+    try:
+        info = migrations.check(base)
+        if not args.check:
+            info["applied"] = migrations.migrate(base, audit=migrations.audit_all(base))
+            info.update(migrations.check(base))
+    except migrations.SchemaError as exc:
+        print(f"migrate: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(info, indent=2))
+    return 0
+
+
 def cmd_report(args) -> int:
     cat = Catalog.load(args.base)
     evidence = EvidenceStore(args.evidence)
@@ -557,6 +581,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="restore even if an audit log in the backup does not verify (recorded)")
     bk.add_argument("--out", help="kit: where to write the recovery kit")
     bk.set_defaults(fn=cmd_backup)
+
+    mg = sub.add_parser("migrate", help="show or apply data model migrations (also done at portal start)")
+    mg.add_argument("--check", action="store_true", help="only show the data model version and pending migrations")
+    mg.set_defaults(fn=cmd_migrate)
 
     args = p.parse_args(argv)
     if args.cmd == "collect" and not (args.all or args.names):
