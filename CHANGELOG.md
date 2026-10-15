@@ -4,6 +4,12 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Fixed
+- `sessions` and `account_links` (local sign-in sessions and one-time setup/reset links) were missing from
+  the table registry, so Azure Table Storage never created them, and `account_links` was not a valid Azure
+  table name. Both are now registered (Azure names drop underscores) and are deliberately never backed up:
+  restoring them would revive old sign-ins and used links. A test now fails if code uses an unregistered table.
+
 ### Added
 - **Security calendar** (`/calendar`, admins and auditors): every recurring activity from
   `catalog/tasks.yaml` with its due dates, in Year, Month and List views, plus the dates collectors and

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import re
 import json
 import os
 import stat
@@ -13,7 +14,7 @@ import pytest
 from grcpal import backup
 from grcpal.evidence import EvidenceStore
 from grcpal.portal.auditlog import AuditLog
-from grcpal.portal.store import TABLES, SqliteStore, TenantStore
+from grcpal.portal.store import NOT_BACKED_UP, TABLES, SqliteStore, TenantStore
 
 
 def make_instance(tmp_path: Path) -> backup.Instance:
@@ -51,7 +52,8 @@ def test_round_trip_captures_every_table_tenant_and_file(tmp_path, key):
     inst = make_instance(tmp_path)
     out = tmp_path / "b.grcbak"
     manifest = backup.create(inst, out, key)
-    assert set(manifest["tables"]) == set(TABLES)  # a new table can never be silently left out
+    assert set(manifest["tables"]) == set(backup.BACKUP_TABLES)  # a new table can never be silently left out
+    assert set(backup.BACKUP_TABLES) == set(TABLES) - set(NOT_BACKED_UP)
     assert manifest["tenants"] == ["acme", "globex"]
     assert manifest["rows"]["acme"]["users"] == 1
     names = {f["name"] for f in manifest["files"]}
@@ -271,3 +273,44 @@ def test_manifest_records_versions(tmp_path, key):
     manifest = backup.create(make_instance(tmp_path), tmp_path / "b.grcbak", key)
     assert manifest["app_version"] == __version__ and manifest["schema_version"] == SCHEMA_VERSION
     assert manifest["format"] == backup.FORMAT and json.dumps(manifest)
+
+
+def test_every_table_used_in_code_is_registered():
+    """A table missing from store.TABLES is never created on Azure and silently left out of backups."""
+    import re
+
+    from grcpal.portal.store import NOT_BACKED_UP
+
+    used = set()
+    for path in Path("grcpal").rglob("*.py"):
+        text = path.read_text()
+        used |= set(re.findall(r"store\.(?:insert|upsert|update|get|list|delete|list_prefix)\(\s*\"([a-z_]+)\"", text))
+        used |= set(re.findall(r"^\s*TABLE\s*=\s*\"([a-z_]+)\"", text, re.M))
+    assert used, "scan found no table names"
+    assert used <= set(TABLES), f"not in store.TABLES: {sorted(used - set(TABLES))}"
+    assert set(NOT_BACKED_UP) <= set(TABLES)
+
+
+def test_sign_in_sessions_and_links_are_never_backed_up(tmp_path, key):
+    from grcpal.portal.store import NOT_BACKED_UP
+
+    inst = make_instance(tmp_path)
+    ts = TenantStore(inst.base, "acme")
+    ts.insert("sessions", {"PartitionKey": "s", "RowKey": "a" * 64, "email": "admin@acme.example.com"})
+    ts.insert("account_links", {"PartitionKey": "l", "RowKey": "b" * 64, "email": "admin@acme.example.com"})
+    out = tmp_path / "b.grcbak"
+    manifest = backup.create(inst, out, key)
+    assert {"sessions", "account_links"} <= set(NOT_BACKED_UP)
+    assert not set(NOT_BACKED_UP) & set(manifest["tables"])
+    assert b"a" * 64 not in plaintext(out, key) and b"b" * 64 not in plaintext(out, key)
+    assert backup.verify(out, key)["ok"]
+
+
+def test_azure_table_names_are_valid():
+    from grcpal.portal.store import azure_table_name
+
+    for t in TABLES:
+        name = azure_table_name(t)
+        assert re.fullmatch(r"[A-Za-z][A-Za-z0-9]{2,62}", name), name
+    assert azure_table_name("account_links") == "grcpalaccountlinks"
+    assert len({azure_table_name(t) for t in TABLES}) == len(TABLES)
