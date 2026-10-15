@@ -24,7 +24,11 @@ from typing import Iterable
 SCHEMA_VERSION = 1
 TABLES = ("users", "cycles", "assignments", "uploads", "comments", "overrides", "audit",
           "reminders", "acks", "config", "events", "jobs", "customcontrols", "checks", "frameworks",
-          "aireviews", "aiaudits", "controledits", "controlhistory", "controlnotes", "calendardecisions")
+          "aireviews", "aiaudits", "controledits", "controlhistory", "controlnotes", "calendardecisions",
+          "sessions", "account_links")
+# Sign-in sessions and one-time setup/reset links are never backed up: restoring them would revive old
+# sign-ins and used or expired links. After a restore everyone signs in again.
+NOT_BACKED_UP = ("sessions", "account_links")
 _JSON_FIELDS = {"contributors", "points", "detail", "controls", "values", "secrets", "mappings", "evidence",
                 "config", "result", "requirements", "findings", "package", "items", "summary", "assertions",
                 "headers", "steps", "last_test", "edit", "before", "after", "owner_emails", "links"}
@@ -97,6 +101,11 @@ class SqliteStore:
         return [_decode(json.loads(r[0])) for r in rows]
 
 
+def azure_table_name(table: str) -> str:
+    """Azure table names allow letters and digits only."""
+    return "grcpal" + table.replace("_", "")
+
+
 class TableStore:
     """Azure Table Storage. Endpoint like https://<account>.table.core.windows.net"""
 
@@ -107,8 +116,8 @@ class TableStore:
         svc = TableServiceClient(endpoint=endpoint, credential=DefaultAzureCredential())
         self._clients = {}
         for name in TABLES:
-            svc.create_table_if_not_exists(f"grcpal{name}")
-            self._clients[name] = svc.get_table_client(f"grcpal{name}")
+            svc.create_table_if_not_exists(azure_table_name(name))
+            self._clients[name] = svc.get_table_client(azure_table_name(name))
 
     def insert(self, table: str, entity: dict) -> dict:
         self._clients[table].create_entity(_encode(entity))

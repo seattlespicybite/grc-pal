@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 from grcpal import __version__
-from grcpal.portal.store import SCHEMA_VERSION, TABLES, SqliteStore, TenantStore
+from grcpal.portal.store import NOT_BACKED_UP, SCHEMA_VERSION, TABLES, SqliteStore, TenantStore
 
 MAGIC = b"GRCBAK1\n"
 FORMAT = 1
@@ -47,6 +47,7 @@ _MAX_HEADER = 4096
 _MAX_MANIFEST = 256 << 20
 AREAS = ("evidence", "inbox", "config")
 ACTOR = "system@grc-pal.local"
+BACKUP_TABLES = tuple(t for t in TABLES if t not in NOT_BACKED_UP)
 
 
 class BackupError(Exception):
@@ -293,7 +294,7 @@ def _check_entry(member: tarfile.TarInfo) -> str:
     top = name.split("/", 1)[0]
     ok = member.isfile() and _safe(name) and (
         name == "manifest.json"
-        or (top == "tables" and name[7:-6] in TABLES and name.endswith(".jsonl") and name.count("/") == 1)
+        or (top == "tables" and name[7:-6] in BACKUP_TABLES and name.endswith(".jsonl") and name.count("/") == 1)
         or (top in AREAS and "/" in name))
     if not ok:
         raise BackupError(f"The backup contains an unexpected entry: {name[:200]!r}")
@@ -327,7 +328,7 @@ def create(inst: Instance, out: Path, key: bytes) -> dict:
     out = Path(out)
     started = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
     backup_id = f"{started:%Y%m%dT%H%M%SZ}-{secrets.token_hex(3)}"
-    rows = {t: inst.base.list_prefix(t, "") for t in TABLES}
+    rows = {t: inst.base.list_prefix(t, "") for t in BACKUP_TABLES}
     tenants = sorted({_tenant(r) for table in rows.values() for r in table})
 
     try:
@@ -358,7 +359,7 @@ def create(inst: Instance, out: Path, key: bytes) -> dict:
                     tar.addfile(info, h)
                     return h
 
-                for table in TABLES:
+                for table in BACKUP_TABLES:
                     ordered = sorted(rows[table], key=lambda r: (r["PartitionKey"], r["RowKey"]))
                     data = b"".join(json.dumps(r, sort_keys=True, default=str).encode() + b"\n" for r in ordered)
                     manifest["table_sha256"][table] = add(f"tables/{table}.jsonl", io.BytesIO(data), len(data)) \
@@ -447,7 +448,7 @@ def verify(path: Path, key: bytes) -> dict:
         raise BackupError("The backup file is incomplete (no manifest)")
 
     problems: list[str] = []
-    for table in TABLES:
+    for table in BACKUP_TABLES:
         want = manifest.get("table_sha256", {}).get(table)
         got = seen.get(f"tables/{table}.jsonl")
         if want is None or got is None:
