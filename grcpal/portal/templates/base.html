@@ -29,6 +29,7 @@
       {% elif view_fw %}<a href="/frameworks/{{ view_fw.id }}" class="{{ 'active' if in_framework }}">{{ view_fw.name.split(' (')[0].split(':')[0] }}</a>
       {% else %}<a href="/frameworks" class="{{ 'active' if path.startswith('/frameworks') or path.startswith('/criteria') or nav_active == 'framework' }}">Frameworks</a>{% endif %}{% endif %}
       <a href="/controls" class="{{ 'active' if path.startswith('/controls') and not in_framework }}">{{ 'My controls' if user.is_contributor else 'Controls' }}</a>
+      {% if user.sees_everything %}<a href="/calendar" class="{{ 'active' if path.startswith('/calendar') }}">Calendar {% if calendar_due %}<span class="count" title="Need your decision">{{ calendar_due }}</span>{% endif %}</a>{% endif %}
       {% if user.sees_everything %}<a href="/evidence" class="{{ 'active' if path.startswith('/evidence') }}">Evidence store</a>{% endif %}
       <a href="/policies" class="{{ 'active' if path.startswith('/policies') }}">Policies</a>
       <a href="/kb" class="{{ 'active' if path.startswith('/kb') }}">Knowledge base</a>

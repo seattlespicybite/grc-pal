@@ -24,7 +24,7 @@ from typing import Iterable
 SCHEMA_VERSION = 1
 TABLES = ("users", "cycles", "assignments", "uploads", "comments", "overrides", "audit",
           "reminders", "acks", "config", "events", "jobs", "customcontrols", "checks", "frameworks",
-          "aireviews", "aiaudits", "controledits", "controlhistory", "controlnotes")
+          "aireviews", "aiaudits", "controledits", "controlhistory", "controlnotes", "calendardecisions")
 _JSON_FIELDS = {"contributors", "points", "detail", "controls", "values", "secrets", "mappings", "evidence",
                 "config", "result", "requirements", "findings", "package", "items", "summary", "assertions",
                 "headers", "steps", "last_test", "edit", "before", "after", "owner_emails", "links"}

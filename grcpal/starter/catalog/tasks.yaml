@@ -1,8 +1,8 @@
-# Recurring manual and hybrid control tasks.
-# `grcpal tasks --open-due` creates a GitHub issue for each task due this month.
-# The issue is the evidence record: checklist, attachments, approver comment, close date.
-# cadence: monthly | quarterly | annual ; months: which months it opens (1-12)
-# due_days: days after opening; approver: role that must comment "Approved" before closing.
+# Recurring manual and hybrid control tasks. They appear on the portal's Security calendar, where an
+# admin records each occurrence as performed, performed late, not performed or not applicable.
+# cadence: monthly | quarterly | annual ; months: which months it opens (on the 1st, 1-12)
+# due_days: days after opening; due_time: optional "HH:MM" (default 17:00)
+# Without the portal, `grcpal tasks` opens a GitHub issue per task due this month instead.
 
 tasks:
   leadership-review:
