@@ -28,6 +28,39 @@ jobs:
       - name: Starter catalog validates
         run: grcpal validate
 
+  upgrade:
+    # Data made by the previous release must survive an upgrade to this commit: every row, every evidence
+    # file and every audit chain unchanged, the new portal starts, and the old backup restores.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0   # tags, to find the previous release
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Find the previous release
+        id: prev
+        run: echo "tag=$(git describe --tags --abbrev=0 --match 'v*.*.*' HEAD 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+      - name: No release yet
+        if: steps.prev.outputs.tag == ''
+        run: echo "::notice::No release tag yet, so there is nothing to upgrade from; skipped."
+      - name: Seed data with the previous release
+        if: steps.prev.outputs.tag != ''
+        env:
+          TAG: ${{ steps.prev.outputs.tag }}
+        run: |
+          git worktree add /tmp/previous "$TAG"
+          python -m venv /tmp/old
+          /tmp/old/bin/pip install "/tmp/previous[portal]"
+          /tmp/old/bin/python -I deploy/ci/upgrade_check.py seed /tmp/upgrade
+      - name: Upgrade to this commit and check nothing was lost
+        if: steps.prev.outputs.tag != ''
+        run: |
+          pip install -e ".[dev]"
+          python -I deploy/ci/upgrade_check.py check /tmp/upgrade
+
   infrastructure:
     runs-on: ubuntu-latest
     steps:

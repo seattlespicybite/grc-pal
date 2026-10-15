@@ -25,6 +25,9 @@ Portal administration (uses GRCPAL_TABLES_URL or GRCPAL_SQLITE)
     grcpal backup keygen --key-file backup.key            new backup key (keep it outside the instance)
     grcpal backup create acme.grcbak --key-file backup.key   whole-instance encrypted backup
     grcpal backup verify acme.grcbak --key-file backup.key   prove a backup is complete and unchanged
+    grcpal backup kit --out recovery-kit.json              backup key + app key, for a password manager
+    grcpal backup run-due                                  hourly: queued "Back up now" and the schedule from the Backups page
+    grcpal backup restore acme.grcbak --kit recovery-kit.json   restore into an empty instance (or --into DIR)
 """
 from __future__ import annotations
 
@@ -208,11 +211,17 @@ def _portal(cat, evidence, required: bool = False):
         if required:
             raise SystemExit("Set GRCPAL_TABLES_URL (Azure Table Storage) or GRCPAL_SQLITE (local file) first")
         return None
+    from grcpal import migrations
     from grcpal.portal import mailer
     from grcpal.portal.service import Portal
     from grcpal.portal.store import from_env
 
-    portal = Portal(cat, from_env(), evidence)  # applies email settings saved in the portal, then the environment
+    store = from_env()
+    try:
+        migrations.migrate(store.backend, audit=migrations.audit_all(store.backend))
+    except migrations.SchemaError as exc:
+        raise SystemExit(str(exc)) from None
+    portal = Portal(cat, store, evidence)  # applies email settings saved in the portal, then the environment
     try:
         # scheduled jobs exit when done, so send synchronously instead of in the background
         sync_mailer = mailer.from_settings(portal.settings, sync=True)
@@ -372,25 +381,38 @@ def cmd_backup(args) -> int:
 
     try:
         if args.action == "keygen":
-            key = backup.new_key()
-            if not args.key_file:
-                print(key)
+            path = Path(args.key_file) if args.key_file else backup.default_key_file()
+            if path is None:
+                print(backup.new_key())
             else:
-                fd = os.open(args.key_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-                with os.fdopen(fd, "w") as f:
-                    f.write(key + "\n")
-            print("Store this backup key outside the instance (password manager or Key Vault). Without it a backup "
-                  "cannot be read; it is not the same as GRCPAL_ENCRYPTION_KEY.", file=sys.stderr)
+                backup._write_private(path, backup.new_key() + "\n")
+                print(f"backup key -> {path}", file=sys.stderr)
+            print("Next: grcpal backup kit --out recovery-kit.json, and keep that file in a password manager, "
+                  "apart from the backups. Without the key a backup cannot be read.", file=sys.stderr)
+            return 0
+        if args.action == "run-due":
+            done = _admin_portal(args).run_due_backups()
+            print(json.dumps({"ok": all(d.get("verified") for d in done), "backups": done}, indent=2))
+            return 0 if all(d.get("verified") for d in done) else 2
+        kit = backup.load_kit(Path(args.kit).read_text()) if getattr(args, "kit", None) else None
+        try:
+            key = kit["key"] if kit else backup.resolve_key(args.key_file)
+        except backup.BackupError as exc:
+            raise SystemExit(str(exc)) from None
+        if args.action == "kit":
+            if not args.out:
+                raise SystemExit("grcpal backup kit needs --out FILE")
+            settings_key = backup._settings_key()
+            backup._write_private(Path(args.out), backup.make_kit(key, settings_key, os.getenv("GRCPAL_PUBLIC_URL", "")))
+            _audit_all_tenants(args, "backup.kit_export", {"file": Path(args.out).name})
+            out = {"ok": True, "kit": args.out, "backup_key_id": backup.key_id(key),
+                   "settings_key_included": bool(settings_key)}
+            print(json.dumps(out, indent=2))
+            if not settings_key:
+                print("Warning: GRCPAL_ENCRYPTION_KEY is not set here, so the kit has no settings key.", file=sys.stderr)
             return 0
         if not args.file:
             raise SystemExit(f"grcpal backup {args.action} needs a file name")
-        if args.key_file:
-            key = backup.load_key(Path(args.key_file).read_text())
-        elif os.getenv("GRCPAL_BACKUP_KEY"):
-            key = backup.load_key(os.environ["GRCPAL_BACKUP_KEY"])
-        else:
-            raise SystemExit("Give the backup key with --key-file or the GRCPAL_BACKUP_KEY environment variable "
-                             "(create one with: grcpal backup keygen)")
         if args.action == "create":
             manifest = backup.create(backup.from_env(args.evidence), Path(args.file), key)
             report = {"ok": all(a["ok"] for a in manifest["audit"].values()), "problems": [],
@@ -398,6 +420,13 @@ def cmd_backup(args) -> int:
             report["problems"] = [f"audit log of tenant {t} does not verify"
                                   for t, a in manifest["audit"].items() if not a["ok"]]
             out = {**backup.summary(report), "file": args.file, "sha256": manifest["file_sha256"]}
+        elif args.action == "restore":
+            target = backup.folder_instance(Path(args.into)) if args.into else backup.from_env(args.evidence, create=True)
+            out = backup.restore(Path(args.file), key, target, accept_audit_problems=args.accept_audit_problems)
+            if args.into:
+                out["restored_into"] = args.into
+            for w in out["warnings"]:
+                print(f"Note: {w}", file=sys.stderr)
         else:
             report = backup.verify(Path(args.file), key)
             out = backup.summary(report)
@@ -406,6 +435,39 @@ def cmd_backup(args) -> int:
         return 2
     print(json.dumps(out, indent=2))
     return 0 if out["ok"] else 2
+
+
+def _audit_all_tenants(args, action: str, detail: dict) -> None:
+    """Best effort: record a CLI operator action in every tenant's audit log."""
+    from grcpal import backup
+    from grcpal.portal.auditlog import AuditLog
+    from grcpal.portal.store import TenantStore
+
+    try:
+        inst = backup.from_env(args.evidence)
+    except backup.BackupError:
+        return
+    tenants = {r["PartitionKey"].split("|", 1)[0] for r in inst.base.list_prefix("users", "")}
+    for t in sorted(tenants):
+        AuditLog(TenantStore(inst.base, t)).append("cli", action, "backup", detail)
+
+
+def cmd_migrate(args) -> int:
+    """Show or apply data model migrations (the portal also applies them when it starts)."""
+    from grcpal import migrations
+    from grcpal.portal.store import from_env
+
+    base = from_env().backend
+    try:
+        info = migrations.check(base)
+        if not args.check:
+            info["applied"] = migrations.migrate(base, audit=migrations.audit_all(base))
+            info.update(migrations.check(base))
+    except migrations.SchemaError as exc:
+        print(f"migrate: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(info, indent=2))
+    return 0
 
 
 def cmd_report(args) -> int:
@@ -509,10 +571,20 @@ def main(argv: list[str] | None = None) -> int:
     # allow_abbrev=False: "--key <value>" must fail, never be read as --key-file (keys stay out of shell history)
     bk = sub.add_parser("backup", help="encrypted backup of the whole instance (tables, evidence, inbox, config)",
                         allow_abbrev=False)
-    bk.add_argument("action", choices=["create", "verify", "keygen"])
-    bk.add_argument("file", nargs="?", help="backup file (.grcbak) to write or check")
-    bk.add_argument("--key-file", help="file holding the backup key (default: GRCPAL_BACKUP_KEY)")
+    bk.add_argument("action", choices=["create", "verify", "restore", "keygen", "kit", "run-due"])
+    bk.add_argument("file", nargs="?", help="backup file (.grcbak) to write, check or restore")
+    bk.add_argument("--key-file", help="file holding the backup key (default: GRCPAL_BACKUP_KEY, then "
+                                       "keys/backup.key next to the database)")
+    bk.add_argument("--kit", help="recovery kit file (holds the backup key) instead of --key-file")
+    bk.add_argument("--into", help="restore: a new, empty folder to restore into instead of this instance")
+    bk.add_argument("--accept-audit-problems", action="store_true",
+                    help="restore even if an audit log in the backup does not verify (recorded)")
+    bk.add_argument("--out", help="kit: where to write the recovery kit")
     bk.set_defaults(fn=cmd_backup)
+
+    mg = sub.add_parser("migrate", help="show or apply data model migrations (also done at portal start)")
+    mg.add_argument("--check", action="store_true", help="only show the data model version and pending migrations")
+    mg.set_defaults(fn=cmd_migrate)
 
     args = p.parse_args(argv)
     if args.cmd == "collect" and not (args.all or args.names):

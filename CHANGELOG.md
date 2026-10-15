@@ -4,13 +4,33 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
-### Fixed
-- `sessions` and `account_links` (local sign-in sessions and one-time setup/reset links) were missing from
-  the table registry, so Azure Table Storage never created them, and `account_links` was not a valid Azure
-  table name. Both are now registered (Azure names drop underscores) and are deliberately never backed up:
-  restoring them would revive old sign-ins and used links. A test now fails if code uses an unregistered table.
-
 ### Added
+- **Restore**: `grcpal backup restore FILE` checks the whole backup first and writes nothing unless it is
+  intact, then fills an empty instance or a new folder (`--into`); it never overwrites data. Files are
+  re-hashed as they are written. A backup from a newer data model is refused. Each tenant's audit chain
+  continues with a `backup.restore` record.
+- **Recovery kit**: `grcpal backup kit --out FILE` writes the backup key and the app key
+  (`GRCPAL_ENCRYPTION_KEY`) to one owner-only file for a password manager; `restore --kit FILE` uses it.
+  `grcpal backup keygen` now creates `keys/backup.key` next to the database by default.
+- Backups of SQLite installs are read from a point-in-time copy, so rows written during a backup never
+  mix in.
+- The first-run sign-in page shows the restore command next to `create-admin`.
+- **Backups page** (Administration → Backups, admins only): back up now, daily or weekly schedule,
+  retention (7 daily, 4 weekly, 12 monthly, 3 before updates; never the newest verified one), every
+  backup checked right after it is written, Check and Download per backup, recovery kit download with a
+  reminder banner. Locations come from server settings (`GRCPAL_BACKUP_DIR`, optional second location,
+  Azure container), never from the browser. Works only when the instance holds one organization.
+  Every action is audited (`backup.requested`, `backup.schedule`, `backup.download`, `backup.verify`,
+  `backup.kit_export`, `backup.retention_delete`).
+- `grcpal backup run-due`: the hourly runner for the schedule and queued requests (VM timer, Azure job).
+- **Safe data model upgrades**: numbered, additive migrations (`grcpal/migrations.py`) run once each when
+  the portal starts or with `grcpal migrate`, recorded in every audit log (`system.migration`). Migrations
+  never get access to evidence. An older version refuses to start only on data it can no longer read.
+  Restoring an older backup upgrades it right away.
+- **Upgrade test in CI**: installs the previous release, loads demo data and a backup made with it, upgrades
+  to the new code and checks every row, evidence file and audit chain is unchanged, the portal starts and the
+  old backup restores. The release workflow checks the version rules (data model changes only in minor or
+  major releases).
 - **Security calendar** (`/calendar`, admins and auditors): every recurring activity from
   `catalog/tasks.yaml` with its due dates, in Year, Month and List views, plus the dates collectors and
   checks actually ran (hide them with one click). Only activities whose controls map to a framework in
@@ -28,6 +48,14 @@ All notable changes are listed here. The project follows [semantic versioning](h
 - Calendar CSV (`/calendar.csv`) and, in the cycle export, `calendar_occurrences.csv` (the population of
   scheduled activities in the cycle) and `calendar_decisions.csv` (every decision, including corrected
   ones). CSV cells starting with `= + - @` are prefixed with a quote.
+
+### Fixed
+- A backup made by an older version (without tables added since, such as the calendar) failed `verify` and
+  could not be restored. Found by the new upgrade test.
+- `sessions` and `account_links` (local sign-in sessions and one-time setup/reset links) were missing from
+  the table registry, so Azure Table Storage never created them, and `account_links` was not a valid Azure
+  table name. Both are now registered (Azure names drop underscores) and are deliberately never backed up:
+  restoring them would revive old sign-ins and used links. A test now fails if code uses an unregistered table.
 
 ## [0.2.0] - 2026-10-14 - SOC 2 focus
 

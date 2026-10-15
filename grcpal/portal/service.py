@@ -25,6 +25,7 @@ from grcpal.evidence import EvidenceStore, utcnow
 from grcpal.portal import notify
 from grcpal.portal.auditlog import AuditLog
 from grcpal.portal.accounts import AccountsMixin
+from grcpal.portal.backups import BackupsMixin
 from grcpal.portal.calendar import CalendarMixin
 from grcpal.portal.features import FeaturesMixin
 from grcpal.portal.auth import ROLES, SYSTEM, AuthError, Identity, User, bootstrap_admins, group_role
@@ -58,7 +59,7 @@ def _rk() -> str:
     return f"{utcnow():%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:10]}"
 
 
-class Portal(FeaturesMixin, CalendarMixin, AccountsMixin):
+class Portal(FeaturesMixin, CalendarMixin, AccountsMixin, BackupsMixin):
     def __init__(self, catalog, store, evidence: EvidenceStore, mailer: Mailer | None = None,
                  today: dt.date | None = None, public_url: str | None = None, jobs_sync: bool | None = None) -> None:
         self.base_catalog, self.store, self.evidence = catalog, store, evidence

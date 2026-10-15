@@ -1,0 +1,75 @@
+{% extends "base.html" %}{% from "_macros.html" import when %}{% block title %}Backups{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Backups</h1>
+<div class="sub">One encrypted file holds everything: users and settings, control monitoring, the calendar, evidence and the audit log. Each backup is checked right after it is written.</div></div>
+<a class="btn ghost small" href="/jobs">Background jobs</a></div>
+
+{% if data.blocker %}
+<section class="card"><p>{{ data.blocker }}</p></section>
+{% else %}
+
+{% if not data.kit.at %}
+<section class="card backup-warn" role="alert"><h2>Download your recovery kit</h2>
+<p>A backup can only be opened with its key. The recovery kit holds that key and the key for saved integration credentials. Download it once, store it in a password manager or safe <strong>away from the backups</strong>, then delete the downloaded copy. Without it, nobody can restore these backups.</p>
+<form method="post" action="/backups/kit" class="actions"><input type="hidden" name="csrf" value="{{ csrf }}">
+<button class="btn" type="submit">Download recovery kit</button></form></section>
+{% endif %}
+
+<div class="grid g2">
+<section class="card"><h2>Back up now</h2>
+{% if data.running %}<p>A backup is running. <a href="/jobs/{{ data.running.RowKey }}">Follow it</a>.</p>
+{% elif data.request %}<p>Backup requested by {{ data.request.by }} at {{ when(data.request.at) }} UTC. The backup job starts it within about 10 minutes.</p>
+{% else %}
+<form method="post" action="/backups/now"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label for="dest-now">Save to</label>
+<select id="dest-now" name="destination">{% for d in data.places %}<option value="{{ d.id }}"{% if d.id == data.schedule.destination %} selected{% endif %}>{{ d.label }}</option>{% endfor %}</select>
+<div class="actions"><button class="btn" type="submit">Back up now</button></div></form>
+{% if data.queue_mode %}<p class="sub mt">On Azure the backup runs in the scheduled backup job, not in the portal, so it starts within about 10 minutes.</p>{% endif %}
+{% endif %}</section>
+
+<section class="card"><h2>Schedule</h2>
+<form method="post" action="/backups/schedule"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="form-row">
+<div><label for="freq">How often</label><select id="freq" name="frequency">{% for f in data.frequencies %}<option value="{{ f }}"{% if f == data.schedule.frequency %} selected{% endif %}>{{ {'daily': 'Every day', 'weekly': 'Every Sunday', 'off': 'Off (not recommended)'}[f] }}</option>{% endfor %}</select></div>
+<div><label for="hour">At (hour, UTC)</label><input id="hour" name="hour" type="number" min="0" max="23" value="{{ data.schedule.hour }}"></div>
+<div><label for="dest">Save to</label><select id="dest" name="destination">{% for d in data.places %}<option value="{{ d.id }}"{% if d.id == data.schedule.destination %} selected{% endif %}>{{ d.label }}</option>{% endfor %}</select></div>
+</div>
+<h3 class="mt">Keep</h3>
+<div class="form-row">
+<div><label for="kd">Daily backups</label><input id="kd" name="keep_daily" type="number" min="1" max="60" value="{{ data.schedule.keep_daily }}"></div>
+<div><label for="kw">Weekly</label><input id="kw" name="keep_weekly" type="number" min="0" max="52" value="{{ data.schedule.keep_weekly }}"></div>
+<div><label for="km">Monthly</label><input id="km" name="keep_monthly" type="number" min="0" max="120" value="{{ data.schedule.keep_monthly }}"></div>
+<div><label for="kp">Before updates</label><input id="kp" name="keep_pre_update" type="number" min="1" max="20" value="{{ data.schedule.keep_pre_update }}"></div>
+</div>
+<p class="sub">Older backups are removed automatically after each new one, except the newest one that passed its check. Azure storage keeps backups write-once and removes old ones by its own retention rule.</p>
+<div class="actions"><button class="btn" type="submit">Save schedule</button></div></form></section>
+</div>
+
+{% for d in data.places %}
+<section class="card table-wrap"><div class="row-between"><div><h2>{{ d.label }}</h2><div class="sub mono">{{ d.where }}</div></div></div>
+{% if d.problem %}<div class="flash err" role="alert">{{ d.problem }}</div>{% endif %}
+{% if d.backups %}<table><thead><tr><th>Backup</th><th>Made</th><th>Type</th><th>Size</th><th>Checked</th><th></th></tr></thead><tbody>
+{% for b in d.backups %}<tr>
+<td class="mono">{{ b.name }}<div class="sub">{{ b.where }}</div></td>
+<td class="nowrap">{{ when(b.created.isoformat()) }} UTC</td>
+<td>{{ {'scheduled': 'Scheduled', 'manual': 'Manual', 'pre-update': 'Before update'}[b.kind] }}</td>
+<td class="nowrap">{{ (b.size / 1048576)|round(1) }} MB</td>
+<td>{% if b.summary.verified_ok %}<span class="pill ok">Passed</span>{% elif b.summary.verified_at %}<span class="pill error">Failed</span>{% else %}<span class="pill">Not checked</span>{% endif %}
+{% if b.summary.verified_at %}<div class="sub">{{ when(b.summary.verified_at) }}</div>{% endif %}</td>
+<td class="actions-cell">
+<form method="post" action="/backups/verify" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="destination" value="{{ d.id }}"><input type="hidden" name="name" value="{{ b.name }}"><button class="btn ghost small" type="submit">Check</button></form>
+<form method="post" action="/backups/download" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="destination" value="{{ d.id }}"><input type="hidden" name="name" value="{{ b.name }}"><button class="btn ghost small" type="submit">Download</button></form>
+</td></tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty">No backups here yet.</div>{% endif %}
+</section>
+{% endfor %}
+
+<section class="card"><h2>Restore</h2>
+<p>To rebuild on a clean machine, install GRC-pal, copy a backup file and your recovery kit to the server, and run:</p>
+<p class="mono">grcpal backup restore FILE.grcbak --kit recovery-kit.json</p>
+<p class="sub">Restore checks the whole file first and only fills an empty instance or a new folder, so it can never overwrite data. Everyone signs in again afterwards with their existing accounts. Details: docs/operations.md, "Restore".</p>
+{% if data.kit.at %}<p class="sub mt">Recovery kit last downloaded {{ when(data.kit.at) }} UTC by {{ data.kit.by }}.
+<form method="post" action="/backups/kit" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ghost small" type="submit">Download it again</button></form></p>{% endif %}
+</section>
+{% endif %}
+{% endblock %}

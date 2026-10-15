@@ -57,7 +57,13 @@ def portal_from_env() -> Portal:
     if os.getenv("GRCPAL_ENV", "").lower() == "production" and not os.getenv("GRCPAL_TABLES_URL"):
         event("GRCPAL_TABLES_URL is not set: portal data is in a local SQLite file and is lost when the "
               "container restarts", 30)
-    portal = Portal(Catalog.load(base), store_mod.from_env(), EvidenceStore(os.getenv("GRCPAL_EVIDENCE_DIR", "evidence")),
+    store = store_mod.from_env()
+    from grcpal import migrations
+
+    applied = migrations.migrate(store.backend, audit=migrations.audit_all(store.backend))  # refuses too-new data
+    if applied:
+        event("data model upgraded", migrations=applied)
+    portal = Portal(Catalog.load(base), store, EvidenceStore(os.getenv("GRCPAL_EVIDENCE_DIR", "evidence")),
                     mailer=mailer_mod.from_env())
     if os.getenv("GRCPAL_DEMO") == "1":
         from grcpal.portal.demo import seed
@@ -852,7 +858,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     from types import SimpleNamespace
 
-    from grcpal.portal import routes_accounts, routes_calendar, routes_extra
+    from grcpal.portal import routes_accounts, routes_backups, routes_calendar, routes_extra
 
     if mode == "local":
         routes_accounts.register(app, SimpleNamespace(p=p, templates=templates, HTTPError=_HTTPError,
@@ -865,6 +871,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     routes_calendar.register(app, SimpleNamespace(
         p=p, current_user=current_user, need=need, check_csrf=check_csrf, render=render, back=back,
         invalidate=invalidate, HTTPError=_HTTPError, attachment=_attachment))
+    routes_backups.register(app, SimpleNamespace(p=p, current_user=current_user, need=need, check_csrf=check_csrf,
+                                                 render=render, back=back))
     # Literal paths registered later (e.g. /controls/new) must win over parameter routes (/controls/{id}).
     literal = [r for r in app.router.routes if getattr(r, "path", "") in ("/controls/new", "/frameworks/new")]
     for r in literal:

@@ -21,6 +21,13 @@ Security
     swapping or cutting the file is detected.
   * This module reads every tenant through the raw backend on purpose: it is an operator tool
     (CLI and scheduled job only), never reachable from the portal.
+
+Restore (`grcpal backup restore`) checks the whole file first and writes nothing unless it is intact,
+then fills an EMPTY instance or a new folder (`--into`); it never overwrites existing data. Each tenant's
+audit log continues the restored chain with a `backup.restore` record.
+
+Recovery kit: one small file with the backup key and the app key (GRCPAL_ENCRYPTION_KEY). Keep it in a
+password manager, apart from the backups. With a backup file and the kit, a clean machine can be rebuilt.
 """
 from __future__ import annotations
 
@@ -33,6 +40,7 @@ import os
 import secrets
 import struct
 import tarfile
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
@@ -75,12 +83,95 @@ def key_id(key: bytes, label: bytes = b"grcpal-backup-key-id") -> str:
     return hashlib.sha256(label + b"\0" + key).hexdigest()[:16]
 
 
-def _settings_key_id() -> str | None:
+def _settings_key() -> str | None:
     key = os.getenv("GRCPAL_ENCRYPTION_KEY")
     path = Path(os.getenv("GRCPAL_KEY_FILE", ".grcpal.key"))
     if not key and path.is_file():
         key = path.read_text().strip()
+    return key or None
+
+
+def settings_key_id(key: str | None) -> str | None:
     return key_id(key.encode(), b"grcpal-settings-key-id") if key else None
+
+
+def _settings_key_id() -> str | None:
+    return settings_key_id(_settings_key())
+
+
+def default_key_file() -> Path | None:
+    """GRCPAL_BACKUP_KEY_FILE, else keys/backup.key next to the SQLite database (VM installs)."""
+    if os.getenv("GRCPAL_BACKUP_KEY_FILE"):
+        return Path(os.environ["GRCPAL_BACKUP_KEY_FILE"])
+    if os.getenv("GRCPAL_SQLITE"):
+        return Path(os.environ["GRCPAL_SQLITE"]).parent / "keys" / "backup.key"
+    return None
+
+
+def _write_private(path: Path, text: str) -> None:
+    """Create a new owner-only file; never overwrite."""
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        raise BackupError(f"{path} already exists; it is never overwritten") from None
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+
+
+def ensure_key(path: Path) -> bytes:
+    """Read the backup key, creating it (owner-only) on first use."""
+    path = Path(path)
+    if not path.exists():
+        try:
+            _write_private(path, new_key() + "\n")
+        except BackupError:
+            pass  # created by another process in the meantime
+    return load_key(path.read_text())
+
+
+def resolve_key(key_file: str | None = None) -> bytes:
+    """--key-file, else GRCPAL_BACKUP_KEY, else the default key file if it exists."""
+    if key_file:
+        return load_key(Path(key_file).read_text())
+    if os.getenv("GRCPAL_BACKUP_KEY"):
+        return load_key(os.environ["GRCPAL_BACKUP_KEY"])
+    path = default_key_file()
+    if path and path.is_file():
+        return load_key(path.read_text())
+    raise BackupError("No backup key: give --key-file or --kit, set GRCPAL_BACKUP_KEY, or create one with "
+                      "grcpal backup keygen")
+
+
+# ====================================================================== recovery kit
+KIT_FORMAT = "grcpal-recovery-kit-1"
+
+
+def make_kit(backup_key: bytes, settings_key: str | None, instance: str = "") -> str:
+    """Text of a recovery kit: the two keys needed to rebuild this instance from a backup file."""
+    kit = {"format": KIT_FORMAT, "instance": instance,
+           "created": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
+           "backup_key": base64.b64encode(backup_key).decode(), "backup_key_id": key_id(backup_key),
+           "settings_key": settings_key or "", "settings_key_id": settings_key_id(settings_key),
+           "readme": ["Keep this file in a password manager or safe, NOT next to the backups.",
+                      "backup_key opens .grcbak backup files.",
+                      "settings_key is GRCPAL_ENCRYPTION_KEY: it opens the integration credentials saved in the "
+                      "portal. Set it on the new machine before starting GRC-pal after a restore.",
+                      "Restore: grcpal backup restore FILE.grcbak --kit THIS-FILE"]}
+    return json.dumps(kit, indent=2) + "\n"
+
+
+def load_kit(text: str) -> dict:
+    try:
+        kit = json.loads(text)
+        if kit.get("format") != KIT_FORMAT:
+            raise ValueError
+    except (ValueError, AttributeError):
+        raise BackupError("This is not a GRC-pal recovery kit") from None
+    kit["key"] = load_key(kit.get("backup_key", ""))
+    if kit.get("backup_key_id") != key_id(kit["key"]):
+        raise BackupError("The recovery kit is damaged (backup key does not match its id)")
+    return kit
 
 
 # ====================================================================== encryption stream
@@ -202,10 +293,38 @@ class LocalArea:
                     (lambda p=path: p.open("rb"))
 
 
+    def is_empty(self) -> bool:
+        return next(iter(self.files()), None) is None
+
+    def write(self, name: str, src) -> tuple[str, int]:
+        """Create one file (never overwrite), streaming; returns (sha256, bytes)."""
+        root = Path(self.root)
+        target = root / name
+        if root.resolve() not in target.resolve().parents:
+            raise BackupError(f"Refusing to write outside {root}: {name[:200]!r}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        h, size = hashlib.sha256(), 0
+        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            while block := src.read(1 << 16):
+                h.update(block)
+                size += len(block)
+                f.write(block)
+        return h.hexdigest(), size
+
+
 @dataclass
 class BlobArea:
     """Every blob in an Azure Storage container."""
     container: object
+
+    def is_empty(self) -> bool:
+        return next(iter(self.container.list_blobs()), None) is None
+
+    def write(self, name: str, src) -> tuple[str, int]:
+        data = src.read()  # evidence files are size-limited at upload; the SDK needs the length up front
+        self.container.upload_blob(name, data, overwrite=False)
+        return hashlib.sha256(data).hexdigest(), len(data)
 
     def files(self):
         for blob in sorted(self.container.list_blobs(), key=lambda b: b.name):
@@ -254,14 +373,16 @@ class Instance:
     areas: dict = field(default_factory=dict)     # "evidence" | "inbox" | "config" -> LocalArea | BlobArea
 
 
-def from_env(evidence_dir: str) -> Instance:
-    """The running instance, from the same settings the portal and jobs use."""
+def from_env(evidence_dir: str, create: bool = False) -> Instance:
+    """The running instance, from the same settings the portal and jobs use. create=True (restore) allows a
+    database file that does not exist yet."""
     tables_url, sqlite = os.getenv("GRCPAL_TABLES_URL"), os.getenv("GRCPAL_SQLITE")
     if tables_url:
         from grcpal.portal.store import TableStore
 
         base = TableStore(tables_url)
-    elif sqlite and Path(sqlite).is_file():
+    elif sqlite and (create or Path(sqlite).is_file()):
+        Path(sqlite).parent.mkdir(parents=True, exist_ok=True)
         base = SqliteStore(sqlite)
     else:
         raise BackupError("Set GRCPAL_TABLES_URL (Azure) or GRCPAL_SQLITE to the portal database file")
@@ -278,8 +399,39 @@ def from_env(evidence_dir: str) -> Instance:
                  "config": BlobArea(svc.get_container_client(configbundle.CONTAINER))}
     else:
         root = Path(evidence_dir)
-        areas = {"evidence": LocalArea(root), "inbox": LocalArea(root.parent / "inbox")}
+        areas = {"evidence": LocalArea(root), "inbox": LocalArea(root.parent / "inbox"),
+                 "config": LocalArea(root.parent / "config")}
     return Instance(base, areas)
+
+
+def instance_for(base, evidence) -> Instance:
+    """The instance behind a running portal: its raw store and its EvidenceStore's storage."""
+    if evidence.account_url:
+        from azure.identity import DefaultAzureCredential
+        from azure.storage.blob import BlobServiceClient
+
+        from grcpal import configbundle
+
+        svc = BlobServiceClient(evidence.account_url, credential=DefaultAzureCredential())
+        return Instance(base, {"evidence": BlobArea(svc.get_container_client(evidence.container_name)),
+                               "inbox": BlobArea(svc.get_container_client("inbox")),
+                               "config": BlobArea(svc.get_container_client(configbundle.CONTAINER))})
+    root = Path(evidence.root)
+    return Instance(base, {"evidence": LocalArea(root), "inbox": LocalArea(root.parent / "inbox"),
+                           "config": LocalArea(root.parent / "config")})
+
+
+def tenants_in(base) -> set[str]:
+    """Organizations that have data in this instance (from users and audit records)."""
+    return {_tenant(r) for t in ("users", "audit") for r in base.list_prefix(t, "")}
+
+
+def folder_instance(folder: Path) -> Instance:
+    """A new, separate data folder laid out like a VM install: grcpal.db, evidence/, inbox/, config/."""
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+    return Instance(SqliteStore(str(folder / "grcpal.db")),
+                    {a: LocalArea(folder / a) for a in AREAS})
 
 
 # ====================================================================== names
@@ -323,13 +475,30 @@ def _tenant(row: dict) -> str:
 
 
 # ====================================================================== create
+def _read_rows(base) -> dict[str, list[dict]]:
+    """Every backed-up row. SQLite is read from a point-in-time copy so rows written meanwhile cannot mix in;
+    the copy sits next to the database (not in /tmp, which may be memory) and is deleted afterwards."""
+    if not isinstance(base, SqliteStore) or base.path in ("", ":memory:"):
+        return {t: base.list_prefix(t, "") for t in BACKUP_TABLES}
+    folder = tempfile.mkdtemp(prefix=".grcpal-snapshot-", dir=str(Path(base.path).resolve().parent))
+    snap = None
+    try:
+        snap = base.snapshot(os.path.join(folder, "snapshot.db"))
+        return {t: snap.list_prefix(t, "") for t in BACKUP_TABLES}
+    finally:
+        if snap is not None:
+            snap.close()
+        for name in os.listdir(folder):
+            os.unlink(os.path.join(folder, name))
+        os.rmdir(folder)
+
+
 def create(inst: Instance, out: Path, key: bytes) -> dict:
     """Write the backup file; returns its manifest. The file is created new with mode 0600."""
     out = Path(out)
     started = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
     backup_id = f"{started:%Y%m%dT%H%M%SZ}-{secrets.token_hex(3)}"
-    rows = {t: inst.base.list_prefix(t, "") for t in BACKUP_TABLES}
-    tenants = sorted({_tenant(r) for table in rows.values() for r in table})
+    tenants = sorted({_tenant(r) for t in BACKUP_TABLES for r in inst.base.list_prefix(t, "")})
 
     try:
         fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -341,7 +510,7 @@ def create(inst: Instance, out: Path, key: bytes) -> dict:
     logs = {t: AuditLog(TenantStore(inst.base, t)) for t in tenants}
     for log in logs.values():  # recorded before the snapshot, so the backup shows it was taken
         log.append(ACTOR, "backup.create", backup_id, {"file": out.name})
-    rows["audit"] = inst.base.list_prefix("audit", "")
+    rows = _read_rows(inst.base)
 
     manifest = {"format": FORMAT, "backup_id": backup_id, "app_version": __version__,
                 "schema_version": SCHEMA_VERSION, "created": started.isoformat(), "tenants": tenants,
@@ -448,13 +617,20 @@ def verify(path: Path, key: bytes) -> dict:
         raise BackupError("The backup file is incomplete (no manifest)")
 
     problems: list[str] = []
-    for table in BACKUP_TABLES:
-        want = manifest.get("table_sha256", {}).get(table)
+    # The tables the backup says it has. A backup from an older version lacks tables added since; those simply
+    # start empty after a restore. (Tables are never removed, and unknown table names are rejected above.)
+    listed_tables = manifest.get("table_sha256", {})
+    if not listed_tables:
+        problems.append("the manifest lists no tables")
+    for table, want in listed_tables.items():
         got = seen.get(f"tables/{table}.jsonl")
-        if want is None or got is None:
+        if got is None:
             problems.append(f"table {table} is missing")
         elif got[0] != want or table_lines.get(table) != manifest["tables"].get(table):
             problems.append(f"table {table} does not match the manifest")
+    for name in seen:
+        if name.startswith("tables/") and name[7:-6] not in listed_tables:
+            problems.append(f"{name} is not listed in the manifest")
     listed = {f["name"]: f for f in manifest.get("files", [])}
     for name, f in listed.items():
         if name not in seen:
@@ -468,6 +644,92 @@ def verify(path: Path, key: bytes) -> dict:
         if not result["ok"]:
             problems.append(f"audit log of tenant {tenant} does not verify: {'; '.join(result['problems'][:5])}")
     return {"ok": not problems, "problems": problems, "manifest": manifest}
+
+
+# ====================================================================== restore
+def restore(path: Path, key: bytes, inst: Instance, accept_audit_problems: bool = False) -> dict:
+    """Restore a verified backup into an EMPTY instance. Nothing is written unless the whole file verifies;
+    every file is re-hashed while it is written, so a file swapped after the check is caught too."""
+    report = verify(path, key)
+    m = report["manifest"]
+    audit_only = all(p.startswith("audit log of tenant") for p in report["problems"])
+    if report["problems"] and not (audit_only and accept_audit_problems):
+        hint = " (to restore anyway, add --accept-audit-problems; it is recorded)" if audit_only else ""
+        raise BackupError("The backup did not pass its checks, so nothing was restored: "
+                          + "; ".join(report["problems"][:5]) + hint)
+    if int(m.get("schema_version", 0)) > SCHEMA_VERSION:
+        raise BackupError(f"This backup was made by GRC-pal {m.get('app_version')} (data model "
+                          f"{m.get('schema_version')}); this is {__version__} (data model {SCHEMA_VERSION}). "
+                          f"Install {m.get('app_version')} or newer, then restore.")
+    needed = {f["name"].split("/", 1)[0] for f in m.get("files", [])}
+    if needed - inst.areas.keys():
+        raise BackupError(f"This instance has no place for the backup's {', '.join(sorted(needed - inst.areas.keys()))}")
+    busy = (["portal tables"] if not inst.base.is_empty() else []) + \
+        [a for a, area in inst.areas.items() if not area.is_empty()]
+    if busy:
+        raise BackupError(f"Restore only goes into an empty instance or a new folder (--into); this one already "
+                          f"has data in: {', '.join(busy)}. Nothing was restored.")
+
+    expected = {f["name"]: f for f in m["files"]}
+    rows = files = 0
+    with Path(path).open("rb") as f:
+        reader = _DecryptReader(f, key)
+        try:
+            with tarfile.open(fileobj=reader, mode="r|") as tar:
+                for member in tar:
+                    name = _check_entry(member)
+                    if name == "manifest.json":
+                        continue
+                    src = tar.extractfile(member)
+                    if name.startswith("tables/"):
+                        table, data = name[7:-6], src.read()
+                        if hashlib.sha256(data).hexdigest() != m["table_sha256"].get(table):
+                            raise BackupError(f"{name} changed after it was checked; the restore stopped")
+                        for line in data.splitlines():
+                            if line.strip():
+                                inst.base.upsert(table, json.loads(line))
+                                rows += 1
+                        continue
+                    area, rel = name.split("/", 1)
+                    want = expected.get(name)
+                    if want is None:
+                        raise BackupError(f"{name} is not in the manifest; the restore stopped")
+                    if inst.areas[area].write(rel, src) != (want["sha256"], want["bytes"]):
+                        raise BackupError(f"{name} changed after it was checked; the restore stopped")
+                    files += 1
+            while reader.read(1 << 16):
+                pass
+        except (tarfile.TarError, ValueError, EOFError) as exc:
+            raise BackupError(f"The backup file is damaged ({type(exc).__name__}); the restore stopped") from None
+
+    from grcpal import migrations
+    from grcpal.portal.auditlog import AuditLog
+
+    with Path(path).open("rb") as f:
+        file_sha = hashlib.file_digest(f, "sha256").hexdigest()  # streamed: backups can be large
+    audit = {}
+    for t in m.get("tenants", []):
+        log = AuditLog(TenantStore(inst.base, t))
+        log.append(ACTOR, "backup.restore", m["backup_id"],
+                   {"file": Path(path).name, "sha256": file_sha, "from_version": m.get("app_version"),
+                    "schema_version": m.get("schema_version"), "backup_created": m.get("created"),
+                    "accepted_audit_problems": bool(report["problems"])})
+    # the rows are at the backup's data model; bring them up to this version's (recorded in each audit log)
+    migrations.set_version(inst.base, int(m.get("schema_version", 1)))
+    upgraded = migrations.migrate(inst.base, audit=migrations.audit_all(inst.base))
+    for t in m.get("tenants", []):
+        r = AuditLog(TenantStore(inst.base, t)).verify()
+        audit[t] = {"ok": r["ok"], "records": r["records"]}
+    warnings = []
+    if m.get("settings_key_id") and m["settings_key_id"] != _settings_key_id():
+        warnings.append("GRCPAL_ENCRYPTION_KEY here is not the one this backup was made with. Set the "
+                        "settings_key from the recovery kit before starting GRC-pal, or re-enter integration "
+                        "credentials on the Configuration page.")
+    warnings.append("Sign-in sessions are not restored: everyone signs in again.")
+    return {"ok": all(a["ok"] for a in audit.values()), "backup_id": m["backup_id"],
+            "from_version": m.get("app_version"), "schema_version": m.get("schema_version"),
+            "created": m.get("created"), "tenants": m.get("tenants"), "rows": rows, "files": files,
+            "audit": audit, "migrations_applied": upgraded, "warnings": warnings}
 
 
 def summary(report: dict) -> dict:
