@@ -1,0 +1,43 @@
+criterion: A1.1
+title: Capacity is managed to meet availability commitments
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  You measure how much of your capacity (compute, storage, database, network, rate limits) is used, forecast
+  what you will need, and act before you run out. Evidence is monitoring dashboards, alerts on thresholds,
+  a periodic capacity review and the changes that followed it.
+auditor_approach:
+  - Inspects capacity monitoring and alert thresholds for in-scope systems.
+  - Inspects capacity reviews in the period and the actions they produced.
+points:
+  - id: A1.1-PF01
+    what_auditor_tests: >
+      Whether current capacity and usage are measured.
+    evidence_standard:
+      - Monitoring of key capacity metrics with alert thresholds.
+    good_examples:
+      - Azure Monitor alert rules on CPU, memory, storage and database DTU or vCore usage.
+    common_mistakes:
+      - Monitoring exists but no thresholds or alerts.
+    frequency: Continuous.
+  - id: A1.1-PF02
+    what_auditor_tests: >
+      Whether future capacity demand is forecast.
+    evidence_standard:
+      - Capacity review with trend and forecast.
+    good_examples:
+      - Quarterly capacity review issue with usage trends and growth assumptions.
+    common_mistakes:
+      - Only reacting to outages, with no forward look.
+    frequency: Quarterly is common.
+  - id: A1.1-PF03
+    what_auditor_tests: >
+      Whether changes are made based on forecasts.
+    evidence_standard:
+      - Changes (scaling, plan upgrades) linked to capacity reviews.
+    good_examples:
+      - Pull request increasing autoscale limits referencing the capacity review.
+    common_mistakes:
+      - Forecasts showing a shortfall with no action taken.
+    frequency: As needed after reviews.

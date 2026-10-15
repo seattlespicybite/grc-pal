@@ -1,0 +1,74 @@
+criterion: CC7.5
+title: Recovery from security incidents
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  After an incident you restore the affected environment, find the root cause, make changes so it does not
+  happen again, communicate what happened, and improve your procedures. The recovery part of the plan is
+  tested too.
+auditor_approach:
+  - Inspects post-incident reviews for incidents in the period.
+  - Checks that root-cause fixes were implemented and procedures updated.
+  - Inspects tests of the incident recovery plan.
+points:
+  - id: CC7.5-PF01
+    what_auditor_tests: >
+      Whether the affected environment was restored to a known good state.
+    evidence_standard:
+      - Recovery and verification steps in incident records.
+    good_examples:
+      - Rebuild from infrastructure as code and restore from verified backup, recorded in the incident.
+    common_mistakes:
+      - Restoring from backups taken after the compromise.
+    frequency: Event driven.
+  - id: CC7.5-PF02
+    what_auditor_tests: >
+      Whether information about the event was communicated to the right parties.
+    evidence_standard:
+      - Internal and external communications about the incident.
+    good_examples:
+      - Post-incident report shared with leadership; customer notice where required.
+    common_mistakes:
+      - Communication obligations missed.
+    frequency: Event driven.
+  - id: CC7.5-PF03
+    what_auditor_tests: >
+      Whether the root cause was determined.
+    evidence_standard:
+      - Root cause analysis in the post-incident review.
+    good_examples:
+      - Blameless postmortem with root cause and contributing factors.
+    common_mistakes:
+      - Root cause recorded as human error with no deeper analysis of why the error was possible.
+    frequency: Event driven.
+  - id: CC7.5-PF04
+    what_auditor_tests: >
+      Whether changes were made to prevent and detect recurrence.
+    evidence_standard:
+      - Follow-up actions with owners and completion evidence.
+    good_examples:
+      - New detection rule and configuration change linked to the postmortem.
+    common_mistakes:
+      - Actions agreed but never completed.
+    frequency: Event driven.
+  - id: CC7.5-PF05
+    what_auditor_tests: >
+      Whether response and recovery procedures were improved from lessons learned.
+    evidence_standard:
+      - Updated incident plan or runbooks after incidents or tests.
+    good_examples:
+      - Pull request updating the incident plan after the tabletop exercise.
+    common_mistakes:
+      - Plan unchanged for years despite incidents.
+    frequency: After incidents and tests; at least annually.
+  - id: CC7.5-PF06
+    what_auditor_tests: >
+      Whether the incident recovery plan is tested.
+    evidence_standard:
+      - Test of recovery procedures inside the period.
+    good_examples:
+      - Tabletop including a recovery scenario; DR test that restores from backup.
+    common_mistakes:
+      - Recovery steps never exercised.
+    frequency: At least annually.

@@ -1,0 +1,73 @@
+criterion: CC5.3
+title: Controls are deployed through policies and procedures
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  Policies say what must happen and procedures say how. They are approved, assigned to owners, followed on
+  time, and reviewed regularly. The annual policy review and approval is one of the easiest items to
+  evidence and one of the most common to miss.
+auditor_approach:
+  - Inspects the policy set, approval dates and the annual review in the period.
+  - Checks that procedures match how controls actually operate (tested through other criteria).
+points:
+  - id: CC5.3-PF01
+    what_auditor_tests: >
+      Whether policies and procedures exist to carry out leadership's directives.
+    evidence_standard:
+      - Approved policies covering the control areas in scope.
+    good_examples:
+      - Policy set in the repository with approval history and an index.
+    common_mistakes:
+      - Policy areas referenced in controls with no actual policy document.
+    frequency: Annual review.
+  - id: CC5.3-PF02
+    what_auditor_tests: >
+      Whether each policy has an owner accountable for it.
+    evidence_standard:
+      - Policy owner named in each document.
+    good_examples:
+      - Policy front matter with owner and review date.
+    common_mistakes:
+      - Owner listed is someone who left.
+    frequency: Annual review.
+  - id: CC5.3-PF03
+    what_auditor_tests: >
+      Whether controls are performed on time, as the policies require.
+    evidence_standard:
+      - Timeliness of recurring control activities in the period.
+    good_examples:
+      - GRC-pal task history showing quarterly reviews completed by their due dates.
+    common_mistakes:
+      - Quarterly reviews done late or skipped.
+    frequency: Ongoing; auditors test timeliness across the period.
+  - id: CC5.3-PF04
+    what_auditor_tests: >
+      Whether corrective action is taken when controls are not performed as designed.
+    evidence_standard:
+      - Records of missed or failed controls and the follow-up.
+    good_examples:
+      - Deficiency issue for a missed review with root cause and catch-up action.
+    common_mistakes:
+      - Missed controls silently skipped.
+    frequency: Event driven.
+  - id: CC5.3-PF05
+    what_auditor_tests: >
+      Whether competent people perform the controls.
+    evidence_standard:
+      - Control owners with appropriate roles and training.
+    good_examples:
+      - Control owner list aligned with job descriptions.
+    common_mistakes:
+      - Controls performed by interns or staff with no training.
+    frequency: Annually.
+  - id: CC5.3-PF06
+    what_auditor_tests: >
+      Whether policies and procedures are reviewed and updated periodically.
+    evidence_standard:
+      - Annual review records with approver and date inside the period.
+    good_examples:
+      - Annual policy review pull request approved by the executive sponsor.
+    common_mistakes:
+      - Policies with a "last reviewed" date older than a year.
+    frequency: At least annually.

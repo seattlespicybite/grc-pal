@@ -1,0 +1,93 @@
+criterion: CC4.1
+title: Controls are evaluated on an ongoing and periodic basis
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  You check that your controls keep working: continuous monitoring (automated checks, collectors, alerts)
+  plus periodic separate evaluations (internal control reviews, penetration tests, vendor reports).
+  GRC-pal's collectors and control health report are a form of ongoing evaluation.
+auditor_approach:
+  - Inspects monitoring dashboards or reports from the period and evidence that someone reviewed them.
+  - Inspects separate evaluations such as penetration tests and internal reviews, and their follow-up.
+points:
+  - id: CC4.1-PF01
+    what_auditor_tests: >
+      Whether a mix of ongoing monitoring and separate evaluations is used.
+    evidence_standard:
+      - Description of monitoring activities and periodic evaluations, with outputs from the period.
+    good_examples:
+      - Daily GRC-pal collector runs plus an annual penetration test and an internal control review.
+    common_mistakes:
+      - Only the external audit is used as an evaluation.
+    frequency: Ongoing plus at least annual separate evaluation.
+  - id: CC4.1-PF02
+    what_auditor_tests: >
+      Whether the pace of change in the business and systems is reflected in how often controls are evaluated.
+    evidence_standard:
+      - Monitoring frequency justified by change rate (for example continuous for cloud configuration).
+    good_examples:
+      - Configuration compliance checks daily because infrastructure changes daily.
+    common_mistakes:
+      - Annual checks for systems that change weekly.
+    frequency: Reviewed annually.
+  - id: CC4.1-PF03
+    what_auditor_tests: >
+      Whether a baseline exists to compare against (expected configuration, control design).
+    evidence_standard:
+      - Documented baselines (configuration standards, control descriptions) used in evaluations.
+    good_examples:
+      - CIS or vendor benchmark used as the configuration baseline with deviation reports.
+    common_mistakes:
+      - Monitoring with no defined expected state, so deviations cannot be identified.
+    frequency: Baseline reviewed annually.
+  - id: CC4.1-PF04
+    what_auditor_tests: >
+      Whether people performing evaluations understand what they are evaluating.
+    evidence_standard:
+      - Who performs internal reviews and their qualifications; external tester credentials.
+    good_examples:
+      - Penetration test firm statement of qualifications; internal reviewer's role description.
+    common_mistakes:
+      - Evaluations performed by someone with no relevant knowledge.
+    frequency: Per evaluation.
+  - id: CC4.1-PF05
+    what_auditor_tests: >
+      Whether evaluations are built into normal business processes rather than done only for the audit.
+    evidence_standard:
+      - Monitoring embedded in operations (alerts, tickets, recurring tasks).
+    good_examples:
+      - Recurring GitHub issues for quarterly reviews created automatically and closed with evidence.
+    common_mistakes:
+      - Reviews performed all at once the week before fieldwork.
+    frequency: Ongoing.
+  - id: CC4.1-PF06
+    what_auditor_tests: >
+      Whether scope and frequency of evaluations reflect risk.
+    evidence_standard:
+      - Evaluation plan prioritized by risk.
+    good_examples:
+      - Internal review plan focusing on high-risk controls such as access and change management.
+    common_mistakes:
+      - Equal attention to every control regardless of risk.
+    frequency: Annually.
+  - id: CC4.1-PF07
+    what_auditor_tests: >
+      Whether evaluations are objective, for example done by someone other than the control operator.
+    evidence_standard:
+      - Evidence that reviewers are independent of the work reviewed.
+    good_examples:
+      - Third-party penetration test; evidence review in GRC-pal approved by a second admin.
+    common_mistakes:
+      - The control owner reviews their own evidence and approves it.
+    frequency: Per evaluation.
+  - id: CC4.1-PF08
+    what_auditor_tests: >
+      Whether different evaluation types are used, such as penetration tests, internal reviews and vendor certifications.
+    evidence_standard:
+      - Reports from each evaluation type in the period.
+    good_examples:
+      - Annual penetration test report with retest; vendor SOC 2 reviews; internal audit memo.
+    common_mistakes:
+      - Penetration test outside the observation period or without retest of findings.
+    frequency: At least annually.

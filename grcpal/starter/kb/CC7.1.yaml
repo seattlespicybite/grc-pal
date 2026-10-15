@@ -1,0 +1,66 @@
+criterion: CC7.1
+title: Configuration changes and new vulnerabilities are detected
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  You have secure configuration standards, monitor systems against them, detect unknown or unauthorized
+  components, and scan regularly for vulnerabilities. Vulnerability scanning and remediation within your
+  stated timelines is heavily tested.
+auditor_approach:
+  - Inspects configuration baselines and compliance reports.
+  - Inspects vulnerability scan reports across the period and samples findings to check remediation within your SLA.
+  - Checks that scan coverage matches the asset inventory.
+points:
+  - id: CC7.1-PF01
+    what_auditor_tests: >
+      Whether configuration standards are defined for in-scope systems.
+    evidence_standard:
+      - Documented baselines (CIS benchmarks, vendor guides, internal standards).
+    good_examples:
+      - Azure Security Benchmark assigned through Azure Policy; hardened container base images.
+    common_mistakes:
+      - No baseline, just default settings.
+    frequency: Reviewed annually.
+  - id: CC7.1-PF02
+    what_auditor_tests: >
+      Whether infrastructure and software are monitored.
+    evidence_standard:
+      - Monitoring and logging configuration covering in-scope systems.
+    good_examples:
+      - Log Analytics workspace collecting platform logs from production resources.
+    common_mistakes:
+      - Some production resources not sending logs.
+    frequency: Continuous.
+  - id: CC7.1-PF03
+    what_auditor_tests: >
+      Whether changes to configuration are detected and alerted.
+    evidence_standard:
+      - Change detection alerts and evidence they are reviewed.
+    good_examples:
+      - Activity log alerts on security group and policy changes routed to the security channel.
+    common_mistakes:
+      - Alerts configured but nobody responsible for reviewing them.
+    frequency: Continuous.
+  - id: CC7.1-PF04
+    what_auditor_tests: >
+      Whether unknown or unauthorized components (devices, resources, software) are detected.
+    evidence_standard:
+      - Comparison of discovered assets against the approved inventory.
+    good_examples:
+      - Monthly reconciliation of cloud resources against the inventory; unmanaged device report.
+    common_mistakes:
+      - Shadow resources created in personal or test subscriptions linked to production.
+    frequency: Monthly or continuous.
+  - id: CC7.1-PF05
+    what_auditor_tests: >
+      Whether vulnerability scans are run and findings remediated within defined timelines.
+    evidence_standard:
+      - Scan reports throughout the period with coverage of in-scope assets.
+      - Remediation SLA by severity and evidence of meeting it for sampled findings, or documented exceptions.
+    good_examples:
+      - Weekly Defender or Tenable scan exports; deficiency issues for critical and high findings closed within SLA.
+    common_mistakes:
+      - Scans run but critical findings left open past SLA without risk acceptance.
+      - Scanning only external IPs, not container images or dependencies.
+    frequency: At least monthly (weekly or continuous common); auditors sample findings across the period.

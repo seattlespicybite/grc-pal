@@ -1,0 +1,74 @@
+criterion: CC3.1
+title: Objectives are clear enough to identify risks
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  Before you can assess risk, you need to say what you are trying to achieve: the commitments you make to
+  customers (uptime, confidentiality, security), the laws and frameworks you must follow, and how much risk
+  leadership accepts. In SOC 2 these are the "service commitments and system requirements" in your system description.
+auditor_approach:
+  - Reads the system description's service commitments and system requirements and checks they match customer contracts.
+  - Checks that the risk assessment refers to these objectives and to a stated risk tolerance.
+points:
+  - id: CC3.1-PF01
+    what_auditor_tests: >
+      Whether operational objectives reflect leadership's choices and how much risk they accept.
+    evidence_standard:
+      - Documented security and availability objectives and a risk tolerance or appetite statement.
+    good_examples:
+      - Risk management policy defining risk scoring and the level that requires treatment, approved by leadership.
+    common_mistakes:
+      - No stated tolerance, so it is unclear why some risks are accepted.
+    frequency: Reviewed annually.
+  - id: CC3.1-PF02
+    what_auditor_tests: >
+      Whether objectives are used to decide where to put resources (people, budget, tools).
+    evidence_standard:
+      - Security plan or budget tied to the objectives.
+    good_examples:
+      - Annual security roadmap approved by leadership with priorities linked to top risks.
+    common_mistakes:
+      - Objectives written for the audit and not used in planning.
+    frequency: Annually.
+  - id: CC3.1-PF03
+    what_auditor_tests: >
+      Whether financial reporting objectives are considered. For most SOC 2 reports on security, availability
+      and confidentiality this point has limited relevance; auditors usually accept a short explanation.
+    evidence_standard:
+      - Statement in the system description or risk assessment that external financial reporting is outside the system's scope, if true.
+    good_examples:
+      - Scope note explaining the system does not process customers' financial transactions.
+    common_mistakes:
+      - Ignoring the point entirely when the system does affect customers' financial reporting (then consider a SOC 1).
+    frequency: Annually with the scope review.
+  - id: CC3.1-PF04
+    what_auditor_tests: >
+      Whether internal reporting (for example to leadership) is accurate and precise enough to make decisions.
+    evidence_standard:
+      - Examples of internal security or compliance reports with the data they rely on.
+    good_examples:
+      - Quarterly leadership report with metrics sourced from GRC-pal and the vulnerability scanner.
+    common_mistakes:
+      - Reports based on estimates that cannot be traced to data.
+    frequency: Quarterly or as reported.
+  - id: CC3.1-PF05
+    what_auditor_tests: >
+      Whether compliance objectives reflect applicable laws, regulations, contracts and frameworks.
+    evidence_standard:
+      - List of applicable legal, regulatory and contractual requirements.
+    good_examples:
+      - Compliance obligations register (for example GDPR, state privacy laws, customer contract requirements) with owners.
+    common_mistakes:
+      - Laws in the customer's region (for example GDPR) not considered.
+    frequency: Reviewed annually and when entering new markets.
+  - id: CC3.1-PF06
+    what_auditor_tests: >
+      Whether team-level objectives support the overall objectives.
+    evidence_standard:
+      - Team or function goals linked to the security objectives.
+    good_examples:
+      - Engineering goals including patch timelines that support the security objective.
+    common_mistakes:
+      - Team targets that conflict with security (for example ship speed with no review time).
+    frequency: Annually.

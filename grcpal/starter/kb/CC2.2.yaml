@@ -1,0 +1,105 @@
+criterion: CC2.2
+title: Internal communication of objectives and responsibilities
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  Everyone inside the organization knows the security policies, their own responsibilities, how to report
+  problems, and what changed. Evidence is published policies, acknowledgments, training, a whistleblower
+  or reporting channel, and internal announcements.
+auditor_approach:
+  - Checks that policies are available to staff and that staff acknowledged them.
+  - Inspects training content and completion.
+  - Looks for a channel to report incidents and concerns, including an anonymous or independent option.
+points:
+  - id: CC2.2-PF01
+    what_auditor_tests: >
+      Whether policies and control information are communicated to staff.
+    evidence_standard:
+      - Where policies are published, plus acknowledgment records.
+    good_examples:
+      - GRC-pal Policies page with acknowledgment report for the period.
+    common_mistakes:
+      - Policies stored in a folder only the security team can open.
+    frequency: At hire, annually and when policies change.
+  - id: CC2.2-PF02
+    what_auditor_tests: >
+      Whether leadership and the board receive information about security and controls.
+    evidence_standard:
+      - Leadership or board reporting on security in the period.
+    good_examples:
+      - Board deck security section; management review minutes.
+    common_mistakes:
+      - No reporting upward inside the period.
+    frequency: At least annually; quarterly common.
+  - id: CC2.2-PF03
+    what_auditor_tests: >
+      Whether there is a separate channel (for example anonymous or to someone outside the line manager) for
+      reporting concerns such as fraud or misconduct.
+    evidence_standard:
+      - Whistleblower or ethics reporting policy and how staff learn about it.
+    good_examples:
+      - Ethics hotline or dedicated email reaching an independent board member, described in the handbook.
+    common_mistakes:
+      - The only reporting route is the manager who might be involved.
+    frequency: Communicated at hire and annually.
+  - id: CC2.2-PF04
+    what_auditor_tests: >
+      Whether communication fits the audience: plain language for staff, technical detail for engineers.
+    evidence_standard:
+      - Examples of communications for different audiences.
+    good_examples:
+      - Short security handbook for all staff plus engineering runbooks.
+    common_mistakes:
+      - One long policy document that nobody outside security reads.
+    frequency: Reviewed annually.
+  - id: CC2.2-PF05
+    what_auditor_tests: >
+      Whether people are told what their control responsibilities are.
+    evidence_standard:
+      - Role descriptions or control assignments communicated to owners.
+    good_examples:
+      - GRC-pal assignment notifications to control owners; job descriptions mentioning security duties.
+    common_mistakes:
+      - Owners learn they own a control when the auditor asks them.
+    frequency: On assignment and annually.
+  - id: CC2.2-PF06
+    what_auditor_tests: >
+      Whether staff know how to report security incidents, failures and concerns.
+    evidence_standard:
+      - Incident reporting instructions available to staff and covered in training.
+    good_examples:
+      - Security awareness module "How to report an incident" with completion records; a reporting email or chat channel.
+    common_mistakes:
+      - Incident response plan exists but staff were never told how to raise an incident.
+    frequency: At hire and annually.
+  - id: CC2.2-PF07
+    what_auditor_tests: >
+      Whether objectives (and changes to them) are shared with the people responsible for them.
+    evidence_standard:
+      - Security objectives or program goals communicated to staff or managers.
+    good_examples:
+      - Annual security plan presented at an all-hands, with slides.
+    common_mistakes:
+      - Objectives set but never shared beyond the security team.
+    frequency: Annually.
+  - id: CC2.2-PF08
+    what_auditor_tests: >
+      Whether security awareness information is provided to all staff.
+    evidence_standard:
+      - Training completion records and other awareness activities (phishing tests, newsletters).
+    good_examples:
+      - Annual awareness training completion export plus phishing simulation results.
+    common_mistakes:
+      - Training assigned but completion never tracked.
+    frequency: At hire and annually; ongoing campaigns.
+  - id: CC2.2-PF09
+    what_auditor_tests: >
+      Whether staff are informed about how the system works, its boundaries, and significant changes.
+    evidence_standard:
+      - Internal documentation of the system and change announcements.
+    good_examples:
+      - Engineering wiki architecture page; release notes channel.
+    common_mistakes:
+      - Major changes deployed with no internal announcement or documentation update.
+    frequency: On change.

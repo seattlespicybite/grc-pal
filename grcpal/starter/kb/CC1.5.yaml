@@ -1,0 +1,67 @@
+criterion: CC1.5
+title: People are held accountable for internal control
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  Security responsibilities are part of people's jobs, their performance against them is reviewed, and
+  there are consequences when they are not met. Auditors look at how control ownership connects to
+  performance reviews and disciplinary processes.
+auditor_approach:
+  - Reads how control owners are assigned and whether the assignment is communicated to them.
+  - Inspects performance review templates or objectives for security-related responsibilities.
+  - Checks that the sanctions process exists and, if used, was applied.
+points:
+  - id: CC1.5-PF01
+    what_auditor_tests: >
+      Whether accountability for controls is assigned to named people through the organization's structure.
+    evidence_standard:
+      - List of controls with named owners, and how owners were told.
+    good_examples:
+      - GRC-pal control list with owners, and the assignment emails or acknowledgments.
+    common_mistakes:
+      - Controls owned by a team or a mailbox, with nobody personally accountable.
+    frequency: Reviewed at least annually and on staff changes.
+  - id: CC1.5-PF02
+    what_auditor_tests: >
+      Whether performance measures and objectives include responsibilities for internal control where relevant.
+    evidence_standard:
+      - Performance review template or objectives that include security or compliance responsibilities for relevant roles.
+    good_examples:
+      - Engineering manager objectives including timely remediation of security findings.
+    common_mistakes:
+      - Security tasks treated as optional extras with no link to how people are evaluated.
+    frequency: Annually with the review cycle.
+  - id: CC1.5-PF03
+    what_auditor_tests: >
+      Whether those measures are revisited so they stay relevant as the organization changes.
+    evidence_standard:
+      - Record that the performance framework or objectives were reviewed in the period.
+    good_examples:
+      - Annual HR review of the performance process, with date and approver.
+    common_mistakes:
+      - Objectives copied unchanged year after year.
+    frequency: Annually.
+  - id: CC1.5-PF04
+    what_auditor_tests: >
+      Whether management considers pressures (deadlines, targets, understaffing) that could push people to skip
+      controls.
+    evidence_standard:
+      - Risk assessment entries covering pressure to bypass controls, with mitigations.
+    good_examples:
+      - Risk register entry "release pressure leads to skipped reviews" mitigated by branch protection that cannot be bypassed.
+    common_mistakes:
+      - Risk assessment covers only technical threats, not organizational pressure.
+    frequency: With the annual risk assessment.
+  - id: CC1.5-PF05
+    what_auditor_tests: >
+      Whether people are evaluated, and rewarded or disciplined, based on how they meet their control
+      responsibilities.
+    evidence_standard:
+      - Completed performance reviews for a sample of control owners.
+      - Sanctions policy and any disciplinary actions related to control failures.
+    good_examples:
+      - HR confirmation that reviews were completed for the sampled people, with dates.
+    common_mistakes:
+      - Repeated control failures by the same owner with no recorded follow-up.
+    frequency: Annual review cycle; auditors sample.

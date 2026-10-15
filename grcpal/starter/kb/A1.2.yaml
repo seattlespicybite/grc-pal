@@ -1,0 +1,115 @@
+criterion: A1.2
+title: Environmental protections, backups and recovery infrastructure
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  The infrastructure that keeps the system available is protected and recoverable: environmental risks at
+  data centers (usually carved out to the cloud provider), backups that run as planned and are stored in a
+  separate location, and alternate processing capacity (another zone or region) if the primary fails.
+auditor_approach:
+  - Reviews reliance on the cloud provider's SOC 2 for environmental protections and your review of it.
+  - Inspects backup configuration, schedule, retention and job results across the period.
+  - Inspects redundancy or failover configuration for in-scope systems.
+points:
+  - id: A1.2-PF01
+    what_auditor_tests: >
+      Whether environmental threats (power, fire, flood, climate) are identified, usually through the provider.
+    evidence_standard:
+      - Risk assessment entry and cloud provider report review.
+    good_examples:
+      - Vendor review of the cloud provider SOC 2 noting environmental controls.
+    common_mistakes:
+      - No reference to the provider's environmental controls at all.
+    frequency: Annually.
+  - id: A1.2-PF02
+    what_auditor_tests: >
+      Whether detection of environmental threats is designed (relied on from the provider for cloud).
+    evidence_standard:
+      - Provider SOC 2 report sections reviewed.
+    good_examples:
+      - Annual vendor review notes on data center monitoring.
+    common_mistakes:
+      - On-premises equipment in scope with no environmental monitoring.
+    frequency: Annually.
+  - id: A1.2-PF03
+    what_auditor_tests: >
+      Whether environmental protections are maintained.
+    evidence_standard:
+      - Provider report reliance, or maintenance records for any on-premises equipment.
+    good_examples:
+      - Vendor review confirming no exceptions in environmental controls.
+    common_mistakes:
+      - Assuming coverage without checking the provider report.
+    frequency: Annually.
+  - id: A1.2-PF04
+    what_auditor_tests: >
+      Whether alerts identify environmental and infrastructure anomalies.
+    evidence_standard:
+      - Service health alerts from the provider routed to your team.
+    good_examples:
+      - Azure Service Health alerts configured for the regions you use.
+    common_mistakes:
+      - Learning about provider outages from customers.
+    frequency: Continuous.
+  - id: A1.2-PF05
+    what_auditor_tests: >
+      Whether responses to environmental events are defined.
+    evidence_standard:
+      - Continuity plan procedures for regional or provider outages.
+    good_examples:
+      - Runbook for region failover referenced in the continuity plan.
+    common_mistakes:
+      - Plan covers only office disasters, not cloud region failure.
+    frequency: Reviewed annually.
+  - id: A1.2-PF06
+    what_auditor_tests: >
+      Whether environmental events are communicated and reviewed.
+    evidence_standard:
+      - Records of provider incidents affecting you and their review.
+    good_examples:
+      - Incident or status page entries for provider outages with post-incident notes.
+    common_mistakes:
+      - No record of provider outages that affected customers.
+    frequency: Event driven.
+  - id: A1.2-PF07
+    what_auditor_tests: >
+      Whether you have decided which data needs to be backed up.
+    evidence_standard:
+      - Backup scope tied to the data inventory.
+    good_examples:
+      - Data inventory column "backed up: yes, method, retention".
+    common_mistakes:
+      - New data stores added without backup.
+    frequency: Reviewed annually and when data stores change.
+  - id: A1.2-PF08
+    what_auditor_tests: >
+      Whether backups run as designed throughout the period and failures are handled.
+    evidence_standard:
+      - Backup configuration (schedule, retention) and job history or monitoring across the period.
+      - Handling of failed backups.
+    good_examples:
+      - Database point-in-time restore settings and backup job report; alert on failed backup jobs.
+    common_mistakes:
+      - Backup failures for weeks with no alert.
+    frequency: Daily backups typical; auditors sample dates across the period.
+  - id: A1.2-PF09
+    what_auditor_tests: >
+      Whether backups are stored separately from the primary environment (offsite or another region).
+    evidence_standard:
+      - Backup storage location and redundancy settings.
+    good_examples:
+      - Geo-redundant backup storage; backup vault in a separate subscription with restricted access.
+    common_mistakes:
+      - Backups in the same account an attacker could delete along with production.
+    frequency: Configuration at least once in the period.
+  - id: A1.2-PF10
+    what_auditor_tests: >
+      Whether alternate processing infrastructure exists to meet recovery objectives.
+    evidence_standard:
+      - Redundancy configuration (zones, regions, failover) matching the RTO.
+    good_examples:
+      - Zone-redundant database and app service; documented failover to a secondary region.
+    common_mistakes:
+      - RTO promises that the single-region architecture cannot meet.
+    frequency: Configuration reviewed annually; tested under A1.3.

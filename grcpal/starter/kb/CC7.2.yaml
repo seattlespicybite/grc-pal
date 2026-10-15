@@ -1,0 +1,53 @@
+criterion: CC7.2
+title: System components are monitored for anomalies
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  You collect security logs, have detection rules for suspicious activity, and someone reviews the alerts.
+  The tools themselves are checked to make sure they keep working.
+auditor_approach:
+  - Inspects logging coverage and log retention.
+  - Inspects detection rules and a sample of alerts from the period with evidence of triage.
+  - Checks how you know the logging pipeline is working.
+points:
+  - id: CC7.2-PF01
+    what_auditor_tests: >
+      Whether detection policies, procedures and tools are in place.
+    evidence_standard:
+      - Logging and monitoring policy, list of log sources and the SIEM or alerting tool.
+    good_examples:
+      - Sentinel or similar with connectors for the identity provider, cloud platform and endpoints.
+    common_mistakes:
+      - Logs collected with no detection rules on top.
+    frequency: Reviewed annually.
+  - id: CC7.2-PF02
+    what_auditor_tests: >
+      Whether detection rules are designed for relevant threats.
+    evidence_standard:
+      - List of detection rules and what they detect.
+    good_examples:
+      - Detection rules in the repository (detection as code) for impossible travel, privilege escalation and mass downloads.
+    common_mistakes:
+      - Only default vendor rules, never tuned to your environment.
+    frequency: Reviewed at least annually.
+  - id: CC7.2-PF03
+    what_auditor_tests: >
+      Whether anomalies are analyzed (filtering, triage) so real issues are found.
+    evidence_standard:
+      - Alert triage records showing analysis and outcome.
+    good_examples:
+      - Sample of alerts with triage notes and closure reason in the ticketing system.
+    common_mistakes:
+      - Thousands of untriaged alerts.
+    frequency: Ongoing; auditors sample alerts.
+  - id: CC7.2-PF04
+    what_auditor_tests: >
+      Whether monitoring tools are themselves monitored, so a silent failure is noticed.
+    evidence_standard:
+      - Health checks or alerts when log ingestion stops.
+    good_examples:
+      - Alert on no data from a log source for 24 hours; GRC-pal job failure alerts.
+    common_mistakes:
+      - Logging silently stopped for weeks and nobody noticed.
+    frequency: Continuous.

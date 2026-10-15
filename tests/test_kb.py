@@ -39,6 +39,10 @@ def test_starter_articles_are_valid(catalog):
     assert kb.validate(catalog, articles) == []
     for a in articles.values():
         assert a.status in kb.STATUSES and a.criterion in catalog.criteria
+    # every point of focus of Security, Availability and Confidentiality has guidance
+    criteria = [c for c, v in catalog.criteria.items() if v["category"] in ("security", "availability", "confidentiality")]
+    assert set(criteria) <= set(articles)
+    assert kb.missing_points(catalog, articles, criteria) == []
 
 
 def test_validation_catches_unknown_ids_and_unsupported_review(catalog):
@@ -74,7 +78,7 @@ def test_kb_pages_for_every_role_and_links(env):
     for bad in ("ZZ9.9", "..%2F..%2Fsecrets", "CC6.1.yaml"):
         assert client.get(f"/kb/{bad}").status_code == 404
     # a criterion without an article yet still has a page that says so
-    missing = client.get("/kb/CC1.2")
+    missing = client.get("/kb/P5.1")
     assert missing.status_code == 200 and "not written yet" in missing.text
     # control pages link each point of focus to its guidance section
     ctl = client.get("/controls/IAM-02").text

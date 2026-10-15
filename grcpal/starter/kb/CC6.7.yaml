@@ -1,0 +1,54 @@
+criterion: CC6.7
+title: Transmission, movement and removal of information is restricted
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  Data moves only through approved, protected channels. Data in transit is encrypted, removable media and
+  data copying are controlled, and laptops and phones that hold company data are managed and encrypted.
+auditor_approach:
+  - Inspects TLS settings for external and internal connections carrying customer data.
+  - Inspects device management policies for encryption, removable media and data loss prevention.
+  - Compares the device inventory with MDM enrollment to find unmanaged devices.
+points:
+  - id: CC6.7-PF01
+    what_auditor_tests: >
+      Whether the ability to send or move data outside approved channels is restricted.
+    evidence_standard:
+      - Controls limiting data export (DLP rules, sharing restrictions, egress rules).
+    good_examples:
+      - Microsoft 365 external sharing restricted; storage accounts deny public access.
+    common_mistakes:
+      - Anyone can share files publicly from company storage.
+    frequency: Configuration inspected at least once in the period.
+  - id: CC6.7-PF02
+    what_auditor_tests: >
+      Whether data in transit is protected by encryption or secure channels.
+    evidence_standard:
+      - TLS configuration for public endpoints and internal service connections.
+    good_examples:
+      - TLS scan report showing TLS 1.2+ only; database connections requiring encryption.
+    common_mistakes:
+      - Internal traffic between services unencrypted across networks.
+    frequency: At least once in the period.
+  - id: CC6.7-PF03
+    what_auditor_tests: >
+      Whether removable media (USB drives) is controlled.
+    evidence_standard:
+      - MDM policy blocking or restricting removable storage.
+    good_examples:
+      - Intune device configuration profile blocking USB storage, with assignment to all devices.
+    common_mistakes:
+      - Policy in the handbook but not enforced technically.
+    frequency: Configuration at least once in the period.
+  - id: CC6.7-PF04
+    what_auditor_tests: >
+      Whether laptops and mobile devices are managed and protected (encryption, screen lock, remote wipe).
+    evidence_standard:
+      - MDM compliance report showing encryption and compliance for all devices accessing company data.
+      - Reconciliation of devices to employees.
+    good_examples:
+      - Intune compliance report with BitLocker or FileVault status; Conditional Access requiring a compliant device.
+    common_mistakes:
+      - Personal devices accessing email and files with no management.
+    frequency: Continuous with periodic reports; auditors may sample devices.

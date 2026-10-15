@@ -1,0 +1,84 @@
+criterion: CC1.1
+title: Commitment to integrity and ethical values
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  Leadership shows that integrity matters, everyone (including contractors) knows the rules of conduct and
+  agrees to them, and breaches are dealt with. For a small company this is mostly a code of conduct, signed
+  acknowledgments, and a record of how violations were handled.
+auditor_approach:
+  - Reads the code of conduct and checks it was approved by leadership and is current.
+  - Samples new hires and contractors from the period and checks each acknowledged the code on or near their start date.
+  - Asks for the population of conduct violations or disciplinary actions and how they were resolved (the population may be zero).
+points:
+  - id: CC1.1-PF01
+    what_auditor_tests: >
+      Whether leadership visibly supports integrity and security, for example by approving policies and taking
+      part in the security program, rather than delegating it entirely.
+    evidence_standard:
+      - Leadership approval of the policy set and code of conduct, with name and date.
+      - Leadership meeting minutes or review records where security or compliance was discussed.
+    good_examples:
+      - Pull request approving the information security policy, approved by the CEO or executive sponsor.
+      - Quarterly leadership meeting agenda with a security and compliance item and the notes.
+    common_mistakes:
+      - Policies approved only by the security engineer who wrote them.
+      - No record that leadership ever reviewed security, so "tone at the top" cannot be shown.
+    frequency: Policy approval annually; leadership review at least annually, quarterly is common.
+  - id: CC1.1-PF02
+    what_auditor_tests: >
+      Whether written standards of conduct exist and cover the expected areas: ethics, conflicts of interest,
+      acceptable use, confidentiality and reporting concerns.
+    evidence_standard:
+      - Current code of conduct and acceptable use policy with version and approval date.
+      - Shows where staff can find it (handbook, intranet, policy portal).
+    good_examples:
+      - Code of conduct in the policy repository with its approval history.
+      - Employee handbook section on conduct, published on the intranet with a last-updated date.
+    common_mistakes:
+      - Code of conduct copied from a template and never adapted or approved.
+      - Acceptable use rules exist only in onboarding slides that are not version controlled.
+    frequency: Reviewed and re-approved annually.
+  - id: CC1.1-PF03
+    what_auditor_tests: >
+      Whether people confirm they understand the standards, and whether adherence is checked, typically through
+      acknowledgments at hire and annually.
+    evidence_standard:
+      - Acknowledgment records with person, document version and date for the whole population.
+      - Population list of employees and contractors to compare against acknowledgments.
+    good_examples:
+      - GRC-pal policy acknowledgment export reconciled to the HR roster.
+      - HR system e-signature report for the code of conduct, filtered to the observation period.
+    common_mistakes:
+      - Acknowledgments missing for contractors or people who joined late in the period.
+      - Acknowledgment signed weeks after the start date with no explanation.
+    frequency: At hire (within a defined number of days, often 30) and annually. Auditors sample new hires and test the annual campaign.
+  - id: CC1.1-PF04
+    what_auditor_tests: >
+      Whether breaches of the code are identified and handled consistently and in time, through a defined
+      disciplinary process.
+    evidence_standard:
+      - Disciplinary or sanctions policy describing how violations are handled.
+      - Log of conduct or policy violations in the period with outcome, or a management statement that there were none.
+    good_examples:
+      - HR case log (with sensitive details redacted) showing date reported, action taken and date closed.
+      - Sanctions section in the information security policy referenced in the employee handbook.
+    common_mistakes:
+      - No sanctions policy at all.
+      - Known violations (for example a phishing test failure pattern or data mishandling) with no recorded follow-up.
+    frequency: Event driven; the policy is reviewed annually.
+  - id: CC1.1-PF05
+    what_auditor_tests: >
+      Whether contractors and vendor staff with access to systems or data are bound by the same conduct and
+      confidentiality expectations as employees.
+    evidence_standard:
+      - Contract clauses or signed agreements covering conduct and confidentiality for contractors.
+      - Acknowledgment or NDA records for contractors with system access.
+    good_examples:
+      - Signed NDA and acceptable use acknowledgment for each contractor account in the identity provider.
+      - Standard vendor agreement template with confidentiality and security obligations.
+    common_mistakes:
+      - Contractors given accounts without going through HR onboarding, so nothing was signed.
+      - Agency staff covered only by the agency's contract, with no link to your policies.
+    frequency: At engagement start and on renewal; auditors sample contractors active in the period.

@@ -1,0 +1,63 @@
+criterion: CC3.4
+title: Changes that could affect internal control are assessed
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  When something significant changes (new product, acquisition, new leadership, new key vendor, major
+  architecture change, new law), you stop and ask how it affects your risks and controls. Evidence is a
+  trigger in your risk or change process and records of those reviews.
+auditor_approach:
+  - Asks what significant changes happened in the period and looks for a risk review of each.
+  - Reads the policy describing which changes trigger a risk review.
+points:
+  - id: CC3.4-PF01
+    what_auditor_tests: >
+      Whether changes outside the organization (regulation, threats, market) are assessed.
+    evidence_standard:
+      - Record of external changes considered, for example in the annual risk assessment or ad hoc reviews.
+    good_examples:
+      - Risk register update after a new state privacy law took effect.
+    common_mistakes:
+      - Major industry threats (for example widely exploited vulnerabilities) never considered.
+    frequency: Annually and ad hoc.
+  - id: CC3.4-PF02
+    what_auditor_tests: >
+      Whether changes in the business model (new products, markets, customers) are assessed.
+    evidence_standard:
+      - Risk or security review for new products or markets in the period.
+    good_examples:
+      - Security review issue for a new product line before launch.
+    common_mistakes:
+      - New service launched and added to scope without any risk review.
+    frequency: Event driven.
+  - id: CC3.4-PF03
+    what_auditor_tests: >
+      Whether changes in leadership are assessed for their effect on controls.
+    evidence_standard:
+      - Review of control ownership and approvals after leadership changes.
+    good_examples:
+      - Handover checklist when the security lead or CTO changed, with updated role assignments.
+    common_mistakes:
+      - Approvals still routed to a departed executive.
+    frequency: Event driven.
+  - id: CC3.4-PF04
+    what_auditor_tests: >
+      Whether changes in systems and technology are assessed.
+    evidence_standard:
+      - Security or architecture reviews for major technology changes.
+    good_examples:
+      - Architecture decision record for a database migration with risk notes.
+    common_mistakes:
+      - Migration to a new cloud service with no review of logging or access.
+    frequency: Event driven.
+  - id: CC3.4-PF05
+    what_auditor_tests: >
+      Whether changes in vendor and partner relationships are assessed.
+    evidence_standard:
+      - Vendor risk assessment for new critical vendors and for significant changes in existing ones.
+    good_examples:
+      - Vendor onboarding review for a new payment or support tool, completed before data was shared.
+    common_mistakes:
+      - New vendor given customer data before any review.
+    frequency: Event driven.

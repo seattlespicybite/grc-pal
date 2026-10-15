@@ -1,0 +1,116 @@
+criterion: CC9.2
+title: Vendor and business partner risk is managed
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  You know which vendors touch your system or data, assess them before onboarding and periodically after,
+  have contracts with security and confidentiality terms, review their SOC 2 reports (including the
+  controls you must perform), and offboard them properly. Annual review of critical vendors' SOC 2 reports
+  is a classic Type 2 test.
+auditor_approach:
+  - Inspects the vendor inventory with criticality and owners.
+  - Samples critical vendors and checks for a current assessment or SOC 2 review in the period, including complementary user entity controls (CUECs).
+  - Samples new vendors and checks for a review before data was shared.
+  - Checks contracts for confidentiality and security terms.
+points:
+  - id: CC9.2-PF01
+    what_auditor_tests: >
+      Whether requirements for engaging vendors (security, confidentiality, compliance) are defined.
+    evidence_standard:
+      - Vendor management policy and standard contract terms.
+    good_examples:
+      - Vendor policy defining criticality tiers and required reviews per tier.
+    common_mistakes:
+      - No criteria, so every vendor is treated the same or not at all.
+    frequency: Reviewed annually.
+  - id: CC9.2-PF02
+    what_auditor_tests: >
+      Whether vendor risks are assessed before engagement and periodically.
+    evidence_standard:
+      - Assessment records (questionnaire, SOC 2 review) for sampled vendors with dates.
+    good_examples:
+      - Annual SOC 2 review notes for each critical vendor, including bridge letters and exceptions.
+    common_mistakes:
+      - Reviewing a vendor report that does not cover the services you use, or is two years old.
+    frequency: Before onboarding and annually for critical vendors.
+  - id: CC9.2-PF03
+    what_auditor_tests: >
+      Whether someone is responsible for managing each vendor.
+    evidence_standard:
+      - Vendor inventory with an internal owner per vendor.
+    good_examples:
+      - Vendor register with owner, criticality and data shared.
+    common_mistakes:
+      - Vendors without an owner, so nobody tracks renewals or reviews.
+    frequency: Reviewed annually.
+  - id: CC9.2-PF04
+    what_auditor_tests: >
+      Whether communication with vendors (incident notification, changes) is defined.
+    evidence_standard:
+      - Contract terms for incident notification and points of contact.
+    good_examples:
+      - Contract clause requiring breach notification within 72 hours; vendor contacts in the register.
+    common_mistakes:
+      - No way to learn about a vendor's incident other than the news.
+    frequency: At contract and renewal.
+  - id: CC9.2-PF05
+    what_auditor_tests: >
+      Whether there is a process for handling vendor exceptions (failed controls, missing reports).
+    evidence_standard:
+      - Record of vendor exceptions and how they were handled.
+    good_examples:
+      - Vendor review noting a qualified opinion, with compensating controls documented and accepted.
+    common_mistakes:
+      - Exceptions in vendor reports read but ignored.
+    frequency: Event driven with reviews.
+  - id: CC9.2-PF06
+    what_auditor_tests: >
+      Whether vendor performance (service levels, security) is monitored.
+    evidence_standard:
+      - Periodic vendor performance review for critical vendors.
+    good_examples:
+      - Annual vendor review including uptime against SLA and support issues.
+    common_mistakes:
+      - No review after onboarding.
+    frequency: Annually for critical vendors.
+  - id: CC9.2-PF07
+    what_auditor_tests: >
+      Whether issues found in vendor assessments are tracked and resolved.
+    evidence_standard:
+      - Follow-up tickets for vendor issues.
+    good_examples:
+      - Deficiency issue for a vendor gap with owner and resolution.
+    common_mistakes:
+      - Issues noted in a spreadsheet with no follow-up.
+    frequency: Event driven.
+  - id: CC9.2-PF08
+    what_auditor_tests: >
+      Whether vendor relationships are ended through a defined process (access removal, data return or deletion).
+    evidence_standard:
+      - Offboarding procedure and records for vendors offboarded in the period.
+    good_examples:
+      - Vendor offboarding checklist with SSO app removal, API key revocation and deletion confirmation.
+    common_mistakes:
+      - Former vendors still have API keys or accounts.
+    frequency: Event driven.
+  - id: CC9.2-PF09
+    what_auditor_tests: >
+      Whether confidentiality commitments are obtained from vendors that handle confidential data.
+    evidence_standard:
+      - Signed NDA or confidentiality terms for sampled vendors.
+    good_examples:
+      - Data processing agreement on file for each vendor that processes customer data.
+    common_mistakes:
+      - Click-through terms with no confidentiality commitment for a vendor holding customer data.
+    frequency: At contract.
+  - id: CC9.2-PF10
+    what_auditor_tests: >
+      Whether vendors' compliance with confidentiality commitments is assessed.
+    evidence_standard:
+      - Periodic review of vendor confidentiality controls (for example via their SOC 2 confidentiality section).
+    good_examples:
+      - Vendor SOC 2 review covering confidentiality criteria.
+    common_mistakes:
+      - Commitments obtained but never checked.
+    frequency: Annually for critical vendors.

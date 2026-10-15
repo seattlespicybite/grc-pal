@@ -1,0 +1,44 @@
+criterion: CC4.2
+title: Control deficiencies are evaluated and communicated
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  When monitoring or testing finds a problem, you record it, tell the people who must fix it (and leadership
+  when serious), and track it until it is fixed. A deficiency register or issue tracker with owners and
+  due dates is the core evidence.
+auditor_approach:
+  - Requests the population of deficiencies and findings identified in the period.
+  - Samples items and checks they were assigned, communicated and remediated within the expected time, or formally accepted.
+points:
+  - id: CC4.2-PF01
+    what_auditor_tests: >
+      Whether results of evaluations are assessed to decide what is a deficiency and how severe it is.
+    evidence_standard:
+      - Deficiency or findings register with severity ratings.
+    good_examples:
+      - GitHub issues labeled "deficiency" with severity, created from collector findings and test results.
+    common_mistakes:
+      - Findings noted in reports but never entered in any tracker.
+    frequency: Ongoing.
+  - id: CC4.2-PF02
+    what_auditor_tests: >
+      Whether deficiencies reach the people responsible for fixing them and, when significant, leadership.
+    evidence_standard:
+      - Assignment of each deficiency to an owner; leadership reporting of significant ones.
+    good_examples:
+      - Deficiency issues assigned to owners; quarterly leadership report listing open high-severity items.
+    common_mistakes:
+      - Significant issues known only to the security team.
+    frequency: Ongoing; leadership reporting quarterly.
+  - id: CC4.2-PF03
+    what_auditor_tests: >
+      Whether corrective actions are tracked to completion within defined timelines.
+    evidence_standard:
+      - Due dates, closure dates and verification of fixes for the population of deficiencies.
+    good_examples:
+      - Deficiency tracker with SLA by severity and closure evidence attached.
+    common_mistakes:
+      - Items closed with no evidence that the fix works.
+      - Overdue items with no escalation or risk acceptance.
+    frequency: Ongoing; auditors sample from the population.

@@ -1,0 +1,54 @@
+criterion: CC6.6
+title: Protection against threats from outside the system boundary
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  The edges of your environment are protected: only needed traffic is allowed in, remote access requires
+  strong authentication, credentials are protected, and boundary protections (firewalls, WAF) are in place
+  and monitored.
+auditor_approach:
+  - Inspects firewall, security group and WAF configuration for production.
+  - Checks MFA for remote and administrative access.
+  - May review external scan results for exposed services.
+points:
+  - id: CC6.6-PF01
+    what_auditor_tests: >
+      Whether access through external connection points is restricted to what is needed.
+    evidence_standard:
+      - Inbound rules for production showing only required ports and sources.
+    good_examples:
+      - NSG or security group export with no unrestricted management ports; private endpoints for data stores.
+    common_mistakes:
+      - Database endpoints publicly reachable.
+    frequency: At least once in the period; continuous monitoring preferred.
+  - id: CC6.6-PF02
+    what_auditor_tests: >
+      Whether credentials used across the boundary are protected (not exposed, encrypted, rotated).
+    evidence_standard:
+      - How remote and service credentials are stored and transmitted.
+    good_examples:
+      - Secrets in Key Vault; SSO for remote tools; secret scanning alerts reviewed.
+    common_mistakes:
+      - API keys shared over chat or email.
+    frequency: Ongoing.
+  - id: CC6.6-PF03
+    what_auditor_tests: >
+      Whether external and remote access requires additional authentication (MFA).
+    evidence_standard:
+      - MFA enforcement for VPN, remote admin, cloud consoles and SaaS admin.
+    good_examples:
+      - Conditional Access policies covering all cloud apps from outside trusted locations.
+    common_mistakes:
+      - Legacy authentication protocols left enabled, bypassing MFA.
+    frequency: Configuration inspected at least once in the period.
+  - id: CC6.6-PF04
+    what_auditor_tests: >
+      Whether boundary protection systems (firewall, WAF, DDoS protection) are implemented and monitored.
+    evidence_standard:
+      - Configuration and monitoring of boundary protection.
+    good_examples:
+      - Web application firewall policy and alert routing; DDoS protection plan enabled.
+    common_mistakes:
+      - WAF in detection mode only, with nobody reviewing detections.
+    frequency: Ongoing.

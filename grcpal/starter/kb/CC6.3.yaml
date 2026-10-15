@@ -1,0 +1,54 @@
+criterion: CC6.3
+title: Access is role based, least privilege, and changes are authorized
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  People get access through roles that match their job, with the minimum privileges needed. Changes to
+  access (including privilege increases) are approved, and roles themselves are reviewed. Privileged access
+  deserves extra attention: who are your admins, and why?
+auditor_approach:
+  - Inspects role definitions and the mapping of users to roles for in-scope systems.
+  - Samples access changes (role changes, privilege grants) and checks approval.
+  - Inspects the list of privileged users and checks it was reviewed and is justified.
+points:
+  - id: CC6.3-PF01
+    what_auditor_tests: >
+      Whether access is created or changed only with authorization.
+    evidence_standard:
+      - Approval records for sampled access changes, dated before the change.
+    good_examples:
+      - Access request tickets for role changes; PIM activation requests with approver.
+    common_mistakes:
+      - Engineers adding themselves to admin groups without a request.
+    frequency: Event driven; sampled.
+  - id: CC6.3-PF02
+    what_auditor_tests: >
+      Whether access is removed when no longer needed, including on role changes, not only terminations.
+    evidence_standard:
+      - Role change population and evidence old access was removed.
+    good_examples:
+      - Transfer ticket showing removal from the previous team's groups.
+    common_mistakes:
+      - People who changed teams keep access from both roles (access creep).
+    frequency: Event driven and caught by periodic reviews.
+  - id: CC6.3-PF03
+    what_auditor_tests: >
+      Whether role-based access control is used so access follows job function.
+    evidence_standard:
+      - Role or group definitions and assignments for in-scope systems.
+    good_examples:
+      - Azure RBAC assignments to groups mapped to job roles; GitHub teams with defined permissions.
+    common_mistakes:
+      - Many direct permission grants to individuals.
+    frequency: Reviewed annually and through access reviews.
+  - id: CC6.3-PF04
+    what_auditor_tests: >
+      Whether roles and access rules (including privileged roles) are reviewed for continued appropriateness.
+    evidence_standard:
+      - Privileged access review with reviewer, date and decisions.
+    good_examples:
+      - Quarterly review of Global Administrators, subscription Owners and GitHub org owners.
+    common_mistakes:
+      - Standing admin rights for many engineers with no justification.
+    frequency: Quarterly for privileged access.

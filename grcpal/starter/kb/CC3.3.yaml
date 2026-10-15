@@ -1,0 +1,63 @@
+criterion: CC3.3
+title: The potential for fraud is considered
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  The risk assessment explicitly considers fraud: someone inside or outside misusing access, data or
+  systems for gain, or hiding mistakes. Auditors usually expect a fraud section in the annual risk
+  assessment, linked to controls like segregation of duties and logging.
+auditor_approach:
+  - Looks for fraud risks in the risk assessment performed during the period.
+  - Checks that identified fraud risks map to controls (segregation of duties, privileged access monitoring, audit logs).
+points:
+  - id: CC3.3-PF01
+    what_auditor_tests: >
+      Whether different types of fraud are considered (data theft, misuse of access, false reporting, theft of assets).
+    evidence_standard:
+      - Fraud risks listed in the risk assessment.
+    good_examples:
+      - Fraud section in the risk register covering insider data theft and manipulation of audit evidence.
+    common_mistakes:
+      - No mention of fraud at all.
+    frequency: Annually.
+  - id: CC3.3-PF02
+    what_auditor_tests: >
+      Whether incentives and pressures that might lead to fraud are considered.
+    evidence_standard:
+      - Risk notes on pressures (targets, financial stress, bonuses tied to metrics).
+    good_examples:
+      - Risk entry on pressure to report false uptime figures, with mitigation.
+    common_mistakes:
+      - Only external attackers considered.
+    frequency: Annually.
+  - id: CC3.3-PF03
+    what_auditor_tests: >
+      Whether opportunities for fraud (weak controls, excessive access) are assessed.
+    evidence_standard:
+      - Analysis of who could misuse access, and the controls preventing it.
+    good_examples:
+      - Privileged access review linked to the fraud risk; segregation between code author and approver.
+    common_mistakes:
+      - One person can change code, deploy it and alter logs without anyone noticing.
+    frequency: Annually.
+  - id: CC3.3-PF04
+    what_auditor_tests: >
+      Whether attitudes and rationalizations (culture, tone) are considered.
+    evidence_standard:
+      - Risk notes on culture and conduct; link to the code of conduct and whistleblower channel.
+    good_examples:
+      - Risk workshop notes discussing culture, plus annual conduct acknowledgment.
+    common_mistakes:
+      - Ignored because "we trust everyone".
+    frequency: Annually.
+  - id: CC3.3-PF05
+    what_auditor_tests: >
+      Whether fraud risks from IT and access to information are considered, such as unauthorized data access or tampering with logs.
+    evidence_standard:
+      - Fraud risks for IT systems linked to logging, monitoring and access controls.
+    good_examples:
+      - Alert on privileged role assignment and on audit log deletion, referenced in the fraud risk entry.
+    common_mistakes:
+      - Logs can be deleted by the same admins they record.
+    frequency: Annually; monitoring controls continuous.

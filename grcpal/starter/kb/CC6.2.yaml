@@ -1,0 +1,56 @@
+criterion: CC6.2
+title: Users are registered, authorized and removed
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  Nobody gets an account without approval, people lose access promptly when they leave or no longer need it,
+  and access is reviewed regularly. Joiner, leaver and access review evidence is sampled heavily in every
+  SOC 2 audit; late terminations are the single most common exception.
+auditor_approach:
+  - Requests the populations of new hires, terminations and access changes in the period from the HR system (not from IT).
+  - Samples joiners and checks approval existed before access was granted.
+  - Samples leavers and compares termination date with account disable date across in-scope systems.
+  - Inspects each periodic access review for completeness, reviewer, date and follow-through on removals.
+points:
+  - id: CC6.2-PF01
+    what_auditor_tests: >
+      Whether new accounts are created only after documented authorization.
+    evidence_standard:
+      - For each sampled joiner, an approval (ticket or HR trigger) dated before access was granted.
+      - The access granted matches the approved role.
+    good_examples:
+      - Onboarding ticket with manager approval and role, linked to the Entra ID account creation date.
+      - Access request in the identity governance tool with approver and timestamp.
+    common_mistakes:
+      - Accounts created before the approval date.
+      - Approval by the same person who receives the access.
+    frequency: Event driven; auditors sample joiners (often 10 to 25 depending on population size).
+  - id: CC6.2-PF02
+    what_auditor_tests: >
+      Whether access is removed on time when people leave or change roles.
+    evidence_standard:
+      - Termination population from HR with termination dates.
+      - Account disable dates for each in-scope system, compared with the termination date and your policy timeline (often same day or within 24 hours).
+    good_examples:
+      - GRC-pal leaver check comparing the HR export with Entra ID sign-in and disable dates.
+      - Offboarding ticket with checklist for each system and completion timestamps.
+    common_mistakes:
+      - Accounts in SaaS tools outside SSO left active after termination.
+      - Contractors who finished their engagement never offboarded because HR does not track them.
+    frequency: Event driven; auditors usually sample leavers across the whole period.
+  - id: CC6.2-PF03
+    what_auditor_tests: >
+      Whether user access is reviewed periodically by someone who can judge whether it is appropriate, and
+      whether inappropriate access found is removed.
+    evidence_standard:
+      - Complete user list for each in-scope system as of the review date, with how it was generated.
+      - Reviewer, date, decisions and evidence that removals were completed.
+    good_examples:
+      - Quarterly review issue with exported user lists, the reviewer's sign-off and tickets for each removal.
+      - Entra ID access review results export with decisions and applied status.
+    common_mistakes:
+      - Reviewer approves their own access.
+      - Review based on a list that is not complete (missing service accounts or admins).
+      - Removals decided but never actually done.
+    frequency: Quarterly is most common for production and privileged access; at least annually for others.

@@ -1,0 +1,89 @@
+criterion: CC2.1
+title: Relevant, quality information supports internal control
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  You know what information you need to run your controls, where it comes from, and that it is complete
+  and accurate. In practice this means asset and data inventories, data flow diagrams, data classification,
+  and confidence that the reports you hand the auditor (user lists, change lists) are complete.
+auditor_approach:
+  - Inspects the data inventory, data flow diagram and classification scheme.
+  - For each system-generated report you give as evidence (information produced by the entity, or IPE), asks how you know it is complete and accurate.
+  - Compares inventories with live systems to test completeness.
+points:
+  - id: CC2.1-PF01
+    what_auditor_tests: >
+      Whether you have identified the information needed to operate and monitor controls.
+    evidence_standard:
+      - System description and control list showing what information each control relies on.
+    good_examples:
+      - Control catalog listing the evidence source for each control (collector, task, document).
+    common_mistakes:
+      - Controls that depend on reports nobody knows how to produce.
+    frequency: Reviewed annually.
+  - id: CC2.1-PF02
+    what_auditor_tests: >
+      Whether internal and external data sources feeding the controls are known (identity provider, cloud
+      accounts, HR system, vendors).
+    evidence_standard:
+      - List of data sources and systems that produce control evidence.
+    good_examples:
+      - GRC-pal Configuration page showing connected sources; asset inventory with system owners.
+    common_mistakes:
+      - HR system not connected, so joiner and leaver populations come from manual spreadsheets that can be incomplete.
+    frequency: Reviewed annually and when systems change.
+  - id: CC2.1-PF03
+    what_auditor_tests: >
+      Whether raw data is turned into useful information for decisions, such as dashboards or reports on control status.
+    evidence_standard:
+      - Reports or dashboards used to monitor controls, with an example from the period.
+    good_examples:
+      - Monthly control health report exported from GRC-pal and reviewed by the security lead.
+    common_mistakes:
+      - Data collected but never reviewed by anyone.
+    frequency: Monthly or quarterly.
+  - id: CC2.1-PF04
+    what_auditor_tests: >
+      Whether reports used as evidence are complete and accurate (the auditor's IPE testing).
+    evidence_standard:
+      - How each report was produced (query, tool, parameters) and when.
+      - Reconciliation or tie-out showing completeness, for example user count matches the identity provider total.
+    good_examples:
+      - Collector output stored write-once with its query, run time and a SHA-256 manifest.
+      - Screenshot of the report parameters next to the exported list.
+    common_mistakes:
+      - Spreadsheets edited by hand before being given to the auditor.
+      - Exports with no date, filter or source information, so completeness cannot be shown.
+    frequency: Every time a report is used as evidence.
+  - id: CC2.1-PF05
+    what_auditor_tests: >
+      Whether the flow of data through the system is documented, including where customer data enters, is
+      stored, processed and leaves.
+    evidence_standard:
+      - Current data flow diagram covering in-scope systems and third parties.
+    good_examples:
+      - Data flow diagram in the repository, updated within the period via an approved pull request.
+    common_mistakes:
+      - Diagram missing integrations, analytics tools or backups.
+    frequency: Reviewed annually and on significant changes.
+  - id: CC2.1-PF06
+    what_auditor_tests: >
+      Whether assets (systems, devices, software, data stores) are tracked in inventories.
+    evidence_standard:
+      - Inventory exports for cloud resources, devices and SaaS applications with owners.
+    good_examples:
+      - Automated cloud resource inventory export plus Intune device list.
+    common_mistakes:
+      - SaaS applications holding customer data missing from any inventory.
+    frequency: Continuous or monthly export; reviewed quarterly.
+  - id: CC2.1-PF07
+    what_auditor_tests: >
+      Whether information is classified so people know how to handle it.
+    evidence_standard:
+      - Data classification policy and how classes map to data stores.
+    good_examples:
+      - Classification levels (public, internal, confidential) with handling rules, and the data inventory tagged by level.
+    common_mistakes:
+      - Classification policy exists but no data store is actually labeled.
+    frequency: Policy reviewed annually; inventory updated on change.

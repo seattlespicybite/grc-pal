@@ -1,0 +1,54 @@
+criterion: CC6.4
+title: Physical access to facilities and assets is restricted
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  Only authorized people can physically reach the places and equipment that hold the system. For cloud-only
+  companies the data centers are carved out to the cloud provider (you rely on their SOC 2), so evidence
+  focuses on vendor reports, any office with network equipment, and laptops returned at departure.
+auditor_approach:
+  - Checks whether data center controls are carved out to the cloud provider and that you reviewed the provider's SOC 2.
+  - For offices in scope, inspects badge access provisioning, removal and review.
+  - Samples leavers and checks company devices were recovered.
+points:
+  - id: CC6.4-PF01
+    what_auditor_tests: >
+      Whether physical access is granted only with authorization (or relied on from the cloud provider).
+    evidence_standard:
+      - Cloud provider SOC 2 report reviewed for physical access controls; for offices, badge request approvals.
+    good_examples:
+      - Annual vendor review of the Azure SOC 2 report noting physical security results.
+    common_mistakes:
+      - Claiming physical security is "not applicable" without showing reliance on the provider's report.
+    frequency: Annually for vendor reports; event driven for badges.
+  - id: CC6.4-PF02
+    what_auditor_tests: >
+      Whether physical access is removed when no longer needed.
+    evidence_standard:
+      - Badge deactivation for leavers, or confirmation physical access is carved out.
+    good_examples:
+      - Offboarding checklist including badge return and deactivation.
+    common_mistakes:
+      - Badges never deactivated for remote leavers.
+    frequency: Event driven.
+  - id: CC6.4-PF03
+    what_auditor_tests: >
+      Whether physical access lists are reviewed.
+    evidence_standard:
+      - Periodic review of badge access lists, or vendor report reliance.
+    good_examples:
+      - Annual office badge list review signed by facilities.
+    common_mistakes:
+      - No review of who can enter the server or network room.
+    frequency: At least annually.
+  - id: CC6.4-PF04
+    what_auditor_tests: >
+      Whether company devices are recovered when people leave.
+    evidence_standard:
+      - Device return or remote wipe records for sampled leavers, matched to the asset inventory.
+    good_examples:
+      - Offboarding ticket with laptop return confirmation and serial number; Intune wipe log.
+    common_mistakes:
+      - Remote employees keep laptops with no wipe record.
+    frequency: Event driven; sampled with leavers.

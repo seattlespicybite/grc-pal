@@ -1,0 +1,33 @@
+criterion: CC6.5
+title: Protections continue until assets are disposed of
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  Data and software are removed from equipment and storage before it leaves your control (sold, recycled,
+  returned to a lessor, or deleted from the cloud). This overlaps with confidentiality disposal (C1.2) and
+  uses the same evidence: wipe records, destruction certificates and deletion records.
+auditor_approach:
+  - Requests the population of disposed or reissued devices and decommissioned systems in the period.
+  - Samples and checks for wipe or destruction evidence matched to asset records.
+points:
+  - id: CC6.5-PF01
+    what_auditor_tests: >
+      Whether assets and data due for disposal are identified, for example retired devices and decommissioned cloud resources.
+    evidence_standard:
+      - Asset inventory showing retired status and disposal dates.
+    good_examples:
+      - Asset register with "retired" entries and the disposal ticket reference.
+    common_mistakes:
+      - Retired devices not tracked, so there is no population to sample.
+    frequency: Event driven.
+  - id: CC6.5-PF02
+    what_auditor_tests: >
+      Whether data and software are removed before assets leave your control.
+    evidence_standard:
+      - Wipe or destruction evidence for each sampled asset, dated before it left your control.
+    good_examples:
+      - Intune wipe report; vendor certificate of destruction listing serial numbers.
+    common_mistakes:
+      - Devices handed to a recycler with no destruction certificate.
+    frequency: Event driven; sampled.

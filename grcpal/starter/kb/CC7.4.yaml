@@ -1,0 +1,124 @@
+criterion: CC7.4
+title: Security incidents are responded to
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  When an incident happens, people with assigned roles contain it, remove the threat, restore operations,
+  communicate as required and fix the underlying weakness. The plan is tested (tabletop) and incidents are
+  reviewed for trends. If you had no real incidents, the tabletop exercise carries most of the evidence.
+auditor_approach:
+  - Reads the incident response plan and checks it is approved and current.
+  - Inspects each incident in the period, or the tabletop exercise if none occurred.
+  - Checks lessons learned and trend reviews.
+points:
+  - id: CC7.4-PF01
+    what_auditor_tests: >
+      Whether incident response roles and responsibilities are assigned.
+    evidence_standard:
+      - Incident plan naming roles (incident lead, communications, technical lead) and contacts.
+    good_examples:
+      - Incident plan with role table and on-call rotation.
+    common_mistakes:
+      - Plan lists people who left.
+    frequency: Reviewed annually.
+  - id: CC7.4-PF02
+    what_auditor_tests: >
+      Whether incidents are contained.
+    evidence_standard:
+      - Containment actions recorded in incident tickets.
+    good_examples:
+      - Incident timeline showing account disabled and keys rotated within an hour of detection.
+    common_mistakes:
+      - No timestamps, so speed of containment cannot be shown.
+    frequency: Event driven.
+  - id: CC7.4-PF03
+    what_auditor_tests: >
+      Whether ongoing incidents are mitigated while they are investigated.
+    evidence_standard:
+      - Mitigation steps in the incident record.
+    good_examples:
+      - Temporary firewall block and WAF rule documented during the incident.
+    common_mistakes:
+      - Mitigations applied but not recorded.
+    frequency: Event driven.
+  - id: CC7.4-PF04
+    what_auditor_tests: >
+      Whether the threat is removed (eradication).
+    evidence_standard:
+      - Eradication steps recorded.
+    good_examples:
+      - Malware removed and device reimaged, with ticket evidence.
+    common_mistakes:
+      - Incident closed before eradication was confirmed.
+    frequency: Event driven.
+  - id: CC7.4-PF05
+    what_auditor_tests: >
+      Whether normal operations are restored.
+    evidence_standard:
+      - Recovery steps and confirmation of normal service.
+    good_examples:
+      - Status page resolution and monitoring confirmation.
+    common_mistakes:
+      - No confirmation that systems were verified clean before reconnection.
+    frequency: Event driven.
+  - id: CC7.4-PF06
+    what_auditor_tests: >
+      Whether communication protocols (internal, customer, regulator) are defined and followed.
+    evidence_standard:
+      - Communication section of the plan and actual notifications sent.
+    good_examples:
+      - Customer notification template and the notification sent within the contractual timeline.
+    common_mistakes:
+      - Notification obligations in contracts not reflected in the plan.
+    frequency: Event driven; plan reviewed annually.
+  - id: CC7.4-PF07
+    what_auditor_tests: >
+      Whether the incident is understood and a containment strategy chosen deliberately.
+    evidence_standard:
+      - Analysis notes and decision record in the incident.
+    good_examples:
+      - Incident record documenting scope, affected data and chosen strategy.
+    common_mistakes:
+      - Actions taken with no recorded reasoning.
+    frequency: Event driven.
+  - id: CC7.4-PF08
+    what_auditor_tests: >
+      Whether vulnerabilities exploited or found during the incident are fixed.
+    evidence_standard:
+      - Remediation tickets linked to the incident and closed.
+    good_examples:
+      - Patch or configuration change linked to the incident root cause.
+    common_mistakes:
+      - Root-cause vulnerability left open after the incident closes.
+    frequency: Event driven.
+  - id: CC7.4-PF09
+    what_auditor_tests: >
+      Whether remediation activities are communicated to relevant parties.
+    evidence_standard:
+      - Communication of remediation to leadership and affected parties.
+    good_examples:
+      - Post-incident summary sent to leadership and affected customers.
+    common_mistakes:
+      - Leadership unaware of remediation status.
+    frequency: Event driven.
+  - id: CC7.4-PF10
+    what_auditor_tests: >
+      Whether incident response effectiveness is evaluated, for example through tabletop exercises and post-incident reviews.
+    evidence_standard:
+      - Tabletop exercise or post-incident review inside the period, with actions.
+    good_examples:
+      - Annual tabletop report with scenario, participants, gaps and tracked actions.
+    common_mistakes:
+      - No tabletop in the period and no real incidents, so the plan is untested.
+    frequency: At least annually and inside the observation period.
+  - id: CC7.4-PF11
+    what_auditor_tests: >
+      Whether incidents are reviewed periodically for trends.
+    evidence_standard:
+      - Periodic incident trend review reported to leadership.
+    good_examples:
+      - Quarterly leadership report with incident counts and themes.
+    common_mistakes:
+      - Recurring incidents of the same type with no trend analysis.
+    frequency: Quarterly or annually.

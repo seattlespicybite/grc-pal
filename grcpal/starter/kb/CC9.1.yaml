@@ -1,0 +1,34 @@
+criterion: CC9.1
+title: Risks from business disruption are mitigated
+status: draft
+reviewed_by: ""
+last_reviewed: ""
+summary: >
+  You plan for disruptions (outages, disasters, loss of key people or vendors) through business continuity
+  planning, and you consider insurance to cover financial impact. Evidence is the continuity plan, its link
+  to the risk assessment, and an insurance policy summary.
+auditor_approach:
+  - Reads the business continuity plan and checks it is approved and current.
+  - Checks that disruption risks appear in the risk assessment.
+  - Inspects proof of relevant insurance (for example cyber liability) covering the period.
+points:
+  - id: CC9.1-PF01
+    what_auditor_tests: >
+      Whether disruption risks are identified and mitigated through continuity planning.
+    evidence_standard:
+      - Business continuity plan with recovery objectives, approved and reviewed in the period.
+    good_examples:
+      - Continuity plan with RTO and RPO per service, linked from risk register entries.
+    common_mistakes:
+      - Plan not updated after major architecture changes.
+    frequency: Reviewed annually.
+  - id: CC9.1-PF02
+    what_auditor_tests: >
+      Whether insurance is considered to reduce financial impact of incidents.
+    evidence_standard:
+      - Insurance certificate or summary showing coverage dates and type.
+    good_examples:
+      - Cyber liability insurance certificate valid through the observation period.
+    common_mistakes:
+      - Policy lapsed during the period.
+    frequency: Annually at renewal.
