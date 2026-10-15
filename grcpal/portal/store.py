@@ -52,6 +52,7 @@ def _decode(entity: dict) -> dict:
 
 class SqliteStore:
     def __init__(self, path: str = ":memory:") -> None:
+        self.path = path
         self._db = sqlite3.connect(path, check_same_thread=False)
         self._lock = threading.Lock()
         self._db.execute("CREATE TABLE IF NOT EXISTS entities (tbl TEXT, pk TEXT, rk TEXT, data TEXT, PRIMARY KEY (tbl, pk, rk))")
@@ -99,6 +100,22 @@ class SqliteStore:
         rows = self._db.execute("SELECT data FROM entities WHERE tbl=? AND substr(pk, 1, ?) = ?",
                                 (table, len(prefix), prefix)).fetchall()
         return [_decode(json.loads(r[0])) for r in rows]
+
+    def snapshot(self, path: str) -> "SqliteStore":
+        """Point-in-time copy using SQLite's online backup, so a backup never mixes old and new rows."""
+        dest = sqlite3.connect(path)
+        try:
+            with self._lock:
+                self._db.backup(dest)
+        finally:
+            dest.close()
+        return SqliteStore(path)
+
+    def is_empty(self) -> bool:
+        return self._db.execute("SELECT 1 FROM entities LIMIT 1").fetchone() is None
+
+    def close(self) -> None:
+        self._db.close()
 
 
 def azure_table_name(table: str) -> str:
@@ -161,6 +178,9 @@ class TableStore:
         items = self._clients[table].query_entities("PartitionKey ge @lo and PartitionKey lt @hi",
                                                     parameters={"lo": prefix, "hi": prefix + "~"})
         return [_decode(dict(e)) for e in items]
+
+    def is_empty(self) -> bool:
+        return not any(next(iter(c.list_entities(results_per_page=1)), None) for c in self._clients.values())
 
 
 class TenantStore:

@@ -13,5 +13,8 @@
 {% if first_admin %}<div class="card"><h2>First time here?</h2>
 <p class="sub">Nobody has a password yet. On the server that runs GRC-pal, create the first admin:</p>
 <p class="mono">grcpal create-admin you@example.com --name "Your Name"</p>
-<p class="sub">With Docker: <span class="mono">docker compose exec grcpal grcpal create-admin you@example.com</span>. Then sign in here and add everyone else on the Users and roles page.</p></div>{% endif %}
+<p class="sub">With Docker: <span class="mono">docker compose exec grcpal grcpal create-admin you@example.com</span>. Then sign in here and add everyone else on the Users and roles page.</p>
+<h3>Rebuilding from a backup?</h3>
+<p class="sub">Copy the backup file and your recovery kit to the server, then restore instead of creating an admin. Everyone signs in with their existing accounts afterwards.</p>
+<p class="mono">grcpal backup restore FILE.grcbak --kit recovery-kit.json</p></div>{% endif %}
 {% endblock %}

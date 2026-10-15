@@ -19,6 +19,7 @@ from grcpal.portal.store import NOT_BACKED_UP, TABLES, SqliteStore, TenantStore
 
 def make_instance(tmp_path: Path) -> backup.Instance:
     """Two tenants with users, settings, audit records, evidence and an inbox file."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
     base = SqliteStore(str(tmp_path / "grcpal.db"))
     for tenant in ("acme", "globex"):
         ts = TenantStore(base, tenant)

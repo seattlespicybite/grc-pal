@@ -98,16 +98,19 @@ frameworks, audit log), all evidence, the HR inbox and the published configurati
 installs have no other copy of their data, so take one regularly.
 
 ```bash
-grcpal backup keygen --key-file backup.key          # once; store the key outside the instance
-grcpal backup create acme-2026-10.grcbak --key-file backup.key
-grcpal backup verify acme-2026-10.grcbak --key-file backup.key
+grcpal backup keygen                          # once: creates keys/backup.key next to the database
+grcpal backup kit --out recovery-kit.json     # once: put this file in a password manager, then delete it here
+grcpal backup create acme-2026-10.grcbak
+grcpal backup verify acme-2026-10.grcbak
 ```
 
-- **Two keys, kept apart.** The backup key encrypts the file. `GRCPAL_ENCRYPTION_KEY` (which protects
-  saved integration secrets) is never put in a backup; keep it too. Losing the backup key makes the
-  backup unreadable. Losing the app key only means re-entering integration secrets after a restore.
-  The key can also come from the `GRCPAL_BACKUP_KEY` environment variable; it is never accepted on
-  the command line, so it stays out of shell history.
+- **Recovery kit.** One small file with the backup key and `GRCPAL_ENCRYPTION_KEY` (the app key that
+  protects integration credentials saved in the portal). With a backup file and the kit, a clean machine
+  can be rebuilt. Keep it in a password manager or safe, never next to the backups. Making a kit is
+  recorded in the audit log (`backup.kit_export`).
+- **Where the key comes from.** `--key-file`, `--kit`, the `GRCPAL_BACKUP_KEY` environment variable
+  (Azure: a Container Apps secret), or `keys/backup.key` next to the database. A key is never accepted
+  on the command line, so it stays out of shell history. The app key is never put in a backup.
 - **Tamper-evident.** The file is AES-256-GCM in authenticated chunks. Any changed, reordered or
   missing byte makes `verify` fail. Its manifest holds the SHA-256 of every file and the
   audit-chain check of each tenant.
@@ -115,14 +118,33 @@ grcpal backup verify acme-2026-10.grcbak --key-file backup.key
   `backup.complete` (with the file's SHA-256), so you can match a file to its audit record.
 - **Private by default.** The file is created with owner-only permissions and an existing file is
   never overwritten.
-- **Consistency.** Take backups at a quiet time (for example right after the nightly collection).
-  Rows written during a backup may be in the file or not; evidence is write-once, so nothing
-  already stored can change.
+- **Consistent.** On VMs the database is read from a point-in-time copy (SQLite online backup), so
+  rows written during a backup never mix in. Evidence is write-once, so nothing already stored changes.
+- **Not included on purpose:** sign-in sessions and one-time setup/reset links. After a restore,
+  everyone signs in again with their existing accounts.
 
-Restoring into a clean instance (`grcpal backup restore`) is the next step on the roadmap. Until
-then, `verify` proves the file is complete.
+### Restore
 
-Once a year, check recoverability: run `grcpal backup verify` on a recent backup, open the latest
+Restore checks the whole file first and writes nothing unless it is intact. It only fills an
+**empty** instance or a **new folder**, so it can never overwrite live data.
+
+```bash
+# rebuild a clean machine (fresh install, before anyone signs in)
+grcpal backup restore acme-2026-10.grcbak --kit recovery-kit.json
+# or restore into a separate folder, e.g. to inspect a recovery point
+grcpal backup restore acme-2026-10.grcbak --kit recovery-kit.json --into /var/lib/grcpal/restore-test
+```
+
+- Before starting GRC-pal on the new machine, set `GRCPAL_ENCRYPTION_KEY` to the kit's `settings_key`.
+  If you don't, restore warns you and integration credentials must be entered again.
+- A backup made by a newer GRC-pal is refused; install that version (or newer) first.
+- Each tenant's audit log continues the restored chain with a `backup.restore` record (backup ID, file
+  SHA-256, version it came from). `grcpal audit verify` shows one unbroken chain.
+- If an audit log inside the backup does not verify, restore stops. `--accept-audit-problems`
+  restores anyway and records that you chose to.
+
+Once a year, check recoverability: restore a recent backup with `--into` a test folder (or onto a
+test VM) and keep the JSON result as evidence (SOC 2 A1.3); also open the latest
 `portal_audit` export and confirm it has every table and that `audit_chain_verification.json` says `"ok": true`; redeploy a test instance with
 `--name acme-restore` to confirm the template still deploys.
 
