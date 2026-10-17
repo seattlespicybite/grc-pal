@@ -179,8 +179,27 @@ def base_args(data: Path = DATA, data_ro: bool = False, network: str = "host") -
     for f in ("grcpal.env", "secrets.env"):
         if (ETC / f).is_file():
             args += ["--env-file", str(ETC / f)]
-    return args + ["-v", f"{data}:/data{':ro' if data_ro else ''}", "-v", f"{BACKUPS}:/backups",
-                   "-v", f"{STATE}:/state:ro", "-v", f"{REQUESTS}:/requests"]
+    args += ["-v", f"{data}:/data{':ro' if data_ro else ''}", "-v", f"{BACKUPS}:/backups",
+             "-v", f"{STATE}:/state:ro", "-v", f"{REQUESTS}:/requests"]
+    second = second_backup_dir()
+    if second is not None:  # e.g. a mounted network share, shown on the Backups page as a second location
+        args += ["-v", f"{second}:/backups2", "-e", "GRCPAL_BACKUP_DIR_2=/backups2"]
+    return args
+
+
+def second_backup_dir() -> Path | None:
+    """GRCPAL_BACKUP_DIR_2_HOST in /etc/grcpal/grcpal.env: an existing absolute folder outside GRC-pal's own."""
+    env = ETC / "grcpal.env"
+    if not env.is_file():
+        return None
+    m = re.search(r"(?m)^GRCPAL_BACKUP_DIR_2_HOST=(/[^\s]*)\s*$", env.read_text())
+    if not m:
+        return None
+    path = Path(m.group(1))
+    if not path.is_dir() or path.is_symlink() or path in (ROOT, ETC, Path("/")) or ROOT in path.parents:
+        log(f"Second backup location {path} ignored (must be an existing folder outside {ROOT})")
+        return None
+    return path
 
 
 def serve() -> None:

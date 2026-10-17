@@ -248,6 +248,57 @@ def selftest(base, evidence_root: Path | None, expect: dict | None = None, sampl
     return {"ok": not problems, "problems": problems[:50], "checked": checked, "at": _now()}
 
 
+EXPECTED_KEY = "update-expected"
+
+
+def save_expected(base, tenant: str) -> dict:
+    """Row counts before an Azure update, kept in the instance's own state row for the after-switch self-test."""
+    data = {"counts": counts(base), "at": _now()}
+    base.upsert("config", {"PartitionKey": f"{tenant}|state", "RowKey": EXPECTED_KEY, "json": json.dumps(data)})
+    return data
+
+
+def load_expected(base, tenant: str, max_age_hours: int = 24) -> dict:
+    row = base.get("config", f"{tenant}|state", EXPECTED_KEY)
+    if not row:
+        raise UpdateError("No row counts were saved before this update (run `grcpal update trial` first)")
+    data = json.loads(row["json"])
+    age = dt.datetime.now(dt.timezone.utc) - dt.datetime.fromisoformat(data["at"])
+    if age > dt.timedelta(hours=max_age_hours):
+        raise UpdateError(f"The saved row counts are from {data['at']}, older than {max_age_hours} hours; "
+                          "run the trial again")
+    return data["counts"]
+
+
+def trial_copy(base, tenant: str | None = None) -> dict:
+    """Azure trial run, executed by the NEW version: copy every backed-up table into a scratch database, run
+    this version's migrations there and self-test the copy. The live tables are only read (plus the saved row
+    counts). Evidence is never migrated, so it is not copied."""
+    from grcpal import migrations
+    from grcpal.backup import BACKUP_TABLES
+    from grcpal.portal.store import SqliteStore
+
+    scratch = SqliteStore(":memory:")
+    for table in BACKUP_TABLES:
+        for row in base.list_prefix(table, ""):
+            scratch.upsert(table, row)
+    meta = migrations.read_meta(base)
+    if meta is not None:
+        scratch.upsert(migrations.META_TABLE, {"PartitionKey": migrations.META_PK, "RowKey": migrations.META_RK,
+                                               **{k: v for k, v in meta.items() if k not in ("PartitionKey", "RowKey")}})
+    expected = save_expected(base, tenant)["counts"] if tenant else counts(base)
+    try:
+        applied = migrations.migrate(scratch)
+    except migrations.SchemaError as exc:
+        return {"ok": False, "problems": [f"migrations failed on the copy: {exc}"], "checked": {}, "at": _now()}
+    except Exception as exc:  # noqa: BLE001 - any crash in a migration must stop the update
+        return {"ok": False, "problems": [f"a migration crashed on the copy: {type(exc).__name__}: {exc}"[:500]],
+                "checked": {}, "at": _now()}
+    result = selftest(scratch, None, expected, skip_evidence=True)
+    result["checked"]["migrations_applied"] = applied
+    return result
+
+
 def record(base, action: str, detail: dict) -> None:
     """Updater events in every organization's audit log (update.applied, update.rolled_back, ...)."""
     from grcpal import migrations

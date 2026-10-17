@@ -116,6 +116,69 @@ def test_selftest_passes_on_healthy_data_and_catches_damage(tmp_path):
     assert any("changed" in p for p in bad["problems"]) and any("table users" in p for p in bad["problems"])
 
 
+# ====================================================================== Azure trial (copy of the tables)
+def _rows(base):
+    from grcpal.backup import BACKUP_TABLES
+    return {t: sorted(json.dumps(r, sort_keys=True, default=str) for r in base.list_prefix(t, ""))
+            for t in BACKUP_TABLES}
+
+
+def test_azure_trial_migrates_a_copy_and_leaves_live_tables_alone(tmp_path, monkeypatch):
+    from grcpal import migrations
+
+    inst = make_instance(tmp_path)
+    seen = []
+
+    def add_column(base):  # an additive migration, as the next release would ship
+        for r in base.list_prefix("users", ""):
+            seen.append(r["RowKey"])
+            base.upsert("users", {**r, "new_field": "x"})
+
+    monkeypatch.setattr(migrations, "MIGRATIONS", (migrations.Migration(2, "add new_field", add_column),))
+    monkeypatch.setattr(migrations, "SCHEMA_VERSION", 2)
+    before = _rows(inst.base)
+    result = update.trial_copy(inst.base, "acme")
+    assert result["ok"], result["problems"]
+    assert result["checked"]["migrations_applied"] == [2] and seen
+    after = _rows(inst.base)
+    assert {t: v for t, v in after.items() if t != "config"} == {t: v for t, v in before.items() if t != "config"}
+    assert all("new_field" not in r for r in inst.base.list_prefix("users", ""))  # only the copy was migrated
+    assert update.load_expected(inst.base, "acme") == update.counts(inst.base) | {"config": update.counts(inst.base)["config"] - 1}
+
+
+def test_azure_trial_stops_on_a_crashing_migration(tmp_path, monkeypatch):
+    from grcpal import migrations
+
+    inst = make_instance(tmp_path)
+
+    def broken(base):
+        raise RuntimeError("bad migration")
+
+    monkeypatch.setattr(migrations, "MIGRATIONS", (migrations.Migration(2, "broken", broken),))
+    monkeypatch.setattr(migrations, "SCHEMA_VERSION", 2)
+    result = update.trial_copy(inst.base, "acme")
+    assert not result["ok"] and "bad migration" in result["problems"][0]
+
+
+def test_saved_counts_catch_lost_rows_after_the_switch(tmp_path):
+    inst = make_instance(tmp_path)
+    update.save_expected(inst.base, "acme")
+    assert update.selftest(inst.base, None, update.load_expected(inst.base, "acme"), skip_evidence=True)["ok"]
+    inst.base.delete("users", "globex|u", "admin@globex.example.com")
+    bad = update.selftest(inst.base, None, update.load_expected(inst.base, "acme"), skip_evidence=True)
+    assert not bad["ok"] and any("table users" in p for p in bad["problems"])
+
+
+def test_saved_counts_expire(tmp_path):
+    inst = make_instance(tmp_path)
+    inst.base.upsert("config", {"PartitionKey": "acme|state", "RowKey": update.EXPECTED_KEY,
+                                "json": json.dumps({"counts": {}, "at": "2020-01-01T00:00:00+00:00"})})
+    with pytest.raises(update.UpdateError, match="older than"):
+        update.load_expected(inst.base, "acme")
+    with pytest.raises(update.UpdateError, match="No row counts"):
+        update.load_expected(inst.base, "globex")
+
+
 def test_record_only_accepts_update_events(tmp_path):
     inst = make_instance(tmp_path)
     update.record(inst.base, "update.applied", {"to": "0.3.0"})
@@ -460,3 +523,17 @@ def test_rollback_keeps_the_app_owning_its_files(vm):
     mod.apply(staged)
     for p in (mod.DATA / "grcpal.db", mod.DATA / "keys", mod.DATA / "keys" / "backup.key"):
         assert p.stat().st_uid == 10001, p
+
+
+def test_second_backup_location_is_mounted_only_when_safe(tmp_path, monkeypatch):
+    mod = load_updater(tmp_path, monkeypatch)
+    (tmp_path / "etc").mkdir()
+    share = tmp_path / "nas"
+    share.mkdir()
+    env = tmp_path / "etc" / "grcpal.env"
+    env.write_text(f"GRCPAL_ENV=production\nGRCPAL_BACKUP_DIR_2_HOST={share}\n")
+    args = " ".join(mod.base_args())
+    assert f"{share}:/backups2" in args and "GRCPAL_BACKUP_DIR_2=/backups2" in args
+    for bad in (str(tmp_path / "missing"), str(mod.ROOT / "data"), "/"):
+        env.write_text(f"GRCPAL_BACKUP_DIR_2_HOST={bad}\n")
+        assert "/backups2" not in " ".join(mod.base_args())

@@ -68,6 +68,14 @@ param retentionDays int = 730
 @allowed(['Standard_LRS', 'Standard_ZRS', 'Standard_GRS'])
 param storageSku string = 'Standard_GRS'
 
+@description('Key that encrypts backup files (base64 of 32 random bytes). deploy.sh creates it once and reuses it; keep a copy in the recovery kit.')
+@secure()
+param backupKey string
+
+@description('Days each backup file is write-protected in the backups container (protects against deletion and ransomware).')
+@minValue(1)
+param backupRetentionDays int = 35
+
 @description('Optional allow-list of source IP ranges (CIDR). Empty = reachable from anywhere, still behind sign-in.')
 param allowedIpRanges array = []
 
@@ -76,6 +84,7 @@ var storageName = take('stgrc${replace(instanceName, '-', '')}${suffix}', 24)
 var appName = take('grcpal-${instanceName}', 32)
 var tenantId = subscription().tenantId
 var roleIds = {
+  contributor: 'b24988ac-6180-42a0-ab88-20f7382dd24c'
   blobContributor: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
   tableContributor: '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
 }
@@ -134,6 +143,22 @@ resource config 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-
   properties: { publicAccess: 'None' }
 }
 
+// Backup files (grcpal backup): write-once for backupRetentionDays, so they cannot be changed or deleted early.
+resource backups 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: blobService
+  name: 'backups'
+  properties: { publicAccess: 'None' }
+}
+
+resource backupsImmutability 'Microsoft.Storage/storageAccounts/blobServices/containers/immutabilityPolicies@2023-05-01' = {
+  parent: backups
+  name: 'default'
+  properties: {
+    immutabilityPeriodSinceCreationInDays: backupRetentionDays
+    allowProtectedAppendWrites: false
+  }
+}
+
 // ------------------------------------------------------------------ identities
 resource portalIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: 'id-${appName}'
@@ -152,6 +177,24 @@ resource githubFederation 'Microsoft.ManagedIdentity/userAssignedIdentities/fede
   properties: {
     issuer: 'https://token.actions.githubusercontent.com'
     subject: 'repo:${githubRepo}:ref:refs/heads/main'
+    audiences: ['api://AzureADTokenExchange']
+  }
+}
+
+// Updates (deploy/azure/update.sh) run from the program repository's monthly workflow with this identity. Only
+// workflow runs in the repository's `grcpal-update` environment can use it (add required reviewers there to
+// approve every update). It may change this container app and its jobs, nothing else.
+resource updaterIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = if (!empty(githubRepo)) {
+  name: 'id-${appName}-updater'
+  location: location
+}
+
+resource updaterFederation 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31' = if (!empty(githubRepo)) {
+  parent: updaterIdentity
+  name: 'github-grcpal-update'
+  properties: {
+    issuer: 'https://token.actions.githubusercontent.com'
+    subject: 'repo:${githubRepo}:environment:grcpal-update'
     audiences: ['api://AzureADTokenExchange']
   }
 }
@@ -230,6 +273,7 @@ var baseSecrets = [
   { name: 'grcpal-secret', value: grcpalSecret }
   { name: 'encryption-key', value: encryptionKey }
   { name: 'smtp-password', value: empty(smtpPassword) ? 'unused' : smtpPassword }
+  { name: 'backup-key', value: backupKey }
 ]
 
 var appEnv = [
@@ -250,6 +294,8 @@ var appEnv = [
   { name: 'GRCPAL_SMTP_PORT', value: smtpPort }
   { name: 'GRCPAL_SMTP_USER', value: smtpUser }
   { name: 'GRCPAL_SMTP_PASSWORD', secretRef: 'smtp-password' }
+  { name: 'GRCPAL_BACKUP_KEY', secretRef: 'backup-key' }
+  { name: 'GRCPAL_BACKUP_CONTAINER', value: 'backups' }
 ]
 
 resource app 'Microsoft.App/containerApps@2024-03-01' = {
@@ -264,10 +310,12 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
     environmentId: env.id
     workloadProfileName: 'Consumption'
     configuration: {
-      activeRevisionsMode: 'Single'
+      // Multiple: an update starts a new revision with no traffic, checks it, then moves traffic (update.sh).
+      activeRevisionsMode: 'Multiple'
       ingress: {
         external: true
         targetPort: 8000
+        traffic: [{ latestRevision: true, weight: 100 }]
         transport: 'auto'
         allowInsecure: false
         ipSecurityRestrictions: [for (cidr, i) in allowedIpRanges: {
@@ -300,11 +348,14 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
 
 
 // Scheduled jobs on the same image and identity: daily collection and checks (with the settings saved on the
-// Configuration page), weekly overdue reminders, monthly recurring tasks.
+// Configuration page), weekly overdue reminders, monthly recurring tasks, and the hourly backup runner (the
+// schedule and "Back up now" from the Backups page; also used by update.sh for the pre-update backup and checks).
+// The backup job is larger: a backup is written to the job's local disk before it is uploaded.
 var jobs = [
-  { name: 'collect', cron: '17 6 * * *', args: ['collect', '--all', '--checks'] }
-  { name: 'remind', cron: '0 13 * * 1', args: ['remind', '--overdue'] }
-  { name: 'tasks', cron: '0 12 1 * *', args: ['tasks'] }
+  { name: 'collect', cron: '17 6 * * *', args: ['collect', '--all', '--checks'], cpu: '0.25', memory: '0.5Gi' }
+  { name: 'remind', cron: '0 13 * * 1', args: ['remind', '--overdue'], cpu: '0.25', memory: '0.5Gi' }
+  { name: 'tasks', cron: '0 12 1 * *', args: ['tasks'], cpu: '0.25', memory: '0.5Gi' }
+  { name: 'backup', cron: '7 * * * *', args: ['backup', 'run-due'], cpu: '1.0', memory: '2Gi' }
 ]
 
 resource scheduled 'Microsoft.App/jobs@2024-03-01' = [for j in jobs: {
@@ -333,7 +384,7 @@ resource scheduled 'Microsoft.App/jobs@2024-03-01' = [for j in jobs: {
           image: image
           command: ['grcpal']
           args: j.args
-          resources: { cpu: json('0.25'), memory: '0.5Gi' }
+          resources: { cpu: json(j.cpu), memory: j.memory }
           env: appEnv
         }
       ]
@@ -341,6 +392,48 @@ resource scheduled 'Microsoft.App/jobs@2024-03-01' = [for j in jobs: {
   }
   dependsOn: [portalBlob, portalTables]
 }]
+
+resource updaterOnApp 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(githubRepo)) {
+  scope: app
+  name: guid(app.id, 'updater', roleIds.contributor)
+  properties: {
+    principalId: updaterIdentity!.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleIds.contributor)
+  }
+}
+
+resource updaterOnJobs 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for (j, i) in jobs: if (!empty(githubRepo)) {
+  scope: scheduled[i]
+  name: guid(scheduled[i].id, 'updater', roleIds.contributor)
+  properties: {
+    principalId: updaterIdentity!.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleIds.contributor)
+  }
+}]
+
+// Creating a revision also needs permission to use the environment; this role grants that one action only.
+resource envJoinRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' = if (!empty(githubRepo)) {
+  name: guid(resourceGroup().id, 'grcpal-updater-env-join')
+  properties: {
+    roleName: 'GRC-pal updater environment use (${resourceGroup().name})'
+    description: 'Lets the GRC-pal updater create container app revisions in this environment, nothing else.'
+    type: 'CustomRole'
+    permissions: [{ actions: ['Microsoft.App/managedEnvironments/read', 'Microsoft.App/managedEnvironments/join/action'] }]
+    assignableScopes: [resourceGroup().id]
+  }
+}
+
+resource updaterOnEnv 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(githubRepo)) {
+  scope: env
+  name: guid(env.id, 'updater', 'env-join')
+  properties: {
+    principalId: updaterIdentity!.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: envJoinRole.id
+  }
+}
 
 resource auth 'Microsoft.App/containerApps/authConfigs@2024-03-01' = {
   parent: app
@@ -377,4 +470,5 @@ output tablesUrl string = storage.properties.primaryEndpoints.table
 output portalIdentityClientId string = portalIdentity.properties.clientId
 output portalIdentityPrincipalId string = portalIdentity.properties.principalId
 output collectorClientId string = empty(githubRepo) ? '' : collectorIdentity!.properties.clientId
+output updaterClientId string = empty(githubRepo) ? '' : updaterIdentity!.properties.clientId
 output collectorPrincipalId string = empty(githubRepo) ? '' : collectorIdentity!.properties.principalId

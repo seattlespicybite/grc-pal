@@ -40,8 +40,13 @@
 
 {% elif data.deployment == 'azure' %}
 <section class="card"><h2>Updates on Azure</h2>
-<p>The monthly update job checks for a new release. Patch releases install automatically; feature and major releases wait for approval. Each new version first runs beside the current one without traffic, is checked, and only then takes over. The previous version stays ready for a one-click rollback.</p>
-<p class="sub">Details and the rollback command: docs/deploy-azure.md, "Updates".</p></section>
+<p>This instance runs GRC-pal {{ data.version }}. Updates run from your program repository's <strong>GRC-pal update</strong> workflow (Actions tab), not from this page, so the portal itself can never change its own software.</p>
+<ul>
+<li>Patch releases install on the 8th of each month. Feature and major releases install only when someone runs the workflow with the version number.</li>
+<li>Every update takes a backup first and tries the new version on a copy of the data. The new version then runs beside the current one with no users, and must pass its checks before it takes over.</li>
+<li>The previous version stays ready: run the workflow with <strong>rollback</strong> to go back.</li>
+</ul>
+<p class="sub">Each update, failed trial and rollback appears in the audit log (update.applied, update.trial_failed, update.rolled_back). Details: docs/deploy-azure.md, "Updates".</p></section>
 {% else %}
 <section class="card"><h2>Manual installation</h2>
 <p>This copy of GRC-pal was not installed with the VM installer, so updates are manual: take a backup, install the new version, start it. Migrations run on start and refuse data they cannot read.</p>

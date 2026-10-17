@@ -77,7 +77,7 @@ jobs:
           for d in (a, b): d.get("metadata", {}).pop("_generator", None)
           assert a == b, "deploy/azure/azuredeploy.json is stale: run az bicep build and commit it"
           PY
-      - run: bash -n deploy/azure/deploy.sh
+      - run: bash -n deploy/azure/deploy.sh && bash -n deploy/azure/update.sh && bash -n deploy/vm/install.sh
 
   image:
     runs-on: ubuntu-latest

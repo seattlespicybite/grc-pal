@@ -426,8 +426,13 @@ def cmd_backup(args) -> int:
             out = {**backup.summary(report), "file": args.file, "sha256": manifest["file_sha256"]}
         elif args.action == "restore":
             target = backup.folder_instance(Path(args.into)) if args.into else backup.from_env(args.evidence, create=True)
-            out = backup.restore(Path(args.file), key, target, accept_audit_problems=args.accept_audit_problems,
-                                 tables_only=args.tables_only)
+            source, fetched = _restore_source(args.file, Path(args.evidence))
+            try:
+                out = backup.restore(source, key, target, accept_audit_problems=args.accept_audit_problems,
+                                     tables_only=args.tables_only)
+            finally:
+                if fetched:
+                    source.unlink(missing_ok=True)
             if args.into:
                 out["restored_into"] = args.into
             for w in out["warnings"]:
@@ -440,6 +445,28 @@ def cmd_backup(args) -> int:
         return 2
     print(json.dumps(out, indent=2))
     return 0 if out["ok"] else 2
+
+
+def _restore_source(name: str, evidence_root: Path) -> tuple[Path, bool]:
+    """A local file, or a backup by name from this instance's backup locations (Azure container, second
+    folder). Returns (path, downloaded); a downloaded copy is owner-only and removed after the restore."""
+    import shutil
+    import tempfile
+
+    from grcpal import backup, backup_store
+
+    path = Path(name)
+    if path.is_file():
+        return path, False
+    if not backup_store.parse_name(name):
+        raise backup.BackupError(f"{name} is not a file here and not a GRC-pal backup name")
+    for dest in backup_store.destinations(evidence_root):
+        if name in {b["name"] for b in dest.list()}:
+            fd, tmp = tempfile.mkstemp(suffix=".grcbak")
+            with dest.open(name) as src, os.fdopen(fd, "wb") as out:
+                shutil.copyfileobj(src, out, 1 << 20)
+            return Path(tmp), True
+    raise backup.BackupError(f"No backup named {name} in this instance's backup locations")
 
 
 def _audit_all_tenants(args, action: str, detail: dict) -> None:
@@ -490,15 +517,23 @@ def cmd_update(args) -> int:
             from grcpal.portal.store import from_env
 
             base = from_env().backend
+            tenant = os.getenv("GRCPAL_TENANT", "default")
             if args.action == "counts":
                 out = update.counts(base)
-            elif args.action == "selftest":
-                expect = json.loads(Path(args.expect).read_text()) if args.expect else None
+            elif args.action == "trial":
+                out = update.trial_copy(base, tenant)
+                print(json.dumps(out, indent=2))
+                return 0 if out["ok"] else 2
+            elif args.action in ("selftest", "selftest-saved"):
+                if args.expect_saved or args.action == "selftest-saved":
+                    expect = update.load_expected(base, tenant)
+                else:
+                    expect = json.loads(Path(args.expect).read_text()) if args.expect else None
                 out = update.selftest(base, Path(args.evidence), expect, skip_evidence=args.tables_only)
                 print(json.dumps(out, indent=2))
                 return 0 if out["ok"] else 2
-            else:  # record
-                update.record(base, args.event, json.loads(args.detail or "{}"))
+            else:  # record EVENT [DETAIL]: positional too, so an Azure job can pass them without dashed options
+                update.record(base, args.event or args.file or "", json.loads(args.detail or args.value or "{}"))
                 out = {"ok": True}
     except update.UpdateError as exc:
         print(f"update: {exc}", file=sys.stderr)
@@ -639,8 +674,11 @@ def main(argv: list[str] | None = None) -> int:
     bk.set_defaults(fn=cmd_backup)
 
     up = sub.add_parser("update", help="signed update files and the VM updater's checks")
-    up.add_argument("action", choices=["verify", "verify-manifest", "keygen", "bundle", "counts", "selftest", "record"])
-    up.add_argument("file", nargs="?", help="verify: the .grcupdate file; verify-manifest: manifest.json")
+    up.add_argument("action", choices=["verify", "verify-manifest", "keygen", "bundle", "counts", "trial", "selftest",
+                                       "selftest-saved", "record"])
+    up.add_argument("file", nargs="?", help="verify: the .grcupdate file; verify-manifest: manifest.json; "
+                                            "record: the event")
+    up.add_argument("value", nargs="?", help="record: JSON details")
     up.add_argument("--sig", help="verify-manifest: the signature file")
     up.add_argument("--public-key", help="public key file (default /etc/grcpal/update-signing.pub)")
     up.add_argument("--private-out")
@@ -654,6 +692,8 @@ def main(argv: list[str] | None = None) -> int:
     up.add_argument("--out")
     up.add_argument("--expect", help="selftest: JSON of row counts saved before the update")
     up.add_argument("--tables-only", action="store_true", help="selftest: skip evidence (trial run)")
+    up.add_argument("--expect-saved", action="store_true",
+                    help="selftest: compare with the row counts `update trial` saved (Azure)")
     up.add_argument("--event", help="record: update.applied, update.rolled_back, restore.completed, ...")
     up.add_argument("--detail", help="record: JSON details")
     up.set_defaults(fn=cmd_update)
