@@ -25,7 +25,7 @@ portal = ["fastapi>=0.110", "uvicorn[standard]>=0.29", "jinja2>=3.1", "python-mu
 aws = ["boto3>=1.34"]
 gcp = ["google-auth>=2.29"]
 all = ["grc-pal[portal,aws,gcp]"]
-dev = ["pytest>=8", "httpx>=0.27", "pyflakes>=3", "grc-pal[portal,aws,gcp]"]
+dev = ["pytest>=8", "httpx>=0.27", "pyflakes>=3", "python-docx>=1.1", "grc-pal[portal,aws,gcp]"]
 
 [project.scripts]
 grcpal = "grcpal.cli:main"

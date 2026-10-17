@@ -858,7 +858,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     from types import SimpleNamespace
 
-    from grcpal.portal import routes_accounts, routes_backups, routes_calendar, routes_extra, routes_vendors
+    from grcpal.portal import (routes_accounts, routes_backups, routes_calendar, routes_doclib, routes_extra,
+                               routes_vendors)
 
     if mode == "local":
         routes_accounts.register(app, SimpleNamespace(p=p, templates=templates, HTTPError=_HTTPError,
@@ -873,6 +874,9 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         invalidate=invalidate, HTTPError=_HTTPError, attachment=_attachment, safe_dest=safe_dest))
     routes_backups.register(app, SimpleNamespace(p=p, current_user=current_user, need=need, check_csrf=check_csrf,
                                                  render=render, back=back))
+    routes_doclib.register(app, SimpleNamespace(
+        p=p, current_user=current_user, need=need, check_csrf=check_csrf, render=render, back=back,
+        HTTPError=_HTTPError, attachment=_attachment))
     routes_vendors.register(app, SimpleNamespace(
         p=p, current_user=current_user, need=need, check_csrf=check_csrf, render=render, back=back,
         invalidate=invalidate, HTTPError=_HTTPError, attachment=_attachment))

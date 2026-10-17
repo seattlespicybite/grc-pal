@@ -33,6 +33,7 @@
       <a href="/vendors" class="{{ 'active' if path.startswith('/vendors') }}">Vendors</a>
       {% if user.sees_everything %}<a href="/evidence" class="{{ 'active' if path.startswith('/evidence') }}">Evidence store</a>{% endif %}
       <a href="/policies" class="{{ 'active' if path.startswith('/policies') }}">Policies</a>
+      <a href="/library" class="{{ 'active' if path.startswith('/library') }}">Document library</a>
       <a href="/kb" class="{{ 'active' if path.startswith('/kb') }}">Knowledge base</a>
       {% if user.sees_everything %}<a href="/overrides" class="{{ 'active' if path.startswith('/overrides') }}">Overrides</a>
       <a href="/ai" class="{{ 'active' if path.startswith('/ai') }}">AI assistant</a>
