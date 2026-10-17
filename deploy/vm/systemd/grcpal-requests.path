@@ -1,0 +1,9 @@
+[Unit]
+Description=GRC-pal: requests from the portal (approved updates, restores, update settings)
+
+[Path]
+PathExistsGlob=/var/lib/grcpal/requests/*.json
+Unit=grcpal-requests.service
+
+[Install]
+WantedBy=paths.target

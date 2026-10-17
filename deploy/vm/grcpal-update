@@ -1,0 +1,601 @@
+#!/usr/bin/env python3
+"""GRC-pal updater for VM installs (Debian 13 + Docker). Runs as root on the host, never inside the app.
+
+    grcpal-update status                     what is installed, what is waiting
+    grcpal-update apply FILE.grcupdate       install a signed update file (same steps as an approved update)
+    grcpal-update check                      monthly: find a newer update; install patches if allowed
+    grcpal-update requests                   act on requests from the portal (approve update, restore, policy)
+    grcpal-update rollback                   go back to the previous version (the data copy from before the switch)
+    grcpal-update serve                      used by grcpal.service: run the portal container
+    grcpal-update job NAME                   used by the timers: backup | collect | tasks | remind
+    grcpal-update exec ARGS...               run a grcpal command in the running container (wrapper: grcpal)
+    grcpal-update run ARGS...                run a grcpal command in a one-off container (portal stopped)
+
+How an update is applied (nothing changes until step 5):
+  1. the running (trusted) version checks the file's signature and the image checksum;
+  2. the image is loaded and its ID compared with the signed manifest;
+  3. a backup is taken and checked, and row counts are saved;
+  4. TRIAL: the new version restores that backup's tables into a scratch folder, runs its migrations and
+     its self-test there. A failure stops the update here, with the live system untouched;
+  5. the portal stops; the database, settings and keys are copied aside (evidence is write-once and never
+     changed by an update, so it is not copied); the new image starts and migrates the live data;
+  6. HEALTH GATE: the portal must answer and pass its self-test (data model, audit chains, evidence hashes,
+     no table lost rows). Otherwise the copies are put back and the previous image is started (rollback).
+Every step is logged to /var/lib/grcpal/state/update.log and recorded in the portal's audit log.
+
+Only the Python standard library is used. Requests written by the portal are validated here on their own:
+the portal can ask for an update that is already signed and staged, or a restore of an existing backup,
+nothing else.
+"""
+from __future__ import annotations
+
+import datetime as dt
+import fcntl
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import time
+import urllib.request
+from pathlib import Path
+
+ROOT = Path(os.environ.get("GRCPAL_ROOT", "/var/lib/grcpal"))
+ETC = Path(os.environ.get("GRCPAL_ETC", "/etc/grcpal"))
+DATA, BACKUPS, UPDATES = ROOT / "data", ROOT / "backups", ROOT / "updates"
+STATE, REQUESTS, ROLLBACK, TRIAL = ROOT / "state", ROOT / "requests", ROOT / "rollback", ROOT / "trial"
+APP_UID = 10001
+CONTAINER = "grcpal"
+HEALTH_URL = os.environ.get("GRCPAL_HEALTH_URL", "http://127.0.0.1:8000/healthz")
+HEALTH_SECONDS = int(os.environ.get("GRCPAL_HEALTH_SECONDS", "180"))
+VERSION_RE = re.compile(r"^\d{1,4}\.\d{1,4}\.\d{1,4}$")
+BACKUP_RE = re.compile(r"^grcpal-[a-z0-9][a-z0-9-]{0,39}-\d{8}T\d{6}Z-(scheduled|manual|pre-update)\.grcbak$")
+JOBS = {"backup": ["backup", "run-due"], "collect": ["collect", "--all", "--checks"], "tasks": ["tasks"],
+        "remind": ["remind", "--overdue"]}
+DEFAULT_POLICY = {"auto_patch": True, "online": False, "repository": "seattlespicybite/grc-pal"}
+SMALL_DATA = ("grcpal.db", "grcpal.db-wal", "grcpal.db-shm", "config", "inbox", "keys")  # copied before a switch
+KEEP_ROLLBACKS = 2
+
+
+class Failed(Exception):
+    pass
+
+
+def now() -> str:
+    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
+
+
+def log(msg: str) -> None:
+    line = f"{now()} {msg}"
+    print(line, flush=True)
+    STATE.mkdir(parents=True, exist_ok=True)
+    with (STATE / "update.log").open("a") as f:
+        f.write(line + "\n")
+
+
+def write_json(path: Path, data) -> None:
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(json.dumps(data, indent=2))
+    tmp.chmod(0o644)
+    os.replace(tmp, path)
+
+
+def read_json(path: Path, default=None):
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return default
+
+
+def status(state: str, message: str, **extra) -> None:
+    write_json(STATE / "status.json", {"state": state, "message": message, "at": now(), **extra})
+    log(f"[{state}] {message}")
+
+
+def history(event: dict) -> None:
+    with (STATE / "history.jsonl").open("a") as f:
+        f.write(json.dumps({"at": now(), **event}) + "\n")
+
+
+def policy() -> dict:
+    return {**DEFAULT_POLICY, **(read_json(STATE / "policy.json", {}) or {})}
+
+
+def kind_of(current: str, new: str) -> str:
+    c, n = (tuple(int(x) for x in v.split(".")) for v in (current, new))
+    if n == c:
+        return "same"
+    if n < c:
+        return "older"
+    return "major" if n[0] != c[0] else "minor" if n[1] != c[1] else "patch"
+
+
+# ====================================================================== host operations (replaced in tests)
+class Host:
+    """Docker, systemd and HTTP. Tests swap this for a fake."""
+
+    def docker(self, *args: str, check: bool = True, timeout: int = 3600) -> subprocess.CompletedProcess:
+        r = subprocess.run(["docker", *args], capture_output=True, text=True, timeout=timeout)
+        if check and r.returncode != 0:
+            raise Failed(f"docker {args[0]} failed: {(r.stderr or r.stdout).strip()[-800:]}")
+        return r
+
+    def systemctl(self, *args: str) -> None:
+        subprocess.run(["systemctl", *args], check=True, timeout=300)
+
+    def running(self) -> bool:
+        r = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", CONTAINER], capture_output=True, text=True)
+        return r.returncode == 0 and r.stdout.strip() == "true"
+
+    def healthy(self) -> bool:
+        try:
+            with urllib.request.urlopen(HEALTH_URL, timeout=5) as resp:
+                return resp.status == 200
+        except OSError:
+            return False
+
+    def chown(self, path: Path) -> None:
+        os.chown(path, APP_UID, APP_UID)
+
+    def download(self, url: str, dest: Path) -> None:
+        req = urllib.request.Request(url, headers={"Accept": "application/octet-stream", "User-Agent": "grcpal-update"})
+        with urllib.request.urlopen(req, timeout=600) as resp, dest.open("wb") as f:
+            shutil.copyfileobj(resp, f)
+
+    def get_json(self, url: str):
+        req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json", "User-Agent": "grcpal-update"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return json.loads(resp.read(1 << 20))
+
+
+HOST = Host()
+
+
+# ====================================================================== the container
+def image() -> dict:
+    env = {}
+    try:
+        for line in (STATE / "image.env").read_text().splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip()
+    except OSError:
+        raise Failed("No GRC-pal image is installed yet (state/image.env missing); run install.sh") from None
+    return {"image": env.get("GRCPAL_IMAGE", ""), "version": env.get("GRCPAL_VERSION", "")}
+
+
+def set_image(img: str, version: str) -> None:
+    tmp = STATE / ".image.env.tmp"
+    tmp.write_text(f"GRCPAL_IMAGE={img}\nGRCPAL_VERSION={version}\n")
+    os.replace(tmp, STATE / "image.env")
+
+
+def base_args(data: Path = DATA, data_ro: bool = False, network: str = "host") -> list[str]:
+    """Hardening for every GRC-pal container: read-only root, no capabilities, non-root user."""
+    args = ["--network", network, "--read-only", "--tmpfs", "/tmp:rw,size=512m", "--cap-drop", "ALL",
+            "--security-opt", "no-new-privileges", "--user", f"{APP_UID}:{APP_UID}"]
+    for f in ("grcpal.env", "secrets.env"):
+        if (ETC / f).is_file():
+            args += ["--env-file", str(ETC / f)]
+    return args + ["-v", f"{data}:/data{':ro' if data_ro else ''}", "-v", f"{BACKUPS}:/backups",
+                   "-v", f"{STATE}:/state:ro", "-v", f"{REQUESTS}:/requests"]
+
+
+def serve() -> None:
+    """ExecStart of grcpal.service. The portal listens on localhost only; Caddy serves HTTPS in front."""
+    img = image()["image"]
+    os.execvp("docker", ["docker", "run", "--rm", "--name", CONTAINER, *base_args(), img,
+                         "uvicorn", "grcpal.portal.app:app", "--host", "127.0.0.1", "--port", "8000",
+                         "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "127.0.0.1",
+                         "--no-server-header", "--limit-concurrency", "50"])
+
+
+def grcpal(*args: str, img: str | None = None, check: bool = True, extra: list[str] | None = None,
+           data: Path = DATA, data_ro: bool = False, network: str = "host") -> subprocess.CompletedProcess:
+    """A grcpal command: inside the running portal when it is up (same settings), else a one-off container."""
+    if img is None and HOST.running():
+        return HOST.docker("exec", CONTAINER, "grcpal", *args, check=check)
+    img = img or image()["image"]
+    return HOST.docker("run", "--rm", *base_args(data, data_ro, network), *(extra or []), img, "grcpal", *args,
+                       check=check)
+
+
+def grcpal_json(*args: str, **kw) -> dict:
+    r = grcpal(*args, check=False, **kw)
+    try:
+        out = json.loads(r.stdout)
+    except ValueError:
+        out = None
+    if r.returncode != 0 or not isinstance(out, dict):
+        raise Failed(f"grcpal {' '.join(args[:2])}: {(r.stderr or r.stdout).strip()[-800:]}")
+    return out
+
+
+def record(event: str, detail: dict) -> None:
+    """Best effort: the event in the portal's audit log (the updater's own log always has it)."""
+    try:
+        grcpal("update", "record", "--event", event, "--detail", json.dumps(detail), check=False)
+    except Failed:
+        pass
+
+
+def wait_healthy() -> bool:
+    deadline = time.monotonic() + HEALTH_SECONDS
+    while True:  # always checks at least once
+        if HOST.running() and HOST.healthy():
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(3)
+
+
+# ====================================================================== data copies
+def copy_keeping_owner(src: Path, dst: Path) -> None:
+    """Copy a file or folder and keep each item's owner. The updater runs as root; a plain copy would hand the
+    app's own database and keys to root, and the app could then no longer write them."""
+    if src.is_dir() and not src.is_symlink():
+        shutil.copytree(src, dst, symlinks=True)
+    else:
+        shutil.copy2(src, dst, follow_symlinks=False)
+    pairs = [(src, dst)]
+    if src.is_dir() and not src.is_symlink():
+        for folder, dirs, files in os.walk(src):
+            rel = Path(folder).relative_to(src)
+            pairs += [(Path(folder) / n, dst / rel / n) for n in dirs + files]
+    for a, b in pairs:
+        st = a.lstat()
+        os.lchown(b, st.st_uid, st.st_gid)
+
+
+def copy_small_data(dest: Path) -> None:
+    dest.mkdir(parents=True, exist_ok=False)
+    for name in SMALL_DATA:
+        if (DATA / name).exists():
+            copy_keeping_owner(DATA / name, dest / name)
+
+
+def put_back_small_data(saved: Path, failed: Path) -> None:
+    failed.mkdir(parents=True, exist_ok=True)
+    for name in SMALL_DATA:
+        cur = DATA / name
+        if cur.exists():
+            shutil.move(str(cur), str(failed / name))
+        if (saved / name).exists():
+            copy_keeping_owner(saved / name, cur)
+
+
+def prune_rollbacks() -> None:
+    if ROLLBACK.is_dir():
+        dirs = sorted(p for p in ROLLBACK.iterdir() if p.is_dir() and not p.name.endswith("-before-restore"))
+        for old in dirs[:-KEEP_ROLLBACKS]:
+            shutil.rmtree(old, ignore_errors=True)
+
+
+def fresh_dir(path: Path) -> Path:
+    shutil.rmtree(path, ignore_errors=True)
+    path.mkdir(parents=True)
+    HOST.chown(path)
+    return path
+
+
+# ====================================================================== verify and load an update file
+def verify_file(path: Path) -> dict:
+    """The running version checks the signature and checksum, with no network."""
+    key = ETC / "update-signing.pub"
+    if not key.is_file():
+        raise Failed(f"{key} is missing, so update files cannot be checked; see docs/deploy-vm.md")
+    r = HOST.docker("run", "--rm", "--network", "none", "--read-only", "--cap-drop", "ALL",
+                    "--security-opt", "no-new-privileges", "--user", f"{APP_UID}:{APP_UID}",
+                    "-v", f"{path.resolve()}:/u/update.grcupdate:ro", "-v", f"{key}:/u/key.pub:ro",
+                    image()["image"], "grcpal", "update", "verify", "/u/update.grcupdate", "--public-key", "/u/key.pub",
+                    check=False)
+    try:
+        manifest = json.loads(r.stdout)
+    except ValueError:
+        manifest = None
+    if r.returncode != 0 or not isinstance(manifest, dict):
+        raise Failed(f"{path.name} did not pass its check: {(r.stderr or r.stdout).strip()[-500:]}")
+    if not VERSION_RE.match(str(manifest.get("version", ""))):
+        raise Failed("The update manifest has no valid version")
+    return manifest
+
+
+def load_image(path: Path, manifest: dict) -> str:
+    work = fresh_dir(UPDATES / "work")
+    try:
+        with tarfile.open(path, "r:") as tar:
+            member = tar.getmember("image.tar")
+            if not member.isfile():
+                raise Failed("image.tar is not a regular file")
+            with tar.extractfile(member) as src, (work / "image.tar").open("wb") as out:
+                shutil.copyfileobj(src, out, 1 << 20)
+        HOST.docker("load", "-i", str(work / "image.tar"))
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    got = HOST.docker("image", "inspect", "-f", "{{.Id}}", manifest["image_ref"]).stdout.strip()
+    if got != manifest["image_id"]:
+        raise Failed(f"The loaded image ID {got[:19]} does not match the signed manifest {manifest['image_id'][:19]}")
+    return manifest["image_id"]
+
+
+# ====================================================================== apply
+def apply(path: Path, by: str = "operator") -> bool:
+    cur = image()
+    status("checking", f"Checking {path.name}")
+    manifest = verify_file(path)
+    new_v, kind = manifest["version"], kind_of(cur["version"] or "0.0.0", manifest["version"])
+    if kind in ("same", "older"):
+        status("idle", f"{new_v} is not newer than the installed {cur['version']}; nothing to do")
+        return False
+    new_img = load_image(path, manifest)
+    detail = {"from": cur["version"], "to": new_v, "kind": kind, "file": path.name, "by": by}
+
+    status("backing_up", "Taking and checking a backup before the update", **detail)
+    pre = grcpal_json("backup", "pre-update")
+    expected = grcpal_json("update", "counts")
+    write_json(STATE / "expected.json", expected)
+    detail["backup"] = pre["file"]
+
+    status("trial", f"Trying {new_v} on a copy of the data", **detail)
+    trial = fresh_dir(TRIAL)
+    try:
+        grcpal_json("backup", "restore", f"/backups/{pre['file']}", "--into", "/trial", "--tables-only", img=new_img,
+                    data_ro=True, network="none", extra=["-v", f"{trial}:/trial"])
+        shutil.copy2(STATE / "expected.json", trial / "expected.json")
+        HOST.chown(trial / "expected.json")
+        test = grcpal("update", "selftest", "--tables-only", "--expect", "/trial/expected.json", img=new_img,
+                      data_ro=True, network="none", check=False,
+                      extra=["-v", f"{trial}:/trial", "-e", "GRCPAL_SQLITE=/trial/grcpal.db"])
+        if test.returncode != 0:
+            raise Failed(f"{new_v} failed its self-test on the copy: {test.stdout.strip()[-800:]}")
+    except Failed as exc:
+        status("failed", f"Update stopped before any change: {exc}", **detail)
+        history({"event": "update.trial_failed", **detail, "reason": str(exc)[:500]})
+        record("update.trial_failed", {**detail, "reason": str(exc)[:300]})
+        return False
+    finally:
+        shutil.rmtree(TRIAL, ignore_errors=True)
+
+    status("switching", f"Switching to {new_v}", **detail)
+    record("update.started", detail)
+    saved = ROLLBACK / f"{dt.datetime.now(dt.timezone.utc):%Y%m%dT%H%M%SZ}-{cur['version']}"
+    write_json(STATE / "previous.json", {**cur, "saved": str(saved)})
+    HOST.systemctl("stop", "grcpal")
+    copy_small_data(saved)
+    set_image(new_img, new_v)
+    HOST.systemctl("start", "grcpal")
+
+    status("health", "Checking the new version", **detail)
+    problem = ""
+    if not wait_healthy():
+        problem = "the portal did not answer within the health check time"
+    else:
+        r = grcpal("update", "selftest", "--expect", "/state/expected.json", check=False)
+        if r.returncode != 0:
+            problem = f"self-test failed: {r.stdout.strip()[-800:]}"
+    if problem:
+        rollback(reason=problem)
+        return False
+    status("done", f"Updated to {new_v}", **detail)
+    history({"event": "update.applied", **detail})
+    record("update.applied", detail)
+    prune_rollbacks()
+    keep_images(new_img, cur["image"])
+    return True
+
+
+def keep_images(current: str, previous: str) -> None:
+    """Keep the running and the previous image (instant rollback); remove the one before them."""
+    before = read_json(STATE / "images.json", {}) or {}
+    for img in {before.get("current"), before.get("previous")} - {current, previous, None, ""}:
+        HOST.docker("rmi", img, check=False)
+    write_json(STATE / "images.json", {"current": current, "previous": previous})
+
+
+def rollback(reason: str = "requested") -> None:
+    prev = read_json(STATE / "previous.json")
+    if not prev or not prev.get("image"):
+        raise Failed("Nothing to roll back to (no previous version recorded)")
+    cur = image()
+    status("rolling_back", f"Going back to {prev['version']}: {reason}")
+    HOST.systemctl("stop", "grcpal")
+    saved = Path(prev["saved"])
+    if saved.is_dir():
+        put_back_small_data(saved, saved.with_name(saved.name + "-failed"))
+    set_image(prev["image"], prev["version"])
+    HOST.systemctl("start", "grcpal")
+    ok = wait_healthy()
+    detail = {"from": cur["version"], "to": prev["version"], "reason": reason[:500]}
+    history({"event": "update.rolled_back", **detail, "healthy": ok})
+    if ok:
+        record("update.rolled_back", detail)
+        status("rolled_back", f"Back on {prev['version']}. The update was not kept: {reason[:300]}", **detail)
+    else:
+        status("failed", f"Rolled back to {prev['version']} but it does not answer. Restore the pre-update backup "
+                         "(docs/deploy-vm.md, 'If an update goes wrong').", **detail)
+
+
+# ====================================================================== monthly check and staged files
+def staged() -> list[tuple[Path, dict]]:
+    """Verified update files in /var/lib/grcpal/updates, newest version first."""
+    found = []
+    for p in sorted(UPDATES.glob("*.grcupdate")):
+        try:
+            found.append((p, verify_file(p)))
+        except Failed as exc:
+            log(f"ignored {p.name}: {exc}")
+    return sorted(found, key=lambda pm: tuple(int(x) for x in pm[1]["version"].split(".")), reverse=True)
+
+
+def download_latest() -> None:
+    pol = policy()
+    if not pol.get("online"):
+        return
+    rel = HOST.get_json(f"https://api.github.com/repos/{pol['repository']}/releases/latest")
+    asset = next((a for a in rel.get("assets", []) if a.get("name", "").endswith(".grcupdate")), None)
+    if not asset or not re.fullmatch(r"grcpal-\d+\.\d+\.\d+\.grcupdate", asset["name"]):
+        return
+    dest = UPDATES / asset["name"]
+    if not dest.exists():
+        log(f"Downloading {asset['name']}")
+        part = UPDATES / f".{asset['name']}.part"
+        HOST.download(asset["browser_download_url"], part)
+        os.replace(part, dest)
+
+
+def check() -> None:
+    cur = image()["version"]
+    try:
+        download_latest()
+    except (OSError, ValueError, KeyError) as exc:
+        log(f"online check failed: {exc}")
+    newer = [(p, m) for p, m in staged() if kind_of(cur, m["version"]) in ("patch", "minor", "major")]
+    if not newer:
+        write_json(STATE / "available.json", {})
+        status("idle", f"{cur} is up to date")
+        return
+    path, manifest = newer[0]
+    kind = kind_of(cur, manifest["version"])
+    if kind == "patch" and policy()["auto_patch"]:
+        log(f"{manifest['version']} is a patch release and automatic patches are on")
+        apply(path, by="monthly schedule")
+        return
+    write_json(STATE / "available.json", {"version": manifest["version"], "kind": kind, "file": path.name,
+                                          "notes": manifest.get("notes", "")[:20000], "found_at": now()})
+    status("waiting", f"{manifest['version']} ({kind}) is ready and waits for an admin to approve it")
+
+
+# ====================================================================== requests from the portal
+def restore(name: str, by: str) -> bool:
+    if not BACKUP_RE.match(name) or not (BACKUPS / name).is_file():
+        raise Failed("Unknown backup")
+    status("checking", f"Checking {name} before restoring it")
+    rep = grcpal("backup", "verify", f"/backups/{name}", check=False)
+    if rep.returncode != 0:
+        raise Failed(f"{name} did not pass its check; nothing was changed")
+    pre = grcpal_json("backup", "pre-update")
+    stamp = f"{dt.datetime.now(dt.timezone.utc):%Y%m%dT%H%M%SZ}-before-restore"
+    old = ROLLBACK / stamp
+    detail = {"backup": name, "safety_backup": pre["file"], "by": by, "previous_data": str(old)}
+    record("restore.started", detail)
+    status("restoring", f"Restoring {name}", **detail)
+    HOST.systemctl("stop", "grcpal")
+    ROLLBACK.mkdir(parents=True, exist_ok=True)
+    os.replace(DATA, old)  # same disk: instant, and the old data stays whole until you delete it
+    fresh_dir(DATA)
+    if (old / "keys").is_dir():
+        copy_keeping_owner(old / "keys", DATA / "keys")
+    r = grcpal("backup", "restore", f"/backups/{name}", check=False, img=image()["image"])
+    ok = r.returncode == 0
+    if ok:
+        HOST.systemctl("start", "grcpal")
+        ok = wait_healthy()
+    if not ok:
+        HOST.systemctl("stop", "grcpal")
+        os.replace(DATA, ROLLBACK / f"{stamp}-failed")
+        os.replace(old, DATA)
+        HOST.systemctl("start", "grcpal")
+        status("failed", f"Restore of {name} failed; the previous data is back: {(r.stderr or r.stdout).strip()[-300:]}",
+               **detail)
+        history({"event": "restore.failed", **detail})
+        return False
+    record("restore.completed", detail)
+    history({"event": "restore.completed", **detail})
+    status("done", f"Restored {name}. The data from before is kept in {old}; delete it when you no longer need it.",
+           **detail)
+    return True
+
+
+def handle_requests() -> None:
+    for p in sorted(REQUESTS.glob("*.json")):
+        req = None
+        try:  # the folder is writable by the app: never follow a link it may have planted
+            fd = os.open(p, os.O_RDONLY | os.O_NOFOLLOW)
+            with os.fdopen(fd, "rb") as f:
+                req = json.loads(f.read(4096))
+        except (OSError, ValueError):
+            req = None
+        p.unlink(missing_ok=True)  # each request is acted on once
+        if not isinstance(req, dict):
+            log(f"ignored unreadable request {p.name}")
+            continue
+        by = str(req.get("by", "portal"))[:200]
+        action = req.get("action")
+        try:
+            if action == "apply" and VERSION_RE.match(str(req.get("version", ""))):
+                match = [(f, m) for f, m in staged() if m["version"] == req["version"]]
+                if not match:
+                    raise Failed(f"No checked update file for {req['version']} is staged")
+                apply(match[0][0], by=by)
+            elif action == "restore" and isinstance(req.get("backup"), str):
+                restore(req["backup"], by)
+            elif action == "policy" and isinstance(req.get("auto_patch"), bool):
+                pol = policy()
+                pol["auto_patch"] = req["auto_patch"]
+                if isinstance(req.get("online"), bool):
+                    pol["online"] = req["online"]
+                write_json(STATE / "policy.json", pol)
+                history({"event": "update.policy", "by": by, "auto_patch": pol["auto_patch"], "online": pol["online"]})
+                record("update.policy", {"by": by, "auto_patch": pol["auto_patch"], "online": pol["online"]})
+            else:
+                log(f"ignored invalid request {p.name}")
+        except Failed as exc:
+            status("failed", str(exc))
+            history({"event": f"{action}.failed", "by": by, "reason": str(exc)[:500]})
+
+
+# ====================================================================== main
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] in ("-h", "--help"):
+        print(__doc__)
+        return 0
+    cmd, rest = argv[0], argv[1:]
+    if cmd == "serve":
+        serve()
+    if cmd == "exec":
+        return subprocess.call(["docker", "exec", "-i", *(["-t"] if sys.stdin.isatty() else []), CONTAINER, "grcpal", *rest])
+    if cmd == "run":
+        r = HOST.docker("run", "--rm", *base_args(), image()["image"], "grcpal", *rest, check=False)
+        sys.stdout.write(r.stdout)
+        sys.stderr.write(r.stderr)
+        return r.returncode
+    if cmd == "job":
+        if not rest or rest[0] not in JOBS:
+            print(f"job must be one of {', '.join(JOBS)}", file=sys.stderr)
+            return 2
+        return grcpal(*JOBS[rest[0]], check=False).returncode
+    if cmd == "status":
+        print(json.dumps({"installed": image(), "status": read_json(STATE / "status.json", {}),
+                          "available": read_json(STATE / "available.json", {}), "policy": policy()}, indent=2))
+        return 0
+    STATE.mkdir(parents=True, exist_ok=True)
+    with (STATE / ".lock").open("w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print("Another update or restore is running", file=sys.stderr)
+            return 3
+        try:
+            if cmd == "apply" and len(rest) == 1:
+                return 0 if apply(Path(rest[0])) else 1
+            if cmd == "check":
+                check()
+                return 0
+            if cmd == "requests":
+                handle_requests()
+                return 0
+            if cmd == "rollback":
+                rollback()
+                return 0
+        except Failed as exc:
+            status("failed", str(exc))
+            print(f"grcpal-update: {exc}", file=sys.stderr)
+            return 1
+    print(__doc__, file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

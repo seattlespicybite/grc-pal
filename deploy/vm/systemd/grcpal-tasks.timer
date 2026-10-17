@@ -1,0 +1,11 @@
+[Unit]
+Description=GRC-pal: Open this month's recurring control tasks
+
+[Timer]
+OnCalendar=*-*-01 06:00:00
+RandomizedDelaySec=300
+Persistent=true
+Unit=grcpal-job@tasks.service
+
+[Install]
+WantedBy=timers.target

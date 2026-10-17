@@ -77,7 +77,7 @@ class BackupsMixin:
             places.append({"id": d.id, "label": d.label, "where": d.where(), "kind": d.kind, "problem": problem,
                            "backups": items, "can_delete": d.can_delete})
         return {"blocker": self.backups_blocker(), "schedule": sched, "places": places,
-                "queue_mode": self.backup_queue_mode,
+                "queue_mode": self.backup_queue_mode, "can_restore": self.deployment == "vm",
                 "request": self.settings_store.state(backup_store.REQUEST_KEY, None),
                 "running": self.jobs.running("backup"), "kit": state.get("kit") or {},
                 "key_file": str(backup_store.key_file(self.evidence.root) or ""),
@@ -154,6 +154,20 @@ class BackupsMixin:
         self.settings_store.set_state(backup_store.STATE_KEY, state)
         self.audit(actor, "backup.kit_export", "backups", {"settings_key_included": bool(backup._settings_key())})
         return text
+
+    def run_pre_update_backup(self) -> dict:
+        """The updater's mandatory backup before switching versions (operator path, so it also works when the
+        instance holds several organizations; the file is then named after the instance)."""
+        dests = self._backup_dests()
+        if not dests:
+            raise self._invalid("No backup location is configured")
+        label = self.store.tenant if not (backup.tenants_in(self.store.backend) - {self.store.tenant}) else "instance"
+        result = backup_store.run(self._backup_instance(), dests[0], self._backup_key(), label, "pre-update",
+                                  sched=self.backup_schedule())
+        if not result.summary.get("verified_ok"):
+            raise self._invalid(f"The pre-update backup {result.name} did not pass its check")
+        return {"file": result.name, "path": str(dests[0].local_path(result.name) or ""), "where": result.where,
+                "sha256": result.summary.get("file_sha256"), "verified": True}
 
     # ================================================================ scheduled runner (CLI / job)
     def run_due_backups(self, now=None) -> list[dict]:

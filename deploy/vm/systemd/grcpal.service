@@ -1,0 +1,17 @@
+[Unit]
+Description=GRC-pal portal (container, localhost only; Caddy serves HTTPS)
+After=docker.service network-online.target
+Wants=network-online.target
+BindsTo=docker.service
+
+[Service]
+Type=simple
+ExecStartPre=-/usr/bin/docker rm -f grcpal
+ExecStart=/usr/local/sbin/grcpal-update serve
+ExecStop=/usr/bin/docker stop -t 30 grcpal
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target docker.service

@@ -1,0 +1,8 @@
+[Unit]
+Description=GRC-pal scheduled job: %i
+After=grcpal.service
+Requisite=grcpal.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/grcpal-update job %i

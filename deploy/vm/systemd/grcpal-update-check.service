@@ -1,0 +1,8 @@
+[Unit]
+Description=GRC-pal monthly update check
+After=grcpal.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/grcpal-update check
+TimeoutStartSec=3600

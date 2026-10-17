@@ -390,6 +390,10 @@ def cmd_backup(args) -> int:
             print("Next: grcpal backup kit --out recovery-kit.json, and keep that file in a password manager, "
                   "apart from the backups. Without the key a backup cannot be read.", file=sys.stderr)
             return 0
+        if args.action == "pre-update":
+            out = _admin_portal(args).run_pre_update_backup()
+            print(json.dumps({"ok": True, **out}, indent=2))
+            return 0
         if args.action == "run-due":
             done = _admin_portal(args).run_due_backups()
             print(json.dumps({"ok": all(d.get("verified") for d in done), "backups": done}, indent=2))
@@ -422,7 +426,8 @@ def cmd_backup(args) -> int:
             out = {**backup.summary(report), "file": args.file, "sha256": manifest["file_sha256"]}
         elif args.action == "restore":
             target = backup.folder_instance(Path(args.into)) if args.into else backup.from_env(args.evidence, create=True)
-            out = backup.restore(Path(args.file), key, target, accept_audit_problems=args.accept_audit_problems)
+            out = backup.restore(Path(args.file), key, target, accept_audit_problems=args.accept_audit_problems,
+                                 tables_only=args.tables_only)
             if args.into:
                 out["restored_into"] = args.into
             for w in out["warnings"]:
@@ -450,6 +455,56 @@ def _audit_all_tenants(args, action: str, detail: dict) -> None:
     tenants = {r["PartitionKey"].split("|", 1)[0] for r in inst.base.list_prefix("users", "")}
     for t in sorted(tenants):
         AuditLog(TenantStore(inst.base, t)).append("cli", action, "backup", detail)
+
+
+def cmd_update(args) -> int:
+    """Signed update files and the updater's checks (VM installs; the updater on the host calls these)."""
+    from grcpal import update
+
+    try:
+        if args.action == "verify":
+            out = update.verify_bundle(Path(args.file), update.public_keys(args.public_key))
+        elif args.action == "verify-manifest":
+            out = update.verify_manifest(Path(args.file).read_bytes(), Path(args.sig).read_text(),
+                                         update.public_keys(args.public_key))
+        elif args.action == "keygen":
+            if not (args.private_out and args.public_out):
+                raise SystemExit("grcpal update keygen needs --private-out and --public-out")
+            private, public = update.keygen()
+            from grcpal.backup import _write_private
+
+            _write_private(Path(args.private_out), private)
+            Path(args.public_out).write_text(public)
+            out = {"ok": True, "private": args.private_out, "public": args.public_out}
+        elif args.action == "bundle":
+            private = os.getenv("GRCPAL_UPDATE_SIGNING_KEY") or (Path(args.key_file).read_text() if args.key_file else "")
+            if not private:
+                raise SystemExit("Give the signing key with --key-file or GRCPAL_UPDATE_SIGNING_KEY")
+            from grcpal.portal.store import SCHEMA_VERSION
+
+            notes = Path(args.notes_file).read_text() if args.notes_file else ""
+            out = update.make_bundle(Path(args.out), Path(args.image_tar), args.version, args.image_ref,
+                                     args.image_id, private, SCHEMA_VERSION, notes)
+            out.pop("notes", None)
+        else:
+            from grcpal.portal.store import from_env
+
+            base = from_env().backend
+            if args.action == "counts":
+                out = update.counts(base)
+            elif args.action == "selftest":
+                expect = json.loads(Path(args.expect).read_text()) if args.expect else None
+                out = update.selftest(base, Path(args.evidence), expect, skip_evidence=args.tables_only)
+                print(json.dumps(out, indent=2))
+                return 0 if out["ok"] else 2
+            else:  # record
+                update.record(base, args.event, json.loads(args.detail or "{}"))
+                out = {"ok": True}
+    except update.UpdateError as exc:
+        print(f"update: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(out, indent=2))
+    return 0
 
 
 def cmd_migrate(args) -> int:
@@ -571,7 +626,7 @@ def main(argv: list[str] | None = None) -> int:
     # allow_abbrev=False: "--key <value>" must fail, never be read as --key-file (keys stay out of shell history)
     bk = sub.add_parser("backup", help="encrypted backup of the whole instance (tables, evidence, inbox, config)",
                         allow_abbrev=False)
-    bk.add_argument("action", choices=["create", "verify", "restore", "keygen", "kit", "run-due"])
+    bk.add_argument("action", choices=["create", "verify", "restore", "keygen", "kit", "run-due", "pre-update"])
     bk.add_argument("file", nargs="?", help="backup file (.grcbak) to write, check or restore")
     bk.add_argument("--key-file", help="file holding the backup key (default: GRCPAL_BACKUP_KEY, then "
                                        "keys/backup.key next to the database)")
@@ -580,7 +635,28 @@ def main(argv: list[str] | None = None) -> int:
     bk.add_argument("--accept-audit-problems", action="store_true",
                     help="restore even if an audit log in the backup does not verify (recorded)")
     bk.add_argument("--out", help="kit: where to write the recovery kit")
+    bk.add_argument("--tables-only", action="store_true", help="restore: tables only (the updater's trial run)")
     bk.set_defaults(fn=cmd_backup)
+
+    up = sub.add_parser("update", help="signed update files and the VM updater's checks")
+    up.add_argument("action", choices=["verify", "verify-manifest", "keygen", "bundle", "counts", "selftest", "record"])
+    up.add_argument("file", nargs="?", help="verify: the .grcupdate file; verify-manifest: manifest.json")
+    up.add_argument("--sig", help="verify-manifest: the signature file")
+    up.add_argument("--public-key", help="public key file (default /etc/grcpal/update-signing.pub)")
+    up.add_argument("--private-out")
+    up.add_argument("--public-out")
+    up.add_argument("--key-file", help="bundle: private signing key (or GRCPAL_UPDATE_SIGNING_KEY)")
+    up.add_argument("--image-tar")
+    up.add_argument("--version")
+    up.add_argument("--image-ref")
+    up.add_argument("--image-id")
+    up.add_argument("--notes-file")
+    up.add_argument("--out")
+    up.add_argument("--expect", help="selftest: JSON of row counts saved before the update")
+    up.add_argument("--tables-only", action="store_true", help="selftest: skip evidence (trial run)")
+    up.add_argument("--event", help="record: update.applied, update.rolled_back, restore.completed, ...")
+    up.add_argument("--detail", help="record: JSON details")
+    up.set_defaults(fn=cmd_update)
 
     mg = sub.add_parser("migrate", help="show or apply data model migrations (also done at portal start)")
     mg.add_argument("--check", action="store_true", help="only show the data model version and pending migrations")
@@ -589,7 +665,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     if args.cmd == "collect" and not (args.all or args.names):
         p.error("collect needs collector names or --all")
-    if args.base is None and args.cmd not in ("init", "serve", "publish-config"):
+    if args.base is None and args.cmd not in ("init", "serve", "publish-config", "update", "migrate"):
         from grcpal import configbundle
 
         fetched = configbundle.fetch()  # deployed jobs: use the catalog published by the program repo

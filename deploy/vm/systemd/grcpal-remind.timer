@@ -1,0 +1,11 @@
+[Unit]
+Description=GRC-pal: Weekly reminders for overdue requests
+
+[Timer]
+OnCalendar=Mon *-*-* 13:00:00
+RandomizedDelaySec=300
+Persistent=true
+Unit=grcpal-job@remind.service
+
+[Install]
+WantedBy=timers.target

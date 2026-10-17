@@ -1,0 +1,11 @@
+[Unit]
+Description=GRC-pal: Backups (the schedule set on the Backups page)
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=300
+Persistent=true
+Unit=grcpal-job@backup.service
+
+[Install]
+WantedBy=timers.target

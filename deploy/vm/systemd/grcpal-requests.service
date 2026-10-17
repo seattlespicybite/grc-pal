@@ -1,0 +1,7 @@
+[Unit]
+Description=GRC-pal: act on requests from the portal
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/grcpal-update requests
+TimeoutStartSec=3600
