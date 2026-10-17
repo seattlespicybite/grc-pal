@@ -159,13 +159,58 @@ class CalendarMixin:
             a["id"] = a.get("id") or a["RowKey"]
             a["months"] = sorted(int(m) for m in a.get("months") or [])
             a["controls"] = list(a.get("controls") or [])
-            a["visible"] = self._in_use_framework(a["controls"], scope)
+            # Hide out-of-scope starter and automated activities; never hide one an admin created.
+            a["starter"] = a["kind"] == "automated" or a["id"] in self.catalog.tasks
+            a["visible"] = not a["starter"] or self._in_use_framework(a["controls"], scope)
             a["schedule"] = (sources.get(a.get("source"), {}).get("schedule", "Automated") if a["kind"] == "automated"
                              else f"{cadence(a['months'])}, due {DUE_DAYS.get(str(a.get('due_day')), '15th').lower()}")
             if (a["status"] == "retired" and not include_retired) or (not a["visible"] and not include_hidden):
                 continue
             out.append(a)
-        return sorted(out, key=lambda a: (a["kind"] != "manual", -len(a["months"]), a["title"].lower()))
+        order = self.calendar_order()
+        default = sorted(out, key=lambda a: (a["kind"] != "manual", -len(a["months"]), a["title"].lower()))
+        rank = {a["id"]: i for i, a in enumerate(default)}
+        return sorted(default, key=lambda a: (a["kind"] != "manual", order.get(a["kind"], {}).get(a["id"], 10 ** 6),
+                                              rank[a["id"]]))
+
+    # ================================================================ order (admins arrange rows)
+    def calendar_order(self) -> dict[str, dict[str, int]]:
+        saved = self.settings_store.state("calendar:order", {}) or {}
+        return {k: {aid: i for i, aid in enumerate(saved.get(k) or [])} for k in KINDS}
+
+    def set_calendar_order(self, actor, kind: str, ids: list[str]) -> list[str]:
+        """Save the order of one group (manual or automated). Unknown ids are ignored; activities left out keep
+        their place after the ones given."""
+        self._admin(actor)
+        if kind not in KINDS:
+            raise self._invalid("Unknown group")
+        current = [a["id"] for a in self.calendar_activities(include_retired=True) if a["kind"] == kind]
+        given = [i for i in dict.fromkeys(ids) if i in current]
+        new = given + [i for i in current if i not in given]
+        saved = self.settings_store.state("calendar:order", {}) or {}
+        if saved.get(kind) == new:
+            return new
+        saved[kind] = new
+        self.settings_store.set_state("calendar:order", saved)
+        self.audit(actor, "calendar.order", kind, {"count": len(new), "first": new[:5]})
+        return new
+
+    def move_activity(self, actor, aid: str, direction: str) -> list[str]:
+        """Move one row up or down within its group."""
+        act = self.calendar_activity(aid)
+        ids = [a["id"] for a in self.calendar_activities(include_retired=True) if a["kind"] == act["kind"]]
+        if aid not in ids or direction not in ("up", "down"):
+            raise self._invalid("Cannot move that activity")
+        i = ids.index(aid)
+        j = i - 1 if direction == "up" else i + 1
+        if 0 <= j < len(ids):
+            ids[i], ids[j] = ids[j], ids[i]
+        return self.set_calendar_order(actor, act["kind"], ids)
+
+    def in_scope_controls(self) -> set[str]:
+        """Controls that map to a framework in use (for SOC 2: an in-scope criterion)."""
+        scope = self._calendar_scope()
+        return {c["id"] for c in self.catalog.controls if self._in_use_framework([c["id"]], scope)}
 
     def calendar_activity(self, aid: str) -> dict:
         a = next((x for x in self.calendar_activities(include_retired=True, include_hidden=True) if x["id"] == aid), None)
@@ -239,10 +284,7 @@ class CalendarMixin:
             if not changes:
                 raise self._invalid("Nothing changed")
             action, version = "calendar.activity.edit", int(current.get("version") or 0) + 1
-        # A new activity counts from the start of the observation period (so past months can be recorded);
-        # an edit applies from today, so months already past keep the schedule they had.
-        effective = min(self.calendar_program_start(), self.today.isoformat()) if version == 1 else self.today.isoformat()
-        row = self._write_activity(aid, snap, version, effective, actor.email, _now())
+        row = self._write_activity(aid, snap, version, self.today.isoformat(), actor.email, _now())
         self.audit(actor, action, aid, {"controls": snap["controls"], "version": version, "changes": changes})
         return row
 
@@ -302,11 +344,18 @@ class CalendarMixin:
 
     def _occurrence(self, act: dict, year: int, month: int, versions: list[dict], records: list[dict] | None,
                     start: str) -> dict | None:
+        # A month is on the calendar when the schedule in force that month had it (so unticking a month never
+        # erases one already past), or when the current schedule has it and was made in or before this year (so
+        # a month you tick shows up straight away, even earlier in the year).
         snap = self._schedule_at(versions, year, month)
-        scheduled = bool(snap and snap.get("status") == "active" and month in (snap.get("months") or []))
-        if not scheduled and not records:
+        latest = versions[-1] if versions else None
+        in_force = bool(snap and snap.get("status") == "active" and month in (snap.get("months") or []))
+        added = bool(latest and latest.get("status") == "active" and month in (latest.get("months") or [])
+                     and year >= int(str(latest.get("effective", "2000"))[:4]))
+        if not in_force and not added and not records:
             return None
-        planned_due = due_date(year, month, (snap or act).get("due_day") or "15")
+        source = snap if in_force else (latest if added else (snap or latest or act))
+        planned_due = due_date(year, month, (source or act).get("due_day") or "15")
         last = records[-1] if records else {}
         status = LEGACY.get(last.get("decision"), last.get("decision") or "planned")
         status = status if status in STATUSES else "planned"
@@ -352,6 +401,30 @@ class CalendarMixin:
         occ["history"] = [{**r, "decision": LEGACY.get(r["decision"], r["decision"])} for r in reversed(history)]
         occ["activity_info"] = act
         return occ
+
+    def add_occurrence(self, actor, key: str) -> dict:
+        """Add a one-off occurrence of a manual activity in a month it is not scheduled for."""
+        self._admin(actor)
+        m = KEY_RE.match(key or "")
+        if not m or not 1 <= int(m.group(3)) <= 12:
+            raise self._invalid("No such calendar entry")
+        aid, year, month = m.group(1), int(m.group(2)), int(m.group(3))
+        act = self.calendar_activity(aid)
+        if act["kind"] != "manual" or act["status"] != "active":
+            raise self._invalid("Only active manual activities can get an extra month")
+        if abs(year - self.today.year) > 1:
+            raise self._invalid("Add months within a year of today")
+        if self._occurrence(act, year, month, self._versions().get(aid, []), self.calendar_records().get(key),
+                            self.calendar_program_start()):
+            raise self._invalid("That month is already on the calendar")
+        planned = due_date(year, month, act.get("due_day") or "15")
+        row = {"PartitionKey": "d", "RowKey": f"{key}~001", "occurrence": key, "activity": aid,
+               "period": f"{year}-{month:02d}", "due_date": planned, "moved_to": "", "decision": "planned",
+               "completed_on": "", "reason": "Added for this month only", "by": actor.email, "at": _now(),
+               "version": 1, "supersedes": ""}
+        self.store.insert("calendardecisions", row)
+        self.audit(actor, "calendar.occurrence.add", key, {"controls": act["controls"], "due": planned})
+        return row
 
     def update_occurrence(self, actor, key: str, status: str, completed_on: str = "", note: str = "",
                           move_to: str = "") -> dict:

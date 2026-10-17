@@ -1,8 +1,15 @@
 {% extends "base.html" %}{% block title %}Security calendar {{ year }}{% endblock %}
 {% set q_auto = '' if show_auto else '&auto=0' %}
+{% set here = '/calendar?year=' ~ year ~ q_auto %}
+{% macro mover(a, first, last) -%}
+<td class="cal-move"><form method="post" action="/calendar/a/{{ a.id }}/move"><input type="hidden" name="csrf" value="{{ csrf }}">
+<input type="hidden" name="return_to" value="{{ here }}">
+<button class="cal-arrow" name="direction" value="up" type="submit" aria-label="Move {{ a.title }} up"{% if first %} disabled{% endif %}>↑</button>
+<button class="cal-arrow" name="direction" value="down" type="submit" aria-label="Move {{ a.title }} down"{% if last %} disabled{% endif %}>↓</button></form></td>
+{%- endmacro %}
 {% block content %}
 <div class="page-head"><div><h1>Security calendar {{ year }}</h1>
-<div class="sub">{{ counts.activities }} activities{% if show_auto %} and {{ counts.automated }} automated{% endif %}. Click an activity to edit it; click a month to record what happened or move the date. Past-due warnings start with the observation period ({{ program_start }}).</div></div>
+<div class="sub">{{ counts.activities }} manual{% if show_auto %} and {{ counts.automated }} automated{% endif %} activities. Click an activity to edit it, a month to record what happened or move the date, or <b>+</b> to add a one-off month. Drag rows (or use ↑ ↓) to arrange them. Past-due warnings start with the observation period ({{ program_start }}).</div></div>
 <div class="filters m0">
 <a class="btn ghost small" href="/calendar?year={{ year - 1 }}{{ q_auto }}">‹ {{ year - 1 }}</a>
 <a class="btn ghost small" href="/calendar?year={{ year + 1 }}{{ q_auto }}">{{ year + 1 }} ›</a>
@@ -16,19 +23,27 @@
 {% if show_auto %}<div class="legend">Automated: {% for k, v in auto_labels.items() %}<span class="cal-cell cal-{{ k }}">{{ v }}</span> {% endfor %}</div>{% endif %}
 </div>
 <table class="cal-year">
-<colgroup><col class="cal-act">{% for m in months %}<col>{% endfor %}</colgroup>
-<thead><tr><th>Activity</th>{% for m in months %}<th class="c{{ ' now' if loop.index == this_month }}">{{ m }}</th>{% endfor %}</tr></thead>
-<tbody>
-{% for g in groups %}<tr class="cal-group"><td colspan="13">{{ g.title }} ({{ g.rows|length }})</td></tr>
-{% for a in g.rows %}<tr><td><a class="cal-name" href="/calendar/a/{{ a.id }}">{{ a.title }}</a>{% if a.status == 'retired' %} <span class="sub">(retired)</span>{% endif %}
+<colgroup><col class="cal-act">{% for m in months %}<col>{% endfor %}<col class="cal-move-col"></colgroup>
+<thead><tr><th>Activity</th>{% for m in months %}<th class="c{{ ' now' if loop.index == this_month }}">{{ m }}</th>{% endfor %}<th><span class="sr">Order</span></th></tr></thead>
+<tbody data-sortable="manual">
+<tr class="cal-group"><td colspan="14">Manual ({{ manual|length }})</td></tr>
+{% for a in manual %}<tr id="row-{{ a.id }}" data-id="{{ a.id }}"><td><span class="cal-grip" aria-hidden="true">⋮⋮</span><a class="cal-name" href="/calendar/a/{{ a.id }}">{{ a.title }}</a>{% if a.status == 'retired' %} <span class="sub">(retired)</span>{% endif %}
 <div class="sub">{{ a.schedule }}{% if a.controls %} · {{ a.controls|join(', ') }}{% endif %}</div></td>
-{% for c in a.cells %}<td class="c{{ ' now' if loop.index == this_month }}">{% if c %}<a class="cal-cell cal-{{ 'past_due' if c.past_due else c.status }}" href="/calendar/o/{{ c.key }}" title="{{ a.title }}, due {{ c.due }}{% if c.moved %} (moved from {{ c.planned_due }}){% endif %}">{{ 'Past due' if c.past_due else labels[c.status] }}{% if c.moved %} *{% endif %}</a>{% endif %}</td>{% endfor %}</tr>{% endfor %}
-{% else %}<tr><td colspan="13" class="empty">No activities yet. <a href="/calendar/a/new">Add one</a>.</td></tr>{% endfor %}
-{% if show_auto and automated %}<tr class="cal-group"><td colspan="13">Automated (set by GRC-pal from real runs) ({{ automated|length }})</td></tr>
-{% for a in automated %}<tr><td><a class="cal-name" href="/calendar/a/{{ a.id }}">{{ a.title }}</a>
+{% for c in a.cells %}<td class="c{{ ' now' if loop.index == this_month }}">{% if c %}<a class="cal-cell cal-{{ 'past_due' if c.past_due else c.status }}" href="/calendar/o/{{ c.key }}" title="{{ a.title }}, due {{ c.due }}{% if c.moved %} (moved from {{ c.planned_due }}){% endif %}">{{ 'Past due' if c.past_due else labels[c.status] }}{% if c.moved %} *{% endif %}</a>{% elif a.status == 'active' %}<a class="cal-add" href="/calendar/o/{{ a.id }}~{{ year }}-{{ '%02d' % loop.index }}" aria-label="Add {{ a.title }} in {{ months[loop.index0] }} {{ year }}" title="Add a one-off occurrence in {{ months[loop.index0] }}">+</a>{% endif %}</td>{% endfor %}
+{{ mover(a, loop.first, loop.last) }}</tr>
+{% else %}<tr><td colspan="14" class="empty">No activities yet. <a href="/calendar/a/new">Add one</a>.</td></tr>{% endfor %}
+</tbody>
+{% if show_auto and automated %}<tbody data-sortable="automated">
+<tr class="cal-group"><td colspan="14">Automated, set by GRC-pal from real runs ({{ automated|length }})</td></tr>
+{% for a in automated %}<tr id="row-{{ a.id }}" data-id="{{ a.id }}"><td><span class="cal-grip" aria-hidden="true">⋮⋮</span><a class="cal-name" href="/calendar/a/{{ a.id }}">{{ a.title }}</a>
 <div class="sub">{{ a.schedule }}{% if a.controls %} · {{ a.controls|join(', ') }}{% endif %}</div></td>
-{% for c in a.cells %}<td class="c{{ ' now' if loop.index == this_month }}">{% if c %}<a class="cal-cell cal-{{ c.status }}" href="/calendar/auto/{{ a.source }}" title="{{ c.runs }} run{{ 's' if c.runs != 1 }}{% if c.failed %}, {{ c.failed }} failed{% endif %}">{{ auto_labels[c.status] }}</a>{% endif %}</td>{% endfor %}</tr>{% endfor %}{% endif %}
-</tbody></table>
+{% for c in a.cells %}<td class="c{{ ' now' if loop.index == this_month }}">{% if c %}<a class="cal-cell cal-{{ c.status }}" href="/calendar/auto/{{ a.source }}" title="{{ c.runs }} run{{ 's' if c.runs != 1 }}{% if c.failed %}, {{ c.failed }} failed{% endif %}">{{ auto_labels[c.status] }}</a>{% endif %}</td>{% endfor %}
+{{ mover(a, loop.first, loop.last) }}</tr>{% endfor %}
+</tbody>{% endif %}
+</table>
+{% for kind in ['manual', 'automated'] %}<form method="post" action="/calendar/order" data-sort-form="{{ kind }}" hidden>
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ kind }}">
+<input type="hidden" name="return_to" value="{{ here }}"><input type="hidden" name="ids" value=""></form>{% endfor %}
 <p class="hint">* the due date was moved. Past-due months stay Planned until you record them: GRC-pal never marks an activity Missed on its own. Automated months show the latest run; a failure fixed by a later run shows Passed, and the failure stays in the run history.</p>
 </section>
 {% endblock %}

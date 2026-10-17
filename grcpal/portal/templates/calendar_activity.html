@@ -28,7 +28,7 @@
 <fieldset class="cal-choices mt"><legend>Linked controls (tick all that apply)</legend>
 <input type="search" class="mt-s cal-wide" placeholder="Filter, for example IAM or vendor" aria-label="Filter controls" data-filter-list="ctl-list">
 <div class="cal-picker" id="ctl-list">
-{% for c in controls %}<label class="cal-pick" data-filter-text="{{ c.id }} {{ c.title }}"><input type="checkbox" name="controls" value="{{ c.id }}"{% if c.id in selected %} checked{% endif %}> <b>{{ c.id }}</b> {{ c.title }}</label>{% endfor %}
+{% for c in controls %}<label class="cal-pick" data-filter-text="{{ c.id }} {{ c.title }}"><input type="checkbox" name="controls" value="{{ c.id }}"{% if c.id in selected %} checked{% endif %}> <b>{{ c.id }}</b> {{ c.title }}{% if c.id not in in_scope %} <span class="sub">(out of scope)</span>{% endif %}</label>{% endfor %}
 </div></fieldset>
 </div></div>
 <div class="actions"><button class="btn" type="submit"{% if act.status == 'retired' %} disabled{% endif %}>Save activity</button></div>

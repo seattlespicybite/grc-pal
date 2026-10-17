@@ -83,4 +83,37 @@
       });
     });
   });
+
+  // Calendar: drag a row within its group to reorder; the new order is posted with the group's hidden form.
+  document.querySelectorAll('tbody[data-sortable]').forEach(function (body) {
+    var kind = body.getAttribute('data-sortable');
+    var form = document.querySelector('form[data-sort-form="' + kind + '"]');
+    if (!form) return;
+    var dragged = null;
+    body.querySelectorAll('tr[data-id]').forEach(function (row) {
+      row.setAttribute('draggable', 'true');
+      row.addEventListener('dragstart', function (e) {
+        dragged = row; row.classList.add('cal-dragging');
+        e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', row.getAttribute('data-id'));
+      });
+      row.addEventListener('dragend', function () {
+        row.classList.remove('cal-dragging');
+        body.querySelectorAll('.cal-drop-target').forEach(function (r) { r.classList.remove('cal-drop-target'); });
+      });
+      row.addEventListener('dragover', function (e) {
+        if (!dragged || dragged === row) return;
+        e.preventDefault(); row.classList.add('cal-drop-target');
+      });
+      row.addEventListener('dragleave', function () { row.classList.remove('cal-drop-target'); });
+      row.addEventListener('drop', function (e) {
+        if (!dragged || dragged === row) return;
+        e.preventDefault();
+        var rows = Array.prototype.slice.call(body.querySelectorAll('tr[data-id]'));
+        body.insertBefore(dragged, rows.indexOf(dragged) < rows.indexOf(row) ? row.nextSibling : row);
+        form.querySelector('input[name="ids"]').value = Array.prototype.map.call(
+          body.querySelectorAll('tr[data-id]'), function (r) { return r.getAttribute('data-id'); }).join(',');
+        form.submit();
+      });
+    });
+  });
 })();

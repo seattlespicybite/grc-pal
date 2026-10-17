@@ -870,7 +870,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         safe_dest=safe_dest, attachment=_attachment))
     routes_calendar.register(app, SimpleNamespace(
         p=p, current_user=current_user, need=need, check_csrf=check_csrf, render=render, back=back,
-        invalidate=invalidate, HTTPError=_HTTPError, attachment=_attachment))
+        invalidate=invalidate, HTTPError=_HTTPError, attachment=_attachment, safe_dest=safe_dest))
     routes_backups.register(app, SimpleNamespace(p=p, current_user=current_user, need=need, check_csrf=check_csrf,
                                                  render=render, back=back))
     # Literal paths registered later (e.g. /controls/new) must win over parameter routes (/controls/{id}).
