@@ -142,6 +142,19 @@ def test_run_due_makes_the_scheduled_backup_once(site, monkeypatch):
     assert not backup_store.due(portal.backup_schedule(), existing, existing[0]["created"] + dt.timedelta(hours=1))
 
 
+def test_run_due_skips_while_another_run_is_in_progress(site):
+    """The Azure job checks every 15 minutes; a long backup must not be started twice."""
+    portal, _, tmp = site
+    now = dt.datetime(2026, 10, 12, 5, 0, tzinfo=dt.timezone.utc)
+    portal.settings_store.set_state(backup_store.RUNNING_KEY, {"at": (now - dt.timedelta(minutes=20)).isoformat()})
+    assert portal.run_due_backups(now=now) == []
+    assert not list((tmp / "backups").glob("*.grcbak"))
+    # a marker left by a run that crashed long ago does not block backups forever
+    portal.settings_store.set_state(backup_store.RUNNING_KEY, {"at": (now - dt.timedelta(hours=7)).isoformat()})
+    assert [d["kind"] for d in portal.run_due_backups(now=now)] == ["scheduled"]
+    assert portal.settings_store.state(backup_store.RUNNING_KEY, None) is None  # cleared when done
+
+
 def test_queued_request_on_azure_is_picked_up_by_the_job(site, monkeypatch):
     portal, _, tmp = site
     monkeypatch.setenv("GRCPAL_TABLES_URL", "https://example.table.core.windows.net")  # queue mode only

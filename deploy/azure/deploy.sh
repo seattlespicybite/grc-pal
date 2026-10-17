@@ -15,6 +15,7 @@
 #   --github-repo O/R      your program repository; creates a keyless identity for its collectors
 #   --mail-from ADDRESS    shared mailbox that sends notifications through Microsoft Graph
 #   --require-assignment   only users assigned to the enterprise app may sign in (defense in depth)
+#   --alert-email ADDRESS  email for alerts: missed backups and security-relevant changes (recommended)
 #   --what-if              preview the Azure changes without deploying
 #
 # Needs: Azure CLI (az login), Owner or User Access Administrator on the subscription (role
@@ -23,7 +24,7 @@
 set -euo pipefail
 
 NAME="" ; ADMINS="" ; LOCATION="eastus2" ; IMAGE="" ; RESTORE_FROM="" ; KIT=""
-GITHUB_REPO="" ; MAIL_FROM="" ; REQUIRE_ASSIGNMENT="false" ; WHAT_IF=""
+GITHUB_REPO="" ; MAIL_FROM="" ; ALERT_EMAIL="" ; REQUIRE_ASSIGNMENT="false" ; WHAT_IF=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --name) NAME="$2"; shift 2 ;;
@@ -34,9 +35,10 @@ while [ $# -gt 0 ]; do
     --kit) KIT="$2"; shift 2 ;;
     --github-repo) GITHUB_REPO="$2"; shift 2 ;;
     --mail-from) MAIL_FROM="$2"; shift 2 ;;
+    --alert-email) ALERT_EMAIL="$2"; shift 2 ;;
     --require-assignment) REQUIRE_ASSIGNMENT="true"; shift ;;
     --what-if) WHAT_IF="1"; shift ;;
-    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
     *) echo "Unknown option $1 (see --help)"; exit 1 ;;
   esac
 done
@@ -117,6 +119,7 @@ PARAMS=(instanceName="$NAME" image="$IMAGE" entraClientId="$APP_ID" entraClientS
         grcpalSecret="$GRCPAL_SECRET" encryptionKey="$ENCRYPTION_KEY" backupKey="$BACKUP_KEY" bootstrapAdmins="$ADMINS"
         githubRepo="$GITHUB_REPO")
 [ -n "$MAIL_FROM" ] && PARAMS+=(mailBackend=graph mailFrom="$MAIL_FROM")
+[ -n "$ALERT_EMAIL" ] && PARAMS+=(alertEmail="$ALERT_EMAIL")
 
 if [ -n "$WHAT_IF" ]; then
   step "Preview (what-if)"
@@ -195,8 +198,11 @@ Sign in as:    $ADMINS
 Storage:       $(get storageAccount)
 Next steps:
   1. Open the portal, sign in, and add people under Users and roles (or assign work; assignees get access automatically).
-  2. After a week of clean runs, lock evidence retention (cannot be undone):
-       az storage container immutability-policy show -g $RG --account-name $(get storageAccount) -c evidence
-       az storage container immutability-policy lock -g $RG --account-name $(get storageAccount) -c evidence --if-match <etag>
+  2. After a week of clean runs, lock evidence and backup retention (cannot be undone):
+       for c in evidence backups; do
+         ETAG=\$(az storage container immutability-policy show -g $RG --account-name $(get storageAccount) -c \$c --query etag -o tsv)
+         az storage container immutability-policy lock -g $RG --account-name $(get storageAccount) -c \$c --if-match "\$ETAG"
+       done
   3. The sign-in client secret expires in one year. Re-run this script to rotate it.
+  4. Restrict sign-in to your staff on compliant devices: docs/deploy-azure.md, Step 3b (Conditional Access).
 EOF

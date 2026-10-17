@@ -33,6 +33,8 @@ DEFAULT_SCHEDULE = {"frequency": "daily", "hour": 2, "keep_daily": 7, "keep_week
 FREQUENCIES = ("daily", "weekly", "off")
 STATE_KEY = "backups"            # schedule and kit status, in the config table (state rows)
 REQUEST_KEY = "backup_request"   # "Back up now" on Azure, picked up by the backup job
+RUNNING_KEY = "backup_running"   # set while a scheduled run works, so overlapping checks skip
+RUNNING_STALE = dt.timedelta(hours=6)  # a marker older than this was left by a crashed run; ignore it
 
 
 def _now() -> dt.datetime:

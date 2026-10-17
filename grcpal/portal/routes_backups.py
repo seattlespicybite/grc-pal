@@ -27,7 +27,7 @@ def register(app, h) -> None:
         except (Invalid, Forbidden) as exc:
             return back("/backups", err=str(exc))
         if out.get("queued"):
-            return back("/backups", msg="Backup requested. The backup job starts it within about 10 minutes.")
+            return back("/backups", msg="Backup requested. The backup job starts it within about 15 minutes.")
         return RedirectResponse(f"/jobs/{out['RowKey']}", status_code=303)
 
     @app.post("/backups/schedule")

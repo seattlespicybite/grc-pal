@@ -18,13 +18,13 @@
 <div class="grid g2">
 <section class="card"><h2>Back up now</h2>
 {% if data.running %}<p>A backup is running. <a href="/jobs/{{ data.running.RowKey }}">Follow it</a>.</p>
-{% elif data.request %}<p>Backup requested by {{ data.request.by }} at {{ when(data.request.at) }} UTC. The backup job starts it within about 10 minutes.</p>
+{% elif data.request %}<p>Backup requested by {{ data.request.by }} at {{ when(data.request.at) }} UTC. The backup job starts it within about 15 minutes.</p>
 {% else %}
 <form method="post" action="/backups/now"><input type="hidden" name="csrf" value="{{ csrf }}">
 <label for="dest-now">Save to</label>
 <select id="dest-now" name="destination">{% for d in data.places %}<option value="{{ d.id }}"{% if d.id == data.schedule.destination %} selected{% endif %}>{{ d.label }}</option>{% endfor %}</select>
 <div class="actions"><button class="btn" type="submit">Back up now</button></div></form>
-{% if data.queue_mode %}<p class="sub mt">On Azure the backup runs in the scheduled backup job, not in the portal, so it starts within about 10 minutes.</p>{% endif %}
+{% if data.queue_mode %}<p class="sub mt">On Azure the backup runs in the scheduled backup job, not in the portal, so it starts within about 15 minutes.</p>{% endif %}
 {% endif %}</section>
 
 <section class="card"><h2>Schedule</h2>

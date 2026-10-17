@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "8056654323463485358"
+      "templateHash": "4408034797675592942"
     }
   },
   "parameters": {
@@ -147,6 +147,43 @@
         "description": "Days each backup file is write-protected in the backups container (protects against deletion and ransomware)."
       }
     },
+    "backupCheckCron": {
+      "type": "string",
+      "defaultValue": "*/15 * * * *",
+      "metadata": {
+        "description": "How often the backup job checks for due work (cron, UTC). It makes at most one scheduled backup per day (or week) per the Backups page; the checks also start \"Back up now\" requests."
+      }
+    },
+    "lockStorage": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Put a delete lock on the storage account (protects evidence and backups from deletion of the whole account). Remove the lock first to retire an instance."
+      }
+    },
+    "sessionHours": {
+      "type": "int",
+      "defaultValue": 8,
+      "minValue": 1,
+      "maxValue": 24,
+      "metadata": {
+        "description": "Hours a sign-in lasts before the user goes back to Entra ID, where Conditional Access (MFA, compliant device) is checked again."
+      }
+    },
+    "alertEmail": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Email (or distribution list) for alerts: no successful backup, and changes to locks, role assignments, write-once policies or sign-in settings. Empty = no alerts."
+      }
+    },
+    "backupAlertWindow": {
+      "type": "string",
+      "defaultValue": "P2D",
+      "metadata": {
+        "description": "Alert when no successful scheduled backup was logged for this long (ISO 8601). Use P8D for a weekly schedule."
+      }
+    },
     "allowedIpRanges": {
       "type": "array",
       "defaultValue": [],
@@ -221,7 +258,7 @@
       },
       {
         "name": "backup",
-        "cron": "7 * * * *",
+        "cron": "[parameters('backupCheckCron')]",
         "args": [
           "backup",
           "run-due"
@@ -229,6 +266,15 @@
         "cpu": "1.0",
         "memory": "2Gi"
       }
+    ],
+    "watchedOperations": [
+      "Microsoft.Authorization/locks/delete",
+      "Microsoft.Authorization/roleAssignments/write",
+      "Microsoft.Authorization/roleAssignments/delete",
+      "Microsoft.Storage/storageAccounts/blobServices/containers/immutabilityPolicies/write",
+      "Microsoft.Storage/storageAccounts/blobServices/containers/immutabilityPolicies/delete",
+      "Microsoft.App/containerApps/authConfigs/write",
+      "Microsoft.App/containerApps/write"
     ]
   },
   "resources": [
@@ -337,6 +383,57 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageName'), 'default', 'backups')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/managementPolicies",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}', variables('storageName'), 'default')]",
+      "properties": {
+        "policy": {
+          "rules": [
+            {
+              "name": "expire-backups",
+              "enabled": true,
+              "type": "Lifecycle",
+              "definition": {
+                "filters": {
+                  "blobTypes": [
+                    "blockBlob"
+                  ],
+                  "prefixMatch": [
+                    "backups/"
+                  ]
+                },
+                "actions": {
+                  "baseBlob": {
+                    "delete": {
+                      "daysAfterCreationGreaterThan": "[add(parameters('backupRetentionDays'), 1)]"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageName'), 'default', 'backups')]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('lockStorage')]",
+      "type": "Microsoft.Authorization/locks",
+      "apiVersion": "2020-05-01",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]",
+      "name": "grcpal-no-delete",
+      "properties": {
+        "level": "CanNotDelete",
+        "notes": "GRC-pal evidence and backups. Remove this lock only to retire the instance."
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]"
       ]
     },
     {
@@ -890,6 +987,12 @@
         "httpSettings": {
           "requireHttps": true
         },
+        "login": {
+          "cookieExpiration": {
+            "convention": "FixedTime",
+            "timeToExpiration": "[format('{0}:00:00', padLeft(string(parameters('sessionHours')), 2, '0'))]"
+          }
+        },
         "identityProviders": {
           "azureActiveDirectory": {
             "enabled": true,
@@ -909,6 +1012,109 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.App/containerApps', variables('appName'))]"
+      ]
+    },
+    {
+      "condition": "[not(empty(parameters('alertEmail')))]",
+      "type": "Microsoft.Insights/actionGroups",
+      "apiVersion": "2023-01-01",
+      "name": "[take(format('ag-{0}', variables('appName')), 64)]",
+      "location": "global",
+      "properties": {
+        "groupShortName": "grcpal",
+        "enabled": true,
+        "emailReceivers": [
+          {
+            "name": "grcpal-admins",
+            "emailAddress": "[parameters('alertEmail')]",
+            "useCommonAlertSchema": true
+          }
+        ]
+      }
+    },
+    {
+      "condition": "[not(empty(parameters('alertEmail')))]",
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2023-03-15-preview",
+      "name": "[format('grcpal-{0}-no-backup', parameters('instanceName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "displayName": "[format('GRC-pal {0}: no successful backup', parameters('instanceName'))]",
+        "description": "No verified scheduled backup in the window. Check Administration > Backups and the backup job runs.",
+        "severity": 2,
+        "enabled": true,
+        "scopes": [
+          "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-{0}', variables('appName')))]"
+        ],
+        "evaluationFrequency": "PT1H",
+        "windowSize": "[parameters('backupAlertWindow')]",
+        "criteria": {
+          "allOf": [
+            {
+              "query": "ContainerAppConsoleLogs_CL | where Log_s has \"backup.run_due\" and Log_s contains '\"kind\": \"scheduled\"' and Log_s contains '\"ok\": true'",
+              "timeAggregation": "Count",
+              "operator": "Equal",
+              "threshold": 0,
+              "failingPeriods": {
+                "numberOfEvaluationPeriods": 1,
+                "minFailingPeriodsToAlert": 1
+              }
+            }
+          ]
+        },
+        "actions": {
+          "actionGroups": [
+            "[resourceId('Microsoft.Insights/actionGroups', take(format('ag-{0}', variables('appName')), 64))]"
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/actionGroups', take(format('ag-{0}', variables('appName')), 64))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-{0}', variables('appName')))]"
+      ]
+    },
+    {
+      "condition": "[not(empty(parameters('alertEmail')))]",
+      "type": "Microsoft.Insights/activityLogAlerts",
+      "apiVersion": "2020-10-01",
+      "name": "[format('grcpal-{0}-security-change', parameters('instanceName'))]",
+      "location": "global",
+      "properties": {
+        "description": "A lock, role assignment, write-once policy or sign-in setting changed in this resource group.",
+        "enabled": true,
+        "scopes": [
+          "[resourceGroup().id]"
+        ],
+        "condition": {
+          "allOf": [
+            {
+              "field": "category",
+              "equals": "Administrative"
+            },
+            {
+              "copy": [
+                {
+                  "name": "anyOf",
+                  "count": "[length(variables('watchedOperations'))]",
+                  "input": {
+                    "field": "operationName",
+                    "equals": "[variables('watchedOperations')[copyIndex('anyOf')]]"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "actions": {
+          "actionGroups": [
+            {
+              "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups', take(format('ag-{0}', variables('appName')), 64))]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/actionGroups', take(format('ag-{0}', variables('appName')), 64))]"
       ]
     }
   ],
