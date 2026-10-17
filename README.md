@@ -11,7 +11,7 @@ License: [AGPL-3.0-or-later](LICENSE).
 ## What's inside
 
 - **Ready-made SOC 2 Type 2 program:** 77 controls covering all 61 Trust Services Criteria and 285
-  points of focus, plus 18 recurring activities (access reviews, DR test, risk assessment, tabletop,
+  points of focus, plus 40 recurring activities (access reviews, DR test, risk assessment, tabletop,
   policy review...). The starter scope is Security, Availability and Confidentiality; Processing
   Integrity and Privacy are ready but deferred, and their controls stay out of the way until you
   add them to scope.
@@ -42,7 +42,12 @@ License: [AGPL-3.0-or-later](LICENSE).
   save every connection; credentials are encrypted.
 - **AI assistant (optional, off by default):** per-control evidence review and full mock audits
   with Claude or your own model, always approved by a person and kept as evidence.
-- **Encrypted backups** of the whole instance in one verifiable file.
+- **Security calendar:** one year page with every recurring activity and automated check, editable
+  by admins. Nothing is marked missed automatically: an admin records Performed or Missed, and every
+  decision is kept for the auditor.
+- **Backups and safe updates:** nightly encrypted, verifiable backups of the whole instance with a
+  recovery kit; updates are backed up, tried on a copy of the data, health-checked and rolled back by
+  themselves if a check fails. Both have admin pages (**Backups**, **Updates**).
 
 ## Try it in one minute
 
@@ -88,7 +93,7 @@ flowchart LR
 | Evidence an auditor trusts | Write-once storage, SHA-256 manifests, full populations, code version per run |
 | Work for people without GitHub | Requests with due dates, uploads (screenshots, PDFs, exports), review and comments; admins can change people and due dates at any time |
 | Follow-up | Email on assignment, upload, comment and review; a reminder button; weekly overdue reminders |
-| Recurring activities | Access reviews, DR tests, risk assessments and more open as requests in the right month |
+| Recurring activities | Access reviews, DR tests, risk assessments and more on a security calendar; they open as requests in the right month |
 | Year two | Cycles: carry requests forward and see last cycle's evidence next to this cycle's |
 | Audit fieldwork | Read-only auditor accounts with an end date, and an export zip per cycle with a SHA-256 manifest and every control change |
 | Proof nobody edited history | Hash-chained audit log, verifiable in the portal and with `grcpal audit verify` |
@@ -168,23 +173,55 @@ development only.
 - Keep `GRCPAL_ENCRYPTION_KEY` and the backup key in a password manager, apart from the backups.
 - Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
-## Upgrades and backups
+## Quick guide: deploy, back up, update
 
-- **Back up** with `grcpal backup create FILE --key-file KEY`: one encrypted, tamper-evident file
-  with every table, all evidence and the configuration. `grcpal backup verify` proves it is complete.
-  Restoring into a clean instance is the next item on the roadmap.
-- **Upgrade** after a backup: reinstall the package or rebuild the image and restart. Upgrades
-  never rewrite stored evidence, and control edits made by the library owner are kept; if a
-  release changes the starter text of a control you edited, the control page tells you.
-- Read the [CHANGELOG](CHANGELOG.md) before upgrading. Details: [docs/operations.md](docs/operations.md).
+> **Release status:** the VM installer and the updaters install published releases (0.3.0 and later).
+> Until 0.3.0 is on the [releases page](https://github.com/seattlespicybite/grc-pal/releases), use the
+> demo above to evaluate; production installs start with that release.
+
+**1. Deploy** (once)
+
+| | VM in your network | Azure |
+| --- | --- | --- |
+| Install | `sudo ./install.sh --hostname grc.example.com --version 0.3.0` | `./deploy/azure/deploy.sh --name acme --admins you@acme.com --github-repo acme/acme-grc` |
+| First admin | `sudo grcpal create-admin you@example.com` | the `--admins` emails |
+| Lock down | VPN or internal network only (local accounts have no MFA yet) | Conditional Access: MFA and compliant devices ([Step 3b](docs/deploy-azure.md#step-3b-allow-only-your-staff-on-managed-devices-conditional-access)) |
+
+**2. Back up** (set once, then check monthly)
+
+1. Sign in, open **Administration → Backups** and **download the recovery kit**. Store it in a password
+   manager, never next to the backups. Without it no backup can be read.
+2. The nightly backup is on by default (02:00 UTC). On a VM, add a second location outside the VM (network
+   share, `GRCPAL_BACKUP_DIR_2_HOST`); on Azure, backups are write-once for 35 days.
+3. Each backup is checked right after it is written. **Check** re-verifies one at any time.
+4. Once a year, do a restore test and keep the result as SOC 2 A1.3 evidence
+   ([how](docs/operations.md#yearly-restore-test)).
+
+Command line, any install: `grcpal backup create FILE`, `grcpal backup verify FILE`,
+`grcpal backup restore FILE --kit recovery-kit.json` (fills only an empty instance or a new folder).
+
+**3. Update** (you decide when)
+
+| | VM | Azure |
+| --- | --- | --- |
+| Bug and security fixes (0.3.x) | Installed by the monthly check | Installed by the monthly workflow in your program repository |
+| New features (0.4, 1.0) | **Administration → Updates → Approve** after reading the release notes | Actions → **GRC-pal update** → Run workflow with the version |
+| No internet | `sudo grcpal-update apply grcpal-<version>.grcupdate` (signed file) | n/a |
+| Go back | `sudo grcpal-update rollback` | Run the workflow with **rollback** |
+
+Every update makes a backup first, tries the new version on a copy of your data, checks the portal, the
+data model, audit chains and evidence hashes, and rolls back by itself if anything fails. Evidence is never
+changed by an update. Details: [deploy-vm.md](docs/deploy-vm.md#updates),
+[deploy-azure.md](docs/deploy-azure.md#updates), [operations.md](docs/operations.md#upgrades).
 
 ## Documentation
 
 | | |
 | --- | --- |
-| [Quickstart](docs/quickstart.md) | Local trial, Docker, your own catalog, production VM with Python or Docker |
-| [Deploy to Azure](docs/deploy-azure.md) | Azure Container Apps with Entra ID sign-in |
-| [Operations](docs/operations.md) | Daily and yearly routines, cycles, reminders, logs, backups, upgrades |
+| [Quickstart](docs/quickstart.md) | Local trial, Docker, your own catalog, where to go for production |
+| [Deploy on a VM](docs/deploy-vm.md) | Debian 13 + Docker in your network: install, backups, signed updates, rebuild |
+| [Deploy to Azure](docs/deploy-azure.md) | Azure Container Apps with Entra ID sign-in, Conditional Access, backups, updates |
+| [Operations](docs/operations.md) | Daily and yearly routines, cycles, reminders, logs, backups, restore tests, disaster recovery, upgrades |
 | [Roles and permissions](docs/roles.md) | Exactly who can see and do what, including the control library owner |
 | [Frameworks, controls and checks](docs/frameworks-and-controls.md) | Frameworks in use, the SOC 2 view, implementation notes, the knowledge base, editing controls, custom controls, URL checks |
 | [Configuration](docs/configuration.md) | Configuration page and every environment variable |
@@ -215,7 +252,12 @@ grcpal users add EMAIL --role admin     add a user (admin, contributor = Control
 grcpal remind --overdue                 email people with overdue requests
 grcpal audit verify                     verify the audit log hash chain
 grcpal export --cycle ID                auditor export zip
-grcpal backup keygen | create FILE | verify FILE   encrypted whole-instance backup
+grcpal backup keygen | kit --out FILE    backup key; recovery kit for a password manager
+grcpal backup create FILE | verify FILE  encrypted whole-instance backup and its check
+grcpal backup restore FILE --kit KIT     rebuild an empty instance (or --into a new folder)
+grcpal backup run-due                   scheduled and queued backups (run hourly by the VM timer or Azure job)
+grcpal migrate [--check]                data model version and pending migrations
+sudo grcpal-update status | apply FILE | rollback   VM updater (on the host)
 grcpal ai review --control ID           AI evidence review of one control
 grcpal ai audit --framework soc2        AI mock audit
 ```

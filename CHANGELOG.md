@@ -18,38 +18,11 @@ All notable changes are listed here. The project follows [semantic versioning](h
   assignments, write-once policies or sign-in settings.
 - `grcpal backup run-due` prints one JSON line (`"event": "backup.run_due"`) so logs and alerts can read it.
 
-### Docs
-- Conditional Access runbook (phishing-resistant MFA, compliant device, group assignment, guests):
-  `docs/deploy-azure.md`, Step 3b. Lock both write-once containers in Step 6. Why private endpoints and
-  Key Vault are not in the template yet: `docs/security.md`.
-
-### Fixed
-- **Calendar: months you tick now show up straight away**, including months earlier in the year (a new
-  activity for March, or extra months added to the vendor review in October, appeared only next year).
-  Unticking a month still never removes one that has already passed, so a missed activity cannot vanish.
-- **Calendar: activities you create are never hidden** by the scope filter (one linked only to an
-  out-of-scope control disappeared). Starter and automated activities for out-of-scope areas stay hidden.
-  The control picker marks out-of-scope controls.
-
 ### Added
 - **Calendar: one-off months.** Click **+** in an empty month of a manual activity to add it for that month
   only (audited as `calendar.occurrence.add`); the regular schedule does not change.
 - **Calendar: arrange rows.** Drag and drop rows within Manual or Automated, or use the ↑ ↓ buttons; the order
   is saved for everyone and audited (`calendar.order`). New activities go to the bottom.
-
-### Changed
-- Calendar rows are grouped only into **Manual** and **Automated**.
-
-
-### Changed
-- **Security calendar redesigned** as one year page for admins (activities on the left, months on the
-  right). Month and List views are gone; auditors get the calendar through the cycle export.
-- Statuses are now **Planned** (amber **Past due** after the due date), **Performed** (with the date) and
-  **Missed** (note required) for manual activities, and **Passed**, **Findings**, **Failed**, **Not run**
-  for automated ones (latest run of the month). Earlier "performed late" records show as Performed and
-  "not performed" or "not applicable" as Missed.
-
-### Added
 - **VM installs (Debian 13 minimal + Docker)**: `deploy/vm/install.sh` installs only docker.io, Caddy
   (HTTPS), nftables (firewall: SSH, HTTP, HTTPS), unattended-upgrades and Python's cryptography from Debian,
   keeps all data in `/var/lib/grcpal`, runs the portal as a non-root, read-only container on 127.0.0.1, and
@@ -81,12 +54,6 @@ All notable changes are listed here. The project follows [semantic versioning](h
   key secret kept across re-deployments, and an hourly backup job. `deploy.sh --restore-from FILE --kit KIT`
   builds a new instance from a backup. `grcpal backup restore NAME` also finds a backup by name in the
   instance's backup locations.
-
-### Changed (deployment)
-- Azure Container Apps now runs in multiple-revision mode (needed for checked updates).
-- `deploy.sh` never changes the running version: without `--image` it keeps the image that is running, or
-  uses this checkout's version for a new instance (instead of `:latest`).
-
 - **Edit the calendar in the portal**: add, edit, retire and delete activities; tick the months they are
   due, the due day (1st, 15th or last day) and any number of linked controls at once. Schedule edits apply
   from the current month on (versioned in the new `calendarversions` table); past months never change.
@@ -99,7 +66,6 @@ All notable changes are listed here. The project follows [semantic versioning](h
   inventory, incident plan, retention, configuration baseline and continuity plan reviews. Tasks can now
   list `controls` and a `due_day` directly.
 - Performed calendar activities count as evidence for their linked controls' status.
-
 - **Restore**: `grcpal backup restore FILE` checks the whole backup first and writes nothing unless it is
   intact, then fills an empty instance or a new folder (`--into`); it never overwrites data. Files are
   re-hashed as they are written. A backup from a newer data model is refused. Each tenant's audit chain
@@ -126,15 +92,14 @@ All notable changes are listed here. The project follows [semantic versioning](h
   to the new code and checks every row, evidence file and audit chain is unchanged, the portal starts and the
   old backup restores. The release workflow checks the version rules (data model changes only in minor or
   major releases).
-- **Security calendar** (`/calendar`, admins and auditors): every recurring activity from
-  `catalog/tasks.yaml` with its due dates, in Year, Month and List views, plus the dates collectors and
+- **Security calendar** (`/calendar`, admins; auditors get it in the cycle export): every recurring activity from
+  `catalog/tasks.yaml` with its due dates on one year page, plus the dates collectors and
   checks actually ran (hide them with one click). Only activities whose controls map to a framework in
   use (for SOC 2, an in-scope criterion) are shown, so Privacy or ISO-only activities stay hidden while
   they are off. Occurrences are computed from the schedule, so a missed scheduled job cannot lose one;
   occurrences due before the first audit cycle started are not shown.
-- **Decisions, never automatic**: a past-due occurrence shows **Needs decision** until an admin records
-  Performed (with the date), Performed late, Not performed (exception) or Not applicable (reason
-  required for the last three). Decisions are append-only: a correction is a new version and the earlier
+- **Decisions, never automatic**: a past-due occurrence stays **Past due** until an admin records
+  Performed (with the date) or Missed (note required); nothing is marked automatically. Decisions are append-only: a correction is a new version and the earlier
   one stays visible. Each is in the audit log (`calendar.decision`). Performed decisions count as task
   evidence for control status. New `calendardecisions` table, included in backups.
 - Occurrence page: steps and expected evidence, linked controls with their implementation notes,
@@ -144,13 +109,39 @@ All notable changes are listed here. The project follows [semantic versioning](h
   scheduled activities in the cycle) and `calendar_decisions.csv` (every decision, including corrected
   ones). CSV cells starting with `= + - @` are prefixed with a quote.
 
+### Changed
+- Calendar rows are grouped only into **Manual** and **Automated**.
+- **Security calendar redesigned** as one year page for admins (activities on the left, months on the
+  right). Month and List views are gone; auditors get the calendar through the cycle export.
+- Statuses are now **Planned** (amber **Past due** after the due date), **Performed** (with the date) and
+  **Missed** (note required) for manual activities, and **Passed**, **Findings**, **Failed**, **Not run**
+  for automated ones (latest run of the month). Earlier "performed late" records show as Performed and
+  "not performed" or "not applicable" as Missed.
+- Azure Container Apps now runs in multiple-revision mode (needed for checked updates).
+- `deploy.sh` never changes the running version: without `--image` it keeps the image that is running, or
+  uses this checkout's version for a new instance (instead of `:latest`).
+
 ### Fixed
+- **Calendar: months you tick now show up straight away**, including months earlier in the year (a new
+  activity for March, or extra months added to the vendor review in October, appeared only next year).
+  Unticking a month still never removes one that has already passed, so a missed activity cannot vanish.
+- **Calendar: activities you create are never hidden** by the scope filter (one linked only to an
+  out-of-scope control disappeared). Starter and automated activities for out-of-scope areas stay hidden.
+  The control picker marks out-of-scope controls.
 - A backup made by an older version (without tables added since, such as the calendar) failed `verify` and
   could not be restored. Found by the new upgrade test.
 - `sessions` and `account_links` (local sign-in sessions and one-time setup/reset links) were missing from
   the table registry, so Azure Table Storage never created them, and `account_links` was not a valid Azure
   table name. Both are now registered (Azure names drop underscores) and are deliberately never backed up:
   restoring them would revive old sign-ins and used links. A test now fails if code uses an unregistered table.
+
+### Docs
+- README: quick guide for deploying, backing up and updating (VM and Azure), the security calendar and
+  safe updates in the feature list, current counts (40 recurring activities), all backup, migrate and
+  updater commands, and the VM guide in the documentation table. Unreleased changelog regrouped.
+- Conditional Access runbook (phishing-resistant MFA, compliant device, group assignment, guests):
+  `docs/deploy-azure.md`, Step 3b. Lock both write-once containers in Step 6. Why private endpoints and
+  Key Vault are not in the template yet: `docs/security.md`.
 
 ## [0.2.0] - 2026-10-14 - SOC 2 focus
 
