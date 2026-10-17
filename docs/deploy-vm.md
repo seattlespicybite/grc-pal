@@ -19,7 +19,8 @@ and Conditional Access). Local accounts have no MFA yet, so keep this VM reachab
 
 ## Install
 
-Copy the installer kit from the release page (`grcpal-vm-installer-<version>.tar.gz`) to the VM, then:
+Copy the installer kit from the release page (`grcpal-vm-installer-<version>.tar.gz`) to the VM, then
+(the installer kit and signed update files are published from release 0.3.0 on):
 
 ```bash
 tar -xzf grcpal-vm-installer-0.3.0.tar.gz && cd vm
