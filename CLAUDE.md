@@ -25,6 +25,8 @@ explain choices in plain words, keep changes small, never leave the test suite r
   | backup, restore, `store.TABLES` | `tests/test_backup.py tests/test_restore.py` |
   | Backups page, locations, retention | `tests/test_backups_page.py` |
   | migrations, `SCHEMA_VERSION`, `RELEASES` | `tests/test_migrations.py` |
+  | `update.py`, `deploy/vm/*` (updater, installer) | `tests/test_update.py` |
+  | `deploy/azure/update.sh` (fake az/curl/gh in `tests/fake_azure/`) | `tests/test_azure_update.py` |
   | templates, `app.js`, `app.css` | `tests/test_portal.py -k render` (also checks strict CSP), then the full suite |
 - Show diffs or changed parts only; do not paste whole files or full test output back.
 - Done means: full suite green, pyflakes clean, docs/CHANGELOG updated if behavior changed.
@@ -53,6 +55,9 @@ explain choices in plain words, keep changes small, never leave the test suite r
 | Backup file (.grcbak: encrypt, create, verify, restore, recovery kit) | `grcpal/backup.py` |
 | Backup locations, retention, schedule; Backups page rules | `grcpal/backup_store.py`, `grcpal/portal/backups.py`, `routes_backups.py` |
 | Data model versions, migrations, release rules, upgrade test | `grcpal/migrations.py`, `deploy/ci/upgrade_check.py` |
+| Updates: signed .grcupdate files, self-test, Azure trial, portal requests; Updates page | `grcpal/update.py`, `grcpal/portal/updates.py`, `updates.html`, routes in `routes_backups.py` |
+| VM installer and host updater (Debian 13 + Docker; standard library only, runs as root on the host) | `deploy/vm/install.sh`, `deploy/vm/grcpal-update`, `deploy/vm/systemd/`, docs `docs/deploy-vm.md` |
+| Azure updates (revisions, health gate, rollback) | `deploy/azure/update.sh`, starter workflow `grcpal/starter/github/workflows/grcpal-update.yml` |
 | Settings registry (Configuration page, Setup guide, encryption) | `grcpal/settings.py` (`SCHEMA`), validators in `grcpal/integrations/` |
 | Custom checks (HTTP, TLS, command) and SSRF guard | `grcpal/checks.py` |
 | AI review and mock audit | `grcpal/ai/providers.py`, `grcpal/ai/review.py` |
@@ -65,7 +70,7 @@ explain choices in plain words, keep changes small, never leave the test suite r
 | Security headers, CSRF, upload validation | `grcpal/portal/security.py` |
 | Templates and static | `grcpal/portal/templates/`, `grcpal/portal/static/app.css`, `app.js` |
 | Demo data | `grcpal/portal/demo.py` |
-| Deployment | `Dockerfile`, `docker-compose.yml`, `deploy/azure/main.bicep`, `deploy/azure/deploy.sh` |
+| Deployment | `Dockerfile`, `docker-compose.yml` (development), `deploy/vm/` (VM), `deploy/azure/main.bicep`, `deploy.sh`, `update.sh` (Azure) |
 | Tests | `tests/test_framework.py` (engine), `test_portal.py` (portal core), `test_features.py` (config, logs, frameworks, checks, AI), `test_backup.py`, `test_browser.py` |
 | Docs | `README.md`, `docs/*.md`, `CHANGELOG.md` |
 
@@ -93,6 +98,9 @@ explain choices in plain words, keep changes small, never leave the test suite r
     number of migrations, never in a patch release, `breaking=True` only in a major release. Migrations get
     the table store only (never evidence). Add `"X.Y.Z": SCHEMA_VERSION` to `RELEASES` in every release.
     New tables need no migration but must be in `store.TABLES` (a test scans for them).
+11. The portal never updates or restores itself: it only writes request files (VM) that the host updater
+    validates again, and on Azure updates run from the program repository's workflow. Arguments passed to
+    Azure job executions in `update.sh` never start with `--` (a test checks).
 
 ## Patterns to copy
 - New integration: section in `settings.SCHEMA` with help text -> validator in `grcpal/integrations/` ->

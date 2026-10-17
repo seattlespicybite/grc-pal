@@ -172,15 +172,41 @@ grcpal backup restore acme-2026-10.grcbak --kit recovery-kit.json --into /var/li
 - If an audit log inside the backup does not verify, restore stops. `--accept-audit-problems`
   restores anyway and records that you chose to.
 
-Once a year, check recoverability: restore a recent backup with `--into` a test folder (or onto a
-test VM) and keep the JSON result as evidence (SOC 2 A1.3); also open the latest
-`portal_audit` export and confirm it has every table and that `audit_chain_verification.json` says `"ok": true`; redeploy a test instance with
-`--name acme-restore` to confirm the template still deploys.
+### Yearly restore test
+
+Once a year (and after a major update), prove that a backup restores. Keep the output as SOC 2 A1.3 evidence.
+
+1. Pick a recent scheduled backup on the Backups page and click **Check** (it must pass).
+2. Restore it somewhere that is not production:
+   - VM: `sudo grcpal backup restore /backups/<file>.grcbak --into /data/restore-test` and save the JSON it
+     prints (row counts, files, audit chains), then delete `/var/lib/grcpal/data/restore-test`;
+   - Azure: `./deploy/azure/deploy.sh --name acme-restoretest --admins you@acme.com --restore-from <file> --kit
+     recovery-kit.json`, sign in, spot-check a few controls and evidence files, then delete the resource group
+     `rg-grcpal-acme-restoretest`.
+3. Write down the time it took (your recovery time) and the backup's age (your recovery point), and add
+   both with the JSON to the evidence for your continuity control.
+
+### Disaster recovery runbook
+
+| Event | Recovery | Expected loss |
+| --- | --- | --- |
+| A bad update | Nothing to do: it rolls back by itself. To go back later: VM `sudo grcpal-update rollback`; Azure: the update workflow with **rollback** | None |
+| Data deleted or changed by mistake | VM: Backups page → **Restore this backup** (today's data is kept aside). Azure: rebuild a new instance from the backup | Changes since that backup |
+| VM lost or its disk damaged | New Debian 13 VM, then `install.sh ... --restore <file> --kit recovery-kit.json` ([deploy-vm.md](deploy-vm.md#rebuild-on-a-new-vm)) | Since the last off-VM copy |
+| Azure resource group or region lost | `deploy.sh --name <new> --restore-from <file> --kit recovery-kit.json` ([deploy-azure.md](deploy-azure.md#rebuild-from-a-backup)) | Since the last backup copied outside that storage account |
+| Recovery kit lost | Download a new one from the Backups page while the instance still runs. Backups made with the old key still need the old kit | None while the instance runs |
+
+What to keep where: backups on a second location (network share, other storage); the recovery kit in a
+password manager; the installer kit or this repository at the version you run.
 
 ## Upgrades
 
-Pin a version: set the image tag (`--image ghcr.io/seattlespicybite/grc-pal:0.2.0`) and the
-`GRCPAL_VERSION` repository variable to the same release. Read the CHANGELOG first.
+Updates are applied by the updater of each deployment, never by hand: on a VM from the Updates page or a
+signed update file ([deploy-vm.md](deploy-vm.md#updates)), on Azure by the monthly workflow in your program
+repository ([deploy-azure.md](deploy-azure.md#updates)). Both back up first, try the new version on a copy of
+the data, check it before users get it, and roll back by themselves. Read the CHANGELOG before approving a
+feature or major release, and keep the repository variable `GRCPAL_VERSION` (used by your program
+repository's collector workflows) on the version you run.
 
 ### What an update may change
 
