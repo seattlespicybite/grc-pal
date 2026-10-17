@@ -10,16 +10,14 @@ from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse
 
 from grcpal.portal.auth import User
+from grcpal.portal.security import csv_cell
 from grcpal.portal.calendar import AUTO_STATUSES, DUE_DAYS, KEY_RE, STATUSES
 from grcpal.portal.service import Forbidden, Invalid
 
 MONTHS = [_cal.month_abbr[m] for m in range(1, 13)]
 
 
-def _csv_cell(value) -> str:
-    """Stop spreadsheet formula injection: text starting with = + - @ is prefixed with a quote."""
-    text = ", ".join(value) if isinstance(value, list) else str(value if value is not None else "")
-    return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
+_csv_cell = csv_cell  # kept for older imports
 
 
 def register(app, h) -> None:
@@ -47,7 +45,7 @@ def register(app, h) -> None:
         return render(request, user, "calendar.html", nav_active="calendar", year=year, show_auto=show_auto,
                       manual=data["manual"], automated=data["automated"], counts=counts,
                       months=MONTHS, this_month=this_month, labels=STATUSES, auto_labels=AUTO_STATUSES,
-                      program_start=portal.calendar_program_start())
+                      program_start=portal.calendar_program_start(), vendor_months=portal.vendor_calendar(year))
 
     @app.get("/calendar.csv")
     def calendar_csv(year: int = 0, user: User = Depends(current_user)):

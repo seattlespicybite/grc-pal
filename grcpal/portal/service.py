@@ -29,9 +29,10 @@ from grcpal.portal.backups import BackupsMixin
 from grcpal.portal.updates import UpdatesMixin
 from grcpal.portal.calendar import CalendarMixin
 from grcpal.portal.features import FeaturesMixin
+from grcpal.portal.vendors import VendorsMixin
 from grcpal.portal.auth import ROLES, SYSTEM, AuthError, Identity, User, bootstrap_admins, group_role
 from grcpal.portal.mailer import ConsoleMailer, Mailer, Message
-from grcpal.portal.security import safe_filename, validate_upload
+from grcpal.portal.security import csv_cell, safe_filename, validate_upload
 from grcpal.tasks import period_label
 
 EMAIL = re.compile(r"^[^@\s]{1,64}@(?=[^@\s]{1,253}\Z)[^@\s.]+(?:\.[^@\s.]+)+\Z")  # linear time: labels cannot overlap
@@ -60,7 +61,7 @@ def _rk() -> str:
     return f"{utcnow():%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:10]}"
 
 
-class Portal(FeaturesMixin, CalendarMixin, AccountsMixin, BackupsMixin, UpdatesMixin):
+class Portal(FeaturesMixin, CalendarMixin, VendorsMixin, AccountsMixin, BackupsMixin, UpdatesMixin):
     def __init__(self, catalog, store, evidence: EvidenceStore, mailer: Mailer | None = None,
                  today: dt.date | None = None, public_url: str | None = None, jobs_sync: bool | None = None) -> None:
         self.base_catalog, self.store, self.evidence = catalog, store, evidence
@@ -761,7 +762,10 @@ class Portal(FeaturesMixin, CalendarMixin, AccountsMixin, BackupsMixin, UpdatesM
             self.mailer.send(notify.render(content, email, self.org, kind))
             sent.append(email)
         if sent:
-            self.audit(actor, "mail.queued", kind, {"controls": controls or [], "to": sent, "subject": content["subject"][:200]})
+            # Vendor emails can go to people outside GRC-pal (a vendor's internal owner); auditors read the audit log
+            # and must not see contact details, so only the number of recipients is kept for those.
+            who = {"recipients": len(sent)} if kind == "vendor" else {"to": sent}
+            self.audit(actor, "mail.queued", kind, {"controls": controls or [], **who, "subject": content["subject"][:200]})
         return sent
 
     def _mail_result(self, msg: Message, error: Exception | None) -> None:
@@ -938,8 +942,8 @@ class Portal(FeaturesMixin, CalendarMixin, AccountsMixin, BackupsMixin, UpdatesM
             buf = io.StringIO()
             w = csv.DictWriter(buf, fieldnames=cols or ["empty"], extrasaction="ignore")
             w.writeheader()
-            for r in rows:
-                w.writerow({k: json.dumps(v) if isinstance(v, (list, dict)) else v for k, v in r.items()})
+            for r in rows:  # csv_cell: text starting with = + - @ cannot run as a spreadsheet formula
+                w.writerow({k: csv_cell(json.dumps(v) if isinstance(v, (list, dict)) else v) for k, v in r.items()})
             files[f"{name}.csv"] = buf.getvalue().encode()
 
         end = cycle.get("closed_at") or "9999"
@@ -959,6 +963,10 @@ class Portal(FeaturesMixin, CalendarMixin, AccountsMixin, BackupsMixin, UpdatesM
         table("implementation_notes", sorted(({k: v for k, v in r.items() if k not in ("PartitionKey", "RowKey")}
                                               for r in self.store.list("controlnotes", "n")),
                                              key=lambda r: (r["control"], r["version"])))
+        vendor_tables, vendor_files = self.vendor_export(cycle["start"], cycle["end"])
+        for name, rows in vendor_tables.items():
+            table(name, rows)
+        files.update(vendor_files)
         files["audit_chain_verification.json"] = json.dumps(self.log.verify(), indent=2).encode()
         files["cycle.json"] = json.dumps({k: v for k, v in cycle.items() if k != "PartitionKey"}, indent=2).encode()
         if control_status is not None:
@@ -977,6 +985,12 @@ class Portal(FeaturesMixin, CalendarMixin, AccountsMixin, BackupsMixin, UpdatesM
             "calendar_decisions.csv keeps every decision, including ones later corrected.\n"
             "audit_chain_verification.json shows whether the tamper-evident audit log verified at export time.\n"
             "implementation_notes.csv holds every version of each control's 'How we meet this control' notes.\n"
+            "vendors.csv is the vendor population (all statuses) with tier, data access, status and review dates;\n"
+            "vendor_reviews.csv, vendor_exceptions.csv and vendor_cuecs.csv hold each onboarding check, annual review and\n"
+            "offboarding in the cycle, the exceptions in vendors' reports and the CUEC mapping; vendor_files.csv lists\n"
+            "the files under vendor_files/ with their sha256; subservice_organizations.csv supports the system description;\n"
+            "questionnaire_versions.csv holds every version of the vendor security questionnaire. Vendor contact\n"
+            "details are left out on purpose.\n"
             "MANIFEST.csv lists the SHA-256 of every file in this archive.\n").encode()
         manifest = io.StringIO()
         mw = csv.writer(manifest)

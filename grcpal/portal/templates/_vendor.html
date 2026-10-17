@@ -1,0 +1,26 @@
+{# Shared pieces of the vendor pages. #}
+{% macro contacts(v, admin) -%}
+<fieldset class="v-fieldset"><legend>Internal owner (maintains the contract)</legend><div class="form-row">
+<div><label for="owner_name">Name</label><input id="owner_name" name="owner_name" maxlength="120" value="{{ v.owner_name or '' }}"></div>
+<div><label for="owner_title">Title</label><input id="owner_title" name="owner_title" maxlength="120" value="{{ v.owner_title or '' }}" placeholder="For example: Controller, Finance"></div>
+{% if admin %}<div><label for="owner_email">Email</label><input id="owner_email" name="owner_email" type="email" maxlength="254" value="{{ v.owner_email or '' }}"></div>{% endif %}
+<div><label for="owner_phone">Phone</label><input id="owner_phone" name="owner_phone" maxlength="40" value="{{ v.owner_phone or '' }}"></div></div>
+{% if admin %}<div class="hint">If the owner's email belongs to a GRC-pal user, they see this vendor and can upload its files. The owner does not need a GRC-pal account.</div>{% endif %}</fieldset>
+<fieldset class="v-fieldset"><legend>Internal backup (when the owner is away)</legend><div class="form-row">
+<div><label for="backup_name">Name</label><input id="backup_name" name="backup_name" maxlength="120" value="{{ v.backup_name or '' }}"></div>
+<div><label for="backup_title">Title</label><input id="backup_title" name="backup_title" maxlength="120" value="{{ v.backup_title or '' }}"></div>
+{% if admin %}<div><label for="backup_email">Email</label><input id="backup_email" name="backup_email" type="email" maxlength="254" value="{{ v.backup_email or '' }}"></div>{% endif %}</div></fieldset>
+<fieldset class="v-fieldset"><legend>Vendor contract contact</legend><div class="form-row">
+<div><label for="ext_name">Name</label><input id="ext_name" name="ext_name" maxlength="120" value="{{ v.ext_name or '' }}"></div>
+<div><label for="ext_title">Title</label><input id="ext_title" name="ext_title" maxlength="120" value="{{ v.ext_title or '' }}" placeholder="For example: Account manager"></div>
+<div><label for="ext_email">Email</label><input id="ext_email" name="ext_email" type="email" maxlength="254" value="{{ v.ext_email or '' }}"></div>
+<div><label for="ext_phone">Phone</label><input id="ext_phone" name="ext_phone" maxlength="40" value="{{ v.ext_phone or '' }}"></div></div></fieldset>
+<fieldset class="v-fieldset"><legend>Support and documents</legend>
+<label for="support_text">How to open a support ticket</label>
+<textarea id="support_text" name="support_text" maxlength="2000" placeholder="Where to go, what to include, severity levels, the account number location">{{ v.support_text or '' }}</textarea>
+<label for="support_url">Support link</label><input id="support_url" name="support_url" type="url" maxlength="500" value="{{ v.support_url or '' }}" placeholder="https://">
+<label for="docs_text">How to request their SOC 2 report, ISO certificate or a security questionnaire</label>
+<textarea id="docs_text" name="docs_text" maxlength="2000" placeholder="Trust portal, who to email, NDA needed, how long it takes">{{ v.docs_text or '' }}</textarea>
+<label for="docs_url">Trust page or document link</label><input id="docs_url" name="docs_url" type="url" maxlength="500" value="{{ v.docs_url or '' }}" placeholder="https://">
+<div class="hint">Links must start with https://. Contact details are never shown to auditors or included in the auditor export.</div></fieldset>
+{%- endmacro %}

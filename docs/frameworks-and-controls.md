@@ -88,6 +88,56 @@ July and October."* It is written for the next person who runs the program and f
 - **Export:** the cycle export includes `implementation_notes.csv` with every version.
 - Notes are plain text (up to 5,000 characters). Do not put passwords or other secrets in them.
 
+## Vendors
+
+**Vendors** is the vendor register for SOC 2 CC9.2: every vendor that stores, processes or can reach
+company or customer data. It replaces editing `registers/vendors.yaml` by hand: when the page opens for the
+first time, an admin clicks **Import from vendors.yaml** to copy those vendors in (every original field is
+kept; nothing already in the register is overwritten).
+
+**Each vendor** has a tier (critical, high, moderate, low), the data or systems it can reach, a status
+(Onboarding, Active, Offboarding, Offboarded, Not approved), whether it is a subservice organization for
+our SOC 2 system description, contract and report details, and its contacts:
+
+- **Internal owner** (name, title, email, phone): who maintains the contract and who to call when the vendor
+  does not answer. A **backup** covers when the owner is away. If the owner's or backup's email belongs to a
+  GRC-pal user, that person sees this vendor (and only their vendors) and can work on it.
+- **Vendor contract contact**, **how to open a support ticket** and **how to request their SOC 2 report,
+  ISO certificate or a questionnaire**, with links (https only).
+
+Auditors never see contact details: they are removed on the server, left out of the export, and contact
+changes are written to the audit log without the values.
+
+**One review a year.** Every active vendor is reviewed 12 months after its last review. The tier decides what
+the review needs: critical and high need a SOC 2 report or ISO certificate and our returned questionnaire,
+plus the CUECs mapped for SOC 2 reports; moderate needs one of them; low needs only an NDA or standard terms.
+The owner uploads the files and answers four plain questions, then clicks **Mark my part done**. An admin
+records the report details and any exceptions in the vendor's report, maps the CUECs (complementary user
+entity controls: things the vendor's auditor assumes we do) to our controls, and signs off. GRC-pal lists
+anything the tier still needs; signing off anyway requires a note saying why, and both go to the auditor.
+An admin cannot sign off a review they submitted while another admin is active. Signed-off reviews never
+change. If the attached report's period ended more than 12 months ago, it shows as an open item.
+
+**Onboarding and offboarding.** New vendors (added by an admin or requested by a Control owner) start in
+Onboarding with a checklist: tier, data and owner set; report or questionnaire attached; contract terms
+checked. An admin approves the vendor before data is shared. **Start offboarding** opens a checklist (sign-in
+removed, keys revoked, data returned or deleted, contract ended); each item needs a note and the offboarding
+needs at least one evidence file (for example the vendor's deletion letter) before it can be closed (VEN-05).
+
+**Security questionnaire.** **Vendors > Security questionnaire** holds our own questionnaire (47 starter
+questions in 10 sections, written in plain language and linked to the SOC 2 criteria they help assess).
+Admins edit a draft: add, edit or remove questions and sections, move questions up and down, across
+sections or with **Move to section**. Nothing changes for anyone else until **Save as version N** (a reason
+is required). Every version is kept and visible to auditors. Each question keeps a permanent ID (`Q-017`)
+when it moves, and the display number (2.3) is recalculated. **Download (.xlsx)** gives a blank file; on a
+vendor's Review tab, **Download our questionnaire** puts the vendor's name and a return date on the cover
+sheet and records which version was sent. The Excel file has a locked Questions sheet with Answer and
+Comments columns to fill in and Yes/No/N/A lists. Upload the returned file to the vendor's review.
+
+**Reminders.** The weekly `grcpal remind --overdue` job also emails the internal owner, backup and admins 30
+days before a vendor's review is due (once) and on every run while it is overdue. The security calendar
+shows a row with each month's vendor reviews.
+
 ## Security calendar
 
 **Calendar** (admins only) is one page for the year: activities on the left, January to December on the

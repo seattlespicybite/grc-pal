@@ -42,6 +42,10 @@ License: [AGPL-3.0-or-later](LICENSE).
   save every connection; credentials are encrypted.
 - **AI assistant (optional, off by default):** per-control evidence review and full mock audits
   with Claude or your own model, always approved by a person and kept as evidence.
+- **Vendors (SOC 2 CC9.2):** a vendor register with tiers, internal and vendor contacts, an annual
+  review per vendor (report, our questionnaire, exceptions, CUECs mapped to our controls, sign-off by a
+  second admin), onboarding and offboarding checklists, and an editable security questionnaire that
+  downloads as Excel. Auditors get the population and evidence in the export, without contact details.
 - **Security calendar:** one year page with every recurring activity and automated check, editable
   by admins. Nothing is marked missed automatically: an admin records Performed or Missed, and every
   decision is kept for the auditor.

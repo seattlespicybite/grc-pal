@@ -814,6 +814,17 @@ controls:
       - {artifact: Microsoft SOC 2 review and office access review, via: "task:vendor-review"}
     iso27001: [A.7.1, A.7.2]
 
+  - id: VEN-05
+    title: Vendor offboarding
+    description: When a vendor relationship ends, its sign-in and API access are removed, company data is returned or deleted with the vendor's confirmation, and the contract is closed. Evidence is kept per vendor on the Vendors page.
+    criteria: [CC9.2, C1.2]
+    owner: security-lead
+    frequency: event
+    type: manual
+    evidence:
+      - {artifact: Offboarding checklist with evidence for vendors offboarded in the period (Vendors page and auditor export), via: event}
+    iso27001: [A.5.19, A.5.20]
+
   # ===================== Processing integrity (deferred) =====================
   - id: PI-01
     title: Processing specifications documented

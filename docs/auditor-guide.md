@@ -21,6 +21,13 @@ program repository for the audit period.
 | `control_definition_changes.csv` | Every version of a changed control definition, with author, reason and before/after |
 | `calendar_occurrences.csv` | Every scheduled month of every recurring activity in the cycle (from the schedule, not from what was done): scheduled and moved due date, status (Planned, Performed, Missed), past-due flag, performed date, who recorded it, when and the note |
 | `calendar_decisions.csv` | Every change recorded on the calendar, including ones later corrected (version and the status it replaced) |
+| `vendors.csv` | Vendor population (every status, including offboarded and not approved): tier, data access, internal owner's title, status, subservice flag, contract and report details, last and next review, onboarding approval date and a `data_shared_before_approval` flag |
+| `vendor_reviews.csv` | Every onboarding check, annual review and offboarding in the cycle: who started, submitted and signed off, the owner's answers, checklist items with notes, open items accepted at sign-off with the reason, self-approval flag, questionnaire version sent, and the tier, report and opinion at sign-off |
+| `vendor_exceptions.csv`, `vendor_cuecs.csv` | Exceptions noted in vendors' reports with our response; CUECs mapped to our controls, both current and as frozen at each sign-off |
+| `vendor_files.csv`, `vendor_files/` | Vendor reports, returned questionnaires and offboarding evidence uploaded in the cycle, with SHA-256 (these may be under NDA with the vendor) |
+| `vendor_register_history.csv` | Every version of every vendor record with author and reason |
+| `subservice_organizations.csv` | Vendors flagged as subservice organizations (carved out or inclusive), for the system description |
+| `questionnaire_versions.csv` | Every version of the vendor security questionnaire, one row per question, with the SOC 2 criteria each question supports |
 | `implementation_notes.csv` | Every version of each control's "How we meet this control" notes, with author and time; each save is also in the audit log with the SHA-256 of the text |
 | `audit_chain_verification.json` | Result of recomputing the chain at export time |
 | `control_status.json` | Control health at export time, including the computed status behind any override |
@@ -57,6 +64,12 @@ program repository for the audit period.
 | VUL-01 vulnerabilities | `github_vulns`, `prowler` runs | Sample findings; confirm remediation within SLA or exception |
 | IR-02 incidents | `issues_export` issues labeled `incident` | Inspect handling records |
 | Recurring tasks | `issues_export/*/grc_issues.json` | Confirm completion each period and approver sign-off |
+| VEN-01 new vendors | `vendors.csv` (onboarding approved in the period) + `vendor_reviews.csv` (kind onboarding) | Sample new vendors; confirm the onboarding check was approved before `start_date` (`data_shared_before_approval` is false) |
+| VEN-02 vendor reviews | `vendors.csv` (critical and high, active) + `vendor_reviews.csv` (kind annual) + `vendor_files/` | Sample vendors; inspect the report (period within 12 months), our questionnaire, exceptions with responses and the CUEC mapping; confirm sign-off by someone other than the submitter |
+| VEN-05 vendor offboarding | `vendors.csv` (status offboarded, `end_date` in the period) + `vendor_reviews.csv` (kind offboarding) | Confirm each checklist item has a note and evidence under `vendor_files/` |
+
+Vendor contact details (names, emails, phone numbers, support links) are deliberately left out of the
+export and of the auditor's view of the portal; the internal owner is shown by title only.
 
 ## Daily evidence for continuous controls
 Daily runs exist for each day of the period. Gaps (failed runs) are visible as manifests with
