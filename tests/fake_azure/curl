@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import json, os, sys
 url = sys.argv[-1]
-if "releases/latest" in url: print(json.dumps({"tag_name": "v" + os.environ.get("FAKE_LATEST", "0.2.1")}))
+if "/releases?per_page=" in url: print(os.environ.get("FAKE_RELEASES", "[]"))
+elif "releases/latest" in url: print(json.dumps({"tag_name": "v" + os.environ.get("FAKE_LATEST", "0.2.1")}))
 elif "ghcr.io/token" in url: print(json.dumps({"token": "t"}))
 elif "/manifests/" in url: print("HTTP/2 200\r\ndocker-content-digest: sha256:" + "b" * 64 + "\r\n")
 elif url.endswith("/healthz"): sys.exit(0 if os.environ.get("FAKE_HEALTH", "ok") == "ok" else 22)

@@ -222,7 +222,7 @@ container app and its jobs (plus using its Container Apps environment).
 
 | Release | Installs |
 | --- | --- |
-| Patch (0.3.0 → 0.3.1) | Automatically on the 8th of each month |
+| Patch (0.3.0 → 0.3.1) | When someone runs the workflow with the version number. The weekly run (Mondays) installs nothing: it lists newer releases, security fixes first, in the run summary |
 | Feature (0.3 → 0.4) | When someone runs the workflow with the version number (Actions → GRC-pal update → Run workflow) |
 | Major (0.x → 1.0) | Same, with **major** ticked, after reading the release notes |
 
@@ -241,6 +241,10 @@ What every update does (users stay on the current version until the last step):
 
 If step 4 or 5 fails, traffic never moves and the new revision is switched off. Each result is in the audit
 log: `update.applied`, `update.trial_failed`, `update.rolled_back`.
+
+The workflow log shows each step with its percentage (`[45%] Trial ...`). The **Administration → Updates**
+page lists newer releases with *Do I need it?*. The previous revision stays ready until the next update, and
+the backup taken before each update is kept for at least 30 days.
 
 **Roll back:** run the workflow with **rollback** ticked, or `./deploy/azure/update.sh --name acme --rollback`.
 Traffic and jobs go back to the previous revision; the data needs nothing because updates only add.

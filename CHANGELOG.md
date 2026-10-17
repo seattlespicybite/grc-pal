@@ -19,6 +19,14 @@ All notable changes are listed here. The project follows [semantic versioning](h
 - `grcpal backup run-due` prints one JSON line (`"event": "backup.run_due"`) so logs and alerts can read it.
 
 ### Added
+- **Updates page: newer releases with "Do I need it?"** Lists every release newer than yours from GitHub's
+  public release list (checked at most every 12 hours, nothing about the instance is sent, SSRF-guarded,
+  links limited to github.com; off with `GRCPAL_UPDATE_CHECK=off`, and on VMs only when downloads are allowed).
+  Each release shows security, fixed, added and changed counts from its notes and a plain advice line; a
+  banner appears when a newer release has security fixes. `update.sh --status` prints the same list.
+- **Live update progress.** The VM updater reports a percentage and step; the Updates page shows a progress
+  bar and the step list, polling `/updates/progress` (admins only) and reconnecting while the portal
+  restarts. The Azure updater prints `[NN%]` before each step in the workflow log.
 - **Calendar: one-off months.** Click **+** in an empty month of a manual activity to add it for that month
   only (audited as `calendar.occurrence.add`); the regular schedule does not change.
 - **Calendar: arrange rows.** Drag and drop rows within Manual or Automated, or use the ↑ ↓ buttons; the order
@@ -110,6 +118,11 @@ All notable changes are listed here. The project follows [semantic versioning](h
   ones). CSV cells starting with `= + - @` are prefixed with a quote.
 
 ### Changed
+- **Every update is manual by default.** VM: automatic patch installs are off unless an admin turns them on.
+  Azure: the scheduled workflow run (now weekly, Mondays) only lists newer releases in its summary; an update
+  installs only when someone runs the workflow with a version.
+- **30-day rollback window.** Pre-update backups (Backups page retention) and the VM's pre-update data copies
+  are kept for at least 30 days, in addition to the newest ones.
 - Calendar rows are grouped only into **Manual** and **Automated**.
 - **Security calendar redesigned** as one year page for admins (activities on the left, months on the
   right). Month and List views are gone; auditors get the calendar through the cycle export.

@@ -65,6 +65,85 @@ def kind_of(current: str, new: str) -> str:
 
 
 # ====================================================================== keys and signatures
+# ====================================================================== release notes and the release list
+NOTE_SECTIONS = ("security", "fixed", "added", "changed")
+RELEASES_REPO_RE = re.compile(r"^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$")
+
+
+def changelog_section(text: str, version: str) -> str:
+    """The CHANGELOG.md section of one release: the release notes (Security, Fixed, Added, Changed)."""
+    version_tuple(version)
+    m = re.search(rf"^## \[{re.escape(version)}\][^\n]*\n(.*?)(?=^## \[|\Z)", text, re.M | re.S)
+    if not m or not m.group(1).strip():
+        raise UpdateError(f"CHANGELOG.md has no section for {version}")
+    return m.group(1).strip()
+
+
+def notes_summary(notes: str) -> dict:
+    """How many entries each kind of change has (bullets under ### Security / Fixed / Added / Changed)."""
+    counts = dict.fromkeys(NOTE_SECTIONS, 0)
+    section = ""
+    for line in (notes or "").splitlines():
+        head = re.match(r"^###\s+(\w+)", line)
+        if head:
+            section = head.group(1).lower()
+        elif section in counts and line.startswith("- "):
+            counts[section] += 1
+    return counts
+
+
+def advice(kind: str, summary: dict) -> dict:
+    """A plain answer to "do I need this update?" for the Updates page."""
+    if summary.get("security"):
+        return {"level": "security", "text": "Contains security fixes: install soon."}
+    if kind == "major":
+        return {"level": "major", "text": "Major release: read the notes and plan a time; going back needs the "
+                                          "backup taken before the update."}
+    if summary.get("fixed"):
+        return {"level": "fixes", "text": "Bug fixes: install when convenient."}
+    return {"level": "features", "text": "New features: install when you want them."}
+
+
+def newer_releases(rows: list, current: str) -> list[dict]:
+    """GitHub releases API rows -> published releases newer than `current`, newest first.
+    The rows come from the internet: every field is checked, links must point to github.com."""
+    out = []
+    for r in (rows or [])[:50]:
+        if not isinstance(r, dict) or r.get("draft") or r.get("prerelease"):
+            continue
+        version = str(r.get("tag_name") or "").removeprefix("v")
+        if not VERSION_RE.match(version):
+            continue
+        kind = kind_of(current, version)
+        if kind not in ("patch", "minor", "major"):
+            continue
+        notes = str(r.get("body") or "")[:20000]
+        summary = notes_summary(notes)
+        url = r.get("html_url")
+        out.append({"version": version, "kind": kind, "published": str(r.get("published_at") or "")[:10],
+                    "notes": notes, "summary": summary, "advice": advice(kind, summary),
+                    "url": url if isinstance(url, str) and url.startswith("https://github.com/") else ""})
+    return sorted(out, key=lambda x: version_tuple(x["version"]), reverse=True)
+
+
+def fetch_releases(repo: str, timeout: float = 5) -> list:
+    """Read the public release list from GitHub. Sends nothing about this instance (no tenant data, no
+    version), uses the SSRF-guarded client, and only ever this fixed API address."""
+    from grcpal.checks import safe_request
+
+    if not RELEASES_REPO_RE.match(repo or ""):
+        raise UpdateError(f"Not a GitHub repository: {repo!r}")
+    r = safe_request("GET", f"https://api.github.com/repos/{repo}/releases?per_page=30",
+                     headers={"Accept": "application/vnd.github+json", "User-Agent": "grc-pal-update-check"},
+                     timeout=timeout, redirects=0)
+    if r.status != 200 or r.truncated:
+        raise UpdateError(f"GitHub answered {r.status}")
+    rows = json.loads(r.body)
+    if not isinstance(rows, list):
+        raise UpdateError("Unexpected answer from GitHub")
+    return rows
+
+
 def keygen() -> tuple[str, str]:
     """(private PEM, public PEM). Keep the private key only in the GitHub release environment secret."""
     from cryptography.hazmat.primitives import serialization

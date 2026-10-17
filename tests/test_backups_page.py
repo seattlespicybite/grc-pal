@@ -187,11 +187,11 @@ def test_to_keep_grandfather_father_son():
     items = [backup_store.parse_name(backup_store.file_name("acme", "scheduled", now - dt.timedelta(days=d)))
              for d in range(400)]
     items += [backup_store.parse_name(backup_store.file_name("acme", "pre-update", now - dt.timedelta(days=d, hours=1)))
-              for d in range(10)]
-    keep = backup_store.to_keep(items, backup_store.schedule({}))
+              for d in range(0, 65, 5)]
+    keep = backup_store.to_keep(items, backup_store.schedule({}), now=now)
     regular = [n for n in keep if n.endswith("-scheduled.grcbak")]
     pre = [n for n in keep if n.endswith("-pre-update.grcbak")]
-    assert len(pre) == 3
+    assert len(pre) == 6  # every pre-update backup from the last 30 days (rollback window), at least the newest 3
     assert 7 <= len(regular) <= 7 + 4 + 12
     newest = backup_store.file_name("acme", "scheduled", now)
     assert newest in keep
@@ -355,3 +355,87 @@ def test_without_the_vm_updater_there_is_no_in_app_restore(site):
         portal.request_restore(ADMIN, "local", name, "RESTORE")
     assert "Restore this backup" not in as_(client, ADMIN).get("/backups").text
     assert "Manual installation" in client.get("/updates").text
+
+
+def test_progress_endpoint_reports_step_and_percent(vm_site):
+    portal, client, tmp = vm_site
+    (tmp / "state" / "status.json").write_text(json.dumps({"state": "trial", "message": "Trying 0.3.0 on a copy",
+                                                           "at": "2026-10-17T01:00:00+00:00", "percent": 40,
+                                                           "backup": "secret-name-not-needed"}))
+    r = as_(client, ADMIN).get("/updates/progress")
+    assert r.status_code == 200 and r.headers["cache-control"] == "no-store"
+    assert r.json() == {"state": "trial", "message": "Trying 0.3.0 on a copy", "at": "2026-10-17T01:00:00+00:00",
+                        "percent": 40, "active": True, "pending": False}
+    page = client.get("/updates").text
+    assert 'data-update-progress="/updates/progress"' in page and "Trial on a copy" in page
+    (tmp / "state" / "status.json").write_text(json.dumps({"state": "done", "message": "Updated", "percent": 100}))
+    assert client.get("/updates/progress").json()["active"] is False
+
+
+def test_progress_counts_a_request_the_updater_has_not_picked_up(vm_site):
+    portal, client, tmp = vm_site
+    (tmp / "state" / "available.json").write_text(json.dumps({"version": "0.3.0", "kind": "minor"}))
+    portal.approve_update(ADMIN, "0.3.0")
+    p = as_(client, ADMIN).get("/updates/progress").json()
+    assert p["pending"] is True and p["active"] is True
+
+
+@pytest.mark.parametrize("who", [CONTRIB, AUDITOR])
+def test_progress_is_admin_only(vm_site, who):
+    _, client, _ = vm_site
+    assert as_(client, who).get("/updates/progress").status_code == 403
+
+
+ROWS = [{"tag_name": "v99.0.1", "body": "### Security\n- fixed a thing\n### Fixed\n- <b>bold</b>",
+         "html_url": "https://github.com/seattlespicybite/grc-pal/releases/tag/v99.0.1"},
+        {"tag_name": "v99.0.0", "body": "### Added\n- big feature"}]
+
+
+@pytest.fixture()
+def feed(monkeypatch):
+    from grcpal import update
+    from grcpal.portal import updates
+    calls = []
+
+    def fetch(repo, timeout=5):
+        calls.append(repo)
+        return ROWS
+    monkeypatch.setenv("GRCPAL_UPDATE_CHECK", "on")
+    monkeypatch.setattr(update, "fetch_releases", fetch)
+    monkeypatch.setattr(updates, "_FEED", {})
+    return calls
+
+
+def test_release_list_says_whether_an_update_is_needed(site, feed, monkeypatch):
+    portal, client, _ = site
+    from grcpal.portal import updates
+    monkeypatch.setattr(updates.UpdatesMixin, "deployment", property(lambda s: "azure"))
+    page = as_(client, ADMIN).get("/updates").text
+    assert "99.0.1" in page and "99.0.0" in page and "Contains security fixes" in page
+    assert "&lt;b&gt;bold&lt;/b&gt;" in page and "<b>bold</b>" not in page  # notes from the internet are escaped
+    assert "run the" in page.lower() and "with version 99.0.1" in page
+    client.get("/updates")
+    assert feed == ["seattlespicybite/grc-pal"]  # cached: GitHub is asked once
+
+
+def test_release_list_is_off_on_an_offline_vm_and_with_the_switch(vm_site, feed, monkeypatch):
+    portal, client, tmp = vm_site
+    assert "99.0.1" not in as_(client, ADMIN).get("/updates").text  # VM without "download releases"
+    (tmp / "state" / "policy.json").write_text(json.dumps({"online": True}))
+    assert "99.0.1" in client.get("/updates").text
+    monkeypatch.setenv("GRCPAL_UPDATE_CHECK", "off")
+    assert portal.release_feed(True) == {"enabled": False, "releases": []}
+
+
+def test_release_list_survives_github_being_down(site, monkeypatch):
+    from grcpal import update
+    from grcpal.portal import updates
+    monkeypatch.setenv("GRCPAL_UPDATE_CHECK", "on")
+    monkeypatch.setattr(updates, "_FEED", {})
+
+    def down(repo, timeout=5):
+        raise OSError("network unreachable")
+    monkeypatch.setattr(update, "fetch_releases", down)
+    portal, client, _ = site
+    r = as_(client, ADMIN).get("/updates")
+    assert r.status_code == 200 and "Could not reach GitHub" in r.text

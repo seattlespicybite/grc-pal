@@ -1,17 +1,17 @@
-name: GRC-pal update (monthly, Azure)
-# Patch releases install on the 8th of each month. Feature (minor) and major releases install only when a
-# person runs this workflow with a version: that run, and the environment approval if you require one, is the
-# change record. Each run backs up first, tries the new version on a copy, checks it before it gets traffic and
+name: GRC-pal update (Azure)
+# Updates install only when a person runs this workflow with a version: that run, and the environment approval
+# if you require one, is the change record. The weekly scheduled run installs nothing: it lists the releases
+# newer than yours (security fixes first) in the run summary. Each run backs up first, tries the new version on a copy, checks it before it gets traffic and
 # keeps the previous version ready (see docs/deploy-azure.md, "Updates").
 # Setup: deploy.sh sets the variables; create the environment "grcpal-update" (Settings > Environments) and,
 # to approve every update, add required reviewers there.
 on:
   schedule:
-    - cron: "23 11 8 * *"   # 07:23 America/New_York (EDT) on the 8th
+    - cron: "23 11 * * 1"   # check only, Mondays 07:23 America/New_York (EDT)
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to install, e.g. 0.3.0 (empty: latest patch release only)"
+        description: "Version to install, e.g. 0.3.0 (empty: only list what is available)"
         required: false
         default: ""
       major:
@@ -61,7 +61,10 @@ jobs:
         run: |
           cd grc-pal
           if [ "$ROLLBACK" = "true" ]; then exec ./deploy/azure/update.sh --name "$NAME" --rollback --yes; fi
-          ARGS=(--name "$NAME" --yes)
-          if [ -n "$VERSION" ]; then ARGS+=(--version "$VERSION"); else ARGS+=(--auto); fi
+          if [ -z "$VERSION" ]; then
+            ./deploy/azure/update.sh --name "$NAME" --status | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          ARGS=(--name "$NAME" --yes --version "$VERSION")
           if [ "$MAJOR" = "true" ]; then ARGS+=(--major); fi
           ./deploy/azure/update.sh "${ARGS[@]}"

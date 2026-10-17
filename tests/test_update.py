@@ -5,6 +5,7 @@ import importlib.machinery
 import importlib.util
 import json
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -414,23 +415,24 @@ def stage(mod, version):
     return path
 
 
-def test_patch_is_installed_automatically(vm):
+def test_patch_is_installed_automatically_only_when_turned_on(vm):
     mod, staged = vm
     staged.unlink()
     stage(mod, "0.2.1")
     host = use(mod)
+    (mod.STATE / "policy.json").write_text(json.dumps({"auto_patch": True}))
     mod.check()
     assert mod.image()["version"] == "0.2.1" and "update.applied" in host.events
 
 
-def test_patch_waits_when_automatic_patches_are_off(vm):
+def test_patch_waits_for_approval_by_default(vm):
     mod, staged = vm
     staged.unlink()
     stage(mod, "0.2.1")
-    use(mod)
-    (mod.STATE / "policy.json").write_text(json.dumps({"auto_patch": False}))
+    host = use(mod)
+    assert mod.policy()["auto_patch"] is False
     mod.check()
-    assert mod.image()["version"] == "0.2.0"
+    assert mod.image()["version"] == "0.2.0" and "update.applied" not in host.events
     assert json.loads((mod.STATE / "available.json").read_text())["kind"] == "patch"
 
 
@@ -537,3 +539,71 @@ def test_second_backup_location_is_mounted_only_when_safe(tmp_path, monkeypatch)
     for bad in (str(tmp_path / "missing"), str(mod.ROOT / "data"), "/"):
         env.write_text(f"GRCPAL_BACKUP_DIR_2_HOST={bad}\n")
         assert "/backups2" not in " ".join(mod.base_args())
+
+
+def test_rollback_copies_are_kept_for_30_days(vm):
+    import datetime as dt
+    mod, _ = vm
+    mod.ROLLBACK.mkdir(parents=True, exist_ok=True)
+    now = dt.datetime.now(dt.timezone.utc)
+    names = [f"{now - dt.timedelta(days=d):%Y%m%dT%H%M%SZ}-0.{d}.0" for d in (1, 10, 20, 40, 50, 60)]
+    for n in names:
+        (mod.ROLLBACK / n).mkdir()
+    mod.prune_rollbacks()
+    left = sorted(p.name for p in mod.ROLLBACK.iterdir())
+    assert left == sorted(names[:3])  # the last 30 days (also more than the newest two)
+    for n in names[3:5]:
+        (mod.ROLLBACK / n).mkdir()
+    shutil.rmtree(mod.ROLLBACK / names[0])
+    shutil.rmtree(mod.ROLLBACK / names[1])
+    shutil.rmtree(mod.ROLLBACK / names[2])
+    mod.prune_rollbacks()
+    assert sorted(p.name for p in mod.ROLLBACK.iterdir()) == sorted(names[3:5])  # never fewer than two
+
+
+# ================================================================ release list: "do I need this update?"
+CHANGELOG = """# Changelog
+
+## [Unreleased]
+### Added
+- not released yet
+
+## [0.3.1] - 2026-11-02
+### Security
+- Fix session fixation
+### Fixed
+- Backups page typo
+- Calendar order
+
+## [0.3.0] - 2026-10-20
+### Added
+- Updates page progress
+"""
+
+
+def test_changelog_section_is_the_release_notes():
+    notes = update.changelog_section(CHANGELOG, "0.3.1")
+    assert notes.startswith("### Security") and "Calendar order" in notes and "Updates page progress" not in notes
+    with pytest.raises(update.UpdateError, match="no section for 0.9.9"):
+        update.changelog_section(CHANGELOG, "0.9.9")
+
+
+def test_notes_summary_and_advice():
+    s = update.notes_summary(update.changelog_section(CHANGELOG, "0.3.1"))
+    assert s == {"security": 1, "fixed": 2, "added": 0, "changed": 0}
+    assert update.advice("patch", s)["level"] == "security"
+    assert update.advice("minor", update.notes_summary("### Added\n- x"))["level"] == "features"
+    assert update.advice("patch", update.notes_summary("### Fixed\n- x"))["level"] == "fixes"
+    assert update.advice("major", update.notes_summary("### Added\n- x"))["level"] == "major"
+
+
+def test_newer_releases_ignores_drafts_bad_tags_older_and_foreign_links():
+    rows = [{"tag_name": "v0.3.1", "body": "### Security\n- a", "html_url": "https://github.com/o/r/releases/tag/v0.3.1",
+             "published_at": "2026-11-02T10:00:00Z"},
+            {"tag_name": "v0.3.0", "body": "### Added\n- b", "html_url": "javascript:alert(1)"},
+            {"tag_name": "v0.4.0", "draft": True}, {"tag_name": "v0.5.0", "prerelease": True},
+            {"tag_name": "v0.2.0"}, {"tag_name": "v0.1.9"}, {"tag_name": "<script>"}, "not a dict"]
+    out = update.newer_releases(rows, "0.2.0")
+    assert [r["version"] for r in out] == ["0.3.1", "0.3.0"]
+    assert out[0]["kind"] == "minor" and out[0]["advice"]["level"] == "security" and out[0]["published"] == "2026-11-02"
+    assert out[1]["url"] == ""

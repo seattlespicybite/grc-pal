@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 
 from grcpal.portal.auth import User
 from grcpal.portal.service import Forbidden, Invalid
@@ -94,6 +94,11 @@ def register(app, h) -> None:
     def updates_page(request: Request, user: User = Depends(current_user)):
         h.need(user, "admin")
         return render(request, user, "updates.html", data=p().updates_overview(user))
+
+    @app.get("/updates/progress")
+    def updates_progress(request: Request, user: User = Depends(current_user)):
+        h.need(user, "admin")
+        return JSONResponse(p().update_progress(user), headers={"Cache-Control": "no-store"})
 
     @app.post("/updates/approve")
     def updates_approve(request: Request, version: str = Form(""), csrf: str = Form(""),

@@ -116,4 +116,37 @@
       });
     });
   });
+
+  // Updates page: live progress while the host updater works (polls a small JSON endpoint, admins only).
+  document.querySelectorAll('[data-update-progress]').forEach(function (card) {
+    if (!card.hasAttribute('data-active')) return;
+    var url = card.getAttribute('data-update-progress');
+    var steps = Array.prototype.slice.call(card.querySelectorAll('[data-step]'));
+    var keys = steps.map(function (li) { return li.getAttribute('data-step'); });
+    function text(sel, value) { var el = card.querySelector(sel); if (el) el.textContent = value; }
+    function paint(d) {
+      var pct = d.percent === null ? 0 : d.percent;
+      var bar = card.querySelector('[data-progress-bar]');
+      if (bar) bar.value = pct;
+      text('[data-progress-percent]', pct + '%');
+      text('[data-progress-message]', d.pending ? 'Waiting for the updater to start (within a minute).' : d.message);
+      text('[data-progress-state]', (d.pending ? 'waiting' : d.state || 'idle').replace(/_/g, ' '));
+      var at = keys.indexOf(d.state);
+      steps.forEach(function (li, i) {
+        li.classList.toggle('done', at >= 0 && i < at);
+        li.classList.toggle('current', i === at);
+      });
+    }
+    function tick() {
+      fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d) { setTimeout(tick, 5000); return; }
+          paint(d);
+          if (d.active) setTimeout(tick, 2000); else window.location.reload();
+        })
+        .catch(function () { setTimeout(tick, 5000); });  // the portal restarts during the switch
+    }
+    setTimeout(tick, 2000);
+  });
 })();

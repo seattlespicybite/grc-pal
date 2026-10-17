@@ -6,11 +6,38 @@
 
 {% if data.data_model.error %}<div class="flash err" role="alert">{{ data.data_model.error }}</div>{% endif %}
 
+{% set fd = data.feed %}
+{% if fd.enabled %}<section class="card table-wrap"><h2>Newer releases</h2>
+{% if fd.error %}<div class="flash err" role="alert">{{ fd.error }}</div>{% endif %}
+{% if fd.security %}<div class="flash err" role="alert">A newer release contains security fixes. Installing the newest release includes every fix before it.</div>{% endif %}
+{% if fd.releases %}
+<p class="sub">{% if data.deployment == 'azure' %}To install, run the <strong>GRC-pal update</strong> workflow (Actions tab of your program repository) with version {{ fd.releases[0].version }}.{% elif data.deployment == 'vm' %}The updater on the server downloads the newest release at its next check; approve it above when it is ready.{% else %}Install the newest release by hand (docs/deploy-vm.md).{% endif %} Nothing installs until a person starts it.</p>
+<table><thead><tr><th>Version</th><th>Do I need it?</th><th>What changed</th></tr></thead><tbody>
+{% for r in fd.releases %}<tr><td class="nowrap">{{ r.version }}{% if r.published %}<div class="sub">{{ r.published }}</div>{% endif %}<div class="sub">{{ r.kind }}</div></td>
+<td><span class="pill adv-{{ r.advice.level }}">{{ r.advice.level|capitalize }}</span> {{ r.advice.text }}</td>
+<td class="sub">{% set s = r.summary %}{% if s.security %}{{ s.security }} security · {% endif %}{% if s.fixed %}{{ s.fixed }} fixed · {% endif %}{% if s.added %}{{ s.added }} added · {% endif %}{% if s.changed %}{{ s.changed }} changed{% endif %}
+{% if r.notes %}<details><summary>Release notes</summary><pre class="note">{{ r.notes }}</pre></details>{% endif %}
+{% if r.url %}<a href="{{ r.url }}" rel="noopener noreferrer" target="_blank">On GitHub</a>{% endif %}</td></tr>{% endfor %}
+</tbody></table>
+{% elif not fd.error %}<div class="empty">GRC-pal {{ data.version }} is the newest release.</div>{% endif %}
+<p class="sub">Checked {{ when(fd.checked) }} UTC against GitHub's public release list (nothing about this instance is sent).</p></section>{% endif %}
+
 {% if data.deployment == 'vm' %}
-{% set st = data.status %}
-{% if st.state %}<section class="card{{ ' backup-warn' if st.state in ('failed', 'rolled_back', 'waiting') }}"><h2>Status</h2>
-<p><span class="pill {{ 'ok' if st.state in ('done', 'idle') else 'error' if st.state in ('failed', 'rolled_back') else 'pending' }}">{{ st.state|replace('_', ' ')|capitalize }}</span> {{ st.message }}</p>
-<p class="sub">{{ when(st.at) }} UTC</p></section>{% endif %}
+{% set st = data.status %}{% set pr = data.progress %}
+{% set keys = data.steps|map('first')|list %}{% set cur = keys.index(st.state) if st.state in keys else -1 %}
+<section class="card{{ ' backup-warn' if st.state in ('failed', 'rolled_back') }}" data-update-progress="/updates/progress"{% if pr.active %} data-active{% endif %}>
+<h2>Status</h2>
+<p><span class="pill {{ 'ok' if st.state in ('done', 'idle') else 'error' if st.state in ('failed', 'rolled_back') else 'pending' }}" data-progress-state>{{ (st.state or 'idle')|replace('_', ' ')|capitalize }}</span>
+<span data-progress-message>{{ st.message or 'No update is running.' }}</span></p>
+<div class="update-progress" data-progress-box{% if not pr.active %} hidden{% endif %}>
+<progress max="100" value="{{ pr.percent or 0 }}" data-progress-bar>{{ pr.percent or 0 }}%</progress>
+<span class="mono" data-progress-percent>{{ pr.percent or 0 }}%</span></div>
+<ol class="update-steps">{% for key, label in data.steps %}
+<li data-step="{{ key }}"{% if cur >= 0 and loop.index0 < cur %} class="done"{% elif loop.index0 == cur %} class="current"{% endif %}>{{ label }}</li>{% endfor %}
+</ol>
+<p class="sub" data-progress-at>{% if st.at %}{{ when(st.at) }} UTC{% endif %}</p>
+<p class="sub">This page updates itself while an update runs. GRC-pal restarts during the switch; the page reconnects on its own.</p>
+</section>
 
 {% if data.pending %}<section class="card"><h2>Waiting for the updater</h2><ul>
 {% for r in data.pending %}<li>{{ r.action|capitalize }}{% if r.version %} {{ r.version }}{% endif %}{% if r.backup %} {{ r.backup }}{% endif %}, asked by {{ r.by }} at {{ when(r.at) }} UTC</li>{% endfor %}
@@ -27,9 +54,9 @@
 
 <section class="card"><h2>Settings</h2>
 <form method="post" action="/updates/policy"><input type="hidden" name="csrf" value="{{ csrf }}">
-<label class="check"><input type="checkbox" name="auto_patch"{% if data.policy.auto_patch %} checked{% endif %}> Install patch releases automatically during the monthly check (recommended)</label>
+<label class="check"><input type="checkbox" name="auto_patch"{% if data.policy.auto_patch %} checked{% endif %}> Install patch releases automatically during the check (off by default: every update waits for an admin)</label>
 <label class="check"><input type="checkbox" name="online"{% if data.policy.online %} checked{% endif %}> Download new releases from GitHub (needs internet access from the server)</label>
-<p class="sub">Feature and major releases always wait for an admin to approve them here.</p>
+<p class="sub">Feature and major releases always wait for an admin to approve them here. The previous version and its data copy are kept for at least 30 days, so an update can be undone.</p>
 <div class="actions"><button class="btn" type="submit">Save</button></div></form></section>
 
 <section class="card table-wrap"><h2>History</h2>
@@ -42,9 +69,9 @@
 <section class="card"><h2>Updates on Azure</h2>
 <p>This instance runs GRC-pal {{ data.version }}. Updates run from your program repository's <strong>GRC-pal update</strong> workflow (Actions tab), not from this page, so the portal itself can never change its own software.</p>
 <ul>
-<li>Patch releases install on the 8th of each month. Feature and major releases install only when someone runs the workflow with the version number.</li>
-<li>Every update takes a backup first and tries the new version on a copy of the data. The new version then runs beside the current one with no users, and must pass its checks before it takes over.</li>
-<li>The previous version stays ready: run the workflow with <strong>rollback</strong> to go back.</li>
+<li>Nothing installs on its own. The workflow checks every Monday and lists newer releases in its run summary; an update installs only when someone runs the workflow with the version number.</li>
+<li>Every update takes a backup first and tries the new version on a copy of the data. The new version then runs beside the current one with no users, and must pass its checks before it takes over. The workflow log shows each step with its percentage.</li>
+<li>The previous version stays ready (and pre-update backups are kept at least 30 days): run the workflow with <strong>rollback</strong> to go back.</li>
 </ul>
 <p class="sub">Each update, failed trial and rollback appears in the audit log (update.applied, update.trial_failed, update.rolled_back). Details: docs/deploy-azure.md, "Updates".</p></section>
 {% else %}

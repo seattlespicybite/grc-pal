@@ -4,7 +4,7 @@
 #   ./deploy/azure/update.sh --name acme --status              what is running, what is available
 #   ./deploy/azure/update.sh --name acme                       install the latest release (asks first)
 #   ./deploy/azure/update.sh --name acme --version 0.3.1       install a specific release
-#   ./deploy/azure/update.sh --name acme --auto                monthly workflow: patch releases only
+#   ./deploy/azure/update.sh --name acme --auto                patch releases only (opt-in; not used by the workflow)
 #   ./deploy/azure/update.sh --name acme --rollback            go back to the previous version
 #
 # How an update is applied (users keep working on the current version until step 6):
@@ -20,8 +20,9 @@
 #      (label "previous") for --rollback. On any failure before this, traffic never moved.
 # Every result is written to the instance's audit log (update.applied, update.trial_failed, ...).
 #
-# Rules: patch releases (x.y.Z) may install automatically; minor and major releases only when a person runs
-# this script with --version or approves the workflow run. Major releases also need --major (read the
+# Rules: nothing installs unless a person runs this script or the workflow with --version (the weekly
+# workflow run only reports what is available). --auto (patch releases only) exists for operators who
+# choose automatic patching; GRC-pal's own workflow does not use it. Major releases also need --major (read the
 # release notes first: they may need the backup-and-restore path).
 # Needs: Azure CLI signed in with rights on the container app and its jobs (the monthly workflow uses the
 # updater identity deploy.sh created), curl, python3, and the GitHub CLI for the provenance check.
@@ -47,11 +48,15 @@ done
 [ -z "$VERSION" ] || [[ "$VERSION" =~ ^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$ ]] || { echo "--version must look like 0.3.1"; exit 1; }
 command -v az >/dev/null || { echo "Install the Azure CLI first: https://aka.ms/azcli"; exit 1; }
 
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 RG="rg-grcpal-$NAME"
 APP=$(echo "grcpal-$NAME" | cut -c1-32)
 JOBS=(collect remind tasks backup)
 job_name() { echo "job-$NAME-$1" | cut -c1-32; }
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
+progress() {  # progress PERCENT MESSAGE: numbered steps so a person watching the run sees how far it got
+  step "[$1%] $2"
+}
 die() { echo "update: $*" >&2; exit 1; }
 py() { python3 -c "$@"; }
 
@@ -76,6 +81,21 @@ print(next((r["revisionName"] for r in json.load(sys.stdin) if r.get("label") ==
 }
 latest_release() {
   curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | py 'import json,sys; print(json.load(sys.stdin)["tag_name"].lstrip("v"))'
+}
+newer_releases() {  # every release newer than the running one, with "do I need it?" (same rules as the portal)
+  curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=30" | PYTHONPATH="$ROOT" py '
+import json, sys
+from grcpal import update
+try:
+    rows = update.newer_releases(json.load(sys.stdin), sys.argv[1])
+except update.UpdateError:
+    rows = None
+if rows is None:
+    print("- (the running version is unknown)")
+elif not rows:
+    print("- none: this is the newest release")
+for r in rows or []:
+    print("- %s (%s): %s %s" % (r["version"], r["kind"], r["advice"]["text"], r["url"]))' "$CUR_VERSION"
 }
 kind_of() {
   py '
@@ -119,6 +139,9 @@ if [ -n "$STATUS" ]; then
   echo "running:       ${CUR_VERSION:-unknown} ($CUR_IMAGE)"
   echo "serving:       $(traffic_rev)    previous: $(label_rev previous)"
   echo "latest:        $LATEST ($(kind_of "$CUR_VERSION" "$LATEST" 2>/dev/null || echo ?))"
+  echo
+  echo "Newer releases (install one: run the workflow with its version):"
+  newer_releases || echo "- (could not read the release list from GitHub)"
   exit 0
 fi
 
@@ -155,7 +178,7 @@ case "$KIND" in
     [ -n "$MAJOR" ] || die "$VERSION is a major release. Read its release notes, then re-run with --major." ;;
 esac
 
-step "Pinning the image and checking where it was built"
+progress 10 "Pinning the image and checking where it was built"
 TOKEN=$(curl -fsSL "https://ghcr.io/token?scope=repository:${REPO}:pull" | py 'import json,sys; print(json.load(sys.stdin)["token"])')
 DIGEST=$(curl -fsSI -H "Authorization: Bearer $TOKEN" \
   -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json" \
@@ -171,16 +194,16 @@ echo "image $NEW_IMAGE"
 [ -n "$YES" ] || { read -r -p "Install $VERSION ($KIND)? [y/N] " a; [[ "$a" =~ ^[yY]$ ]] || exit 1; }
 DETAIL="\"from\": \"${CUR_VERSION}\", \"to\": \"$VERSION\", \"kind\": \"$KIND\", \"image\": \"$NEW_IMAGE\", \"by\": \"update.sh\""
 
-step "Backup before the update (current version)"
+progress 25 "Backup before the update (current version)"
 run_job "$CUR_IMAGE" backup pre-update >/dev/null || die "the pre-update backup failed; nothing was changed"
 
-step "Trial: $VERSION migrates and checks a copy of the tables"
+progress 45 "Trial: $VERSION migrates and checks a copy of the tables"
 if ! run_job "$NEW_IMAGE" update trial >/dev/null; then
   record "$CUR_IMAGE" update.trial_failed "{$DETAIL}"
   die "$VERSION failed its trial on a copy of the data; nothing was changed"
 fi
 
-step "Starting $VERSION as a new revision with no traffic"
+progress 65 "Starting $VERSION as a new revision with no traffic"
 az containerapp revision set-mode -g "$RG" -n "$APP" --mode multiple -o none 2>/dev/null || true
 OLD_REV=$(traffic_rev)
 [ -n "$OLD_REV" ] || OLD_REV=$(az containerapp show -g "$RG" -n "$APP" --query properties.latestReadyRevisionName -o tsv)
@@ -198,7 +221,7 @@ fail_back() {
   exit 1
 }
 
-step "Health gate: the new revision must answer and pass its self-test"
+progress 80 "Health gate: the new revision must answer and pass its self-test"
 ok=""
 for _ in $(seq 1 40); do
   if curl -fsS --max-time 10 "https://$FQDN/healthz" >/dev/null 2>&1; then ok=1; break; fi
@@ -207,7 +230,7 @@ done
 [ -n "$ok" ] || fail_back "the new revision did not answer /healthz within 10 minutes"
 run_job "$NEW_IMAGE" update selftest-saved >/dev/null || fail_back "the self-test on the live data failed"
 
-step "Moving traffic to $VERSION"
+progress 95 "Moving traffic to $VERSION"
 az containerapp ingress traffic set -g "$RG" -n "$APP" --revision-weight "$NEW_REV=100" -o none
 az containerapp revision label add -g "$RG" -n "$APP" --label previous --revision "$OLD_REV" --yes -o none
 for j in "${JOBS[@]}"; do az containerapp job update -g "$RG" -n "$(job_name "$j")" --image "$NEW_IMAGE" -o none; done
@@ -217,4 +240,5 @@ for r in $(az containerapp revision list -g "$RG" -n "$APP" --query "[?propertie
   [ "$r" = "$NEW_REV" ] || [ "$r" = "$OLD_REV" ] || az containerapp revision deactivate -g "$RG" -n "$APP" --revision "$r" -o none
 done
 record "$NEW_IMAGE" update.applied "{$DETAIL, \"revision\": \"$NEW_REV\"}"
+progress 100 "Updated to $VERSION"
 echo "Updated to $VERSION. Roll back with: ./deploy/azure/update.sh --name $NAME --rollback"

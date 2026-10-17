@@ -61,7 +61,7 @@ your password manager, separate from the backups. Without it a backup cannot be 
 | `/var/lib/grcpal/backups` | Backup files (`.grcbak`), checked right after they are written |
 | `/var/lib/grcpal/updates` | Update files waiting to be installed |
 | `/var/lib/grcpal/state` | Updater status, history and log (`update.log`) |
-| `/var/lib/grcpal/rollback` | The data copies from before the last two updates |
+| `/var/lib/grcpal/rollback` | The data copies from before each update of the last 30 days (at least the last two) |
 | `/etc/grcpal` | Settings (`grcpal.env`), secrets (`secrets.env`, owner-only), the update signing public key |
 
 Updating the operating system (`apt upgrade`, a reboot, or a hypervisor host patch) does not touch any of
@@ -96,16 +96,18 @@ in it, so store them apart.
 
 ## Updates
 
-Open **Administration → Updates** to see the installed version, anything waiting, and the history.
+Open **Administration → Updates** to see the installed version, newer releases with a plain answer to
+*Do I need it?* (security fixes, bug fixes, new features, major), anything waiting, and the history.
+Nothing installs on its own: every update waits for an admin.
 
 | Release | Example | Installs |
 | --- | --- | --- |
-| Patch | 0.3.0 → 0.3.1 (fixes) | By itself during the monthly check, unless you turn automatic patches off |
+| Patch | 0.3.0 → 0.3.1 (fixes) | After an admin clicks **Approve** (you can turn on automatic patches if you prefer) |
 | Feature | 0.3 → 0.4 | After an admin clicks **Approve** on the Updates page |
 | Major | 0.x → 1.0 | After **Approve**; read the release notes first and take a VM snapshot |
 
 **Getting the update file.** With internet access, turn on *Download updates* on the Updates page; the
-monthly check fetches signed update files from the release page. Without internet access, copy
+update check fetches signed update files from the release page. Without internet access, copy
 `grcpal-<version>.grcupdate` from the release page to `/var/lib/grcpal/updates/` (or run
 `sudo grcpal-update apply grcpal-<version>.grcupdate` to install it at once).
 
@@ -123,7 +125,11 @@ monthly check fetches signed update files from the release page. Without interne
    files against their SHA-256, and no table with fewer rows than before. If any check fails, the copies are
    put back and the previous version starts again, automatically.
 
-The last two versions stay on the VM, so going back needs no internet: `sudo grcpal-update rollback`.
+While an update runs, the Updates page shows a progress bar with the percentage and the current step
+(check, backup, trial, switch, health check). The page reconnects by itself while the portal restarts.
+
+The previous version stays on the VM, so going back needs no internet: `sudo grcpal-update rollback`. The data
+copy and the backup taken before each update are kept for at least 30 days.
 
 ### Release signing key (maintainers of the GRC-pal repository)
 
