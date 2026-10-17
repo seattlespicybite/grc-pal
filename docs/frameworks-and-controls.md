@@ -103,9 +103,12 @@ reviews). From then on they live in GRC-pal: edit, retire or delete them, and ad
 
 **Editing an activity** (click its name): name, owner (for information), steps and expected evidence,
 the months it is due (tick any months), the due day (1st, 15th or last day) and the linked controls
-(tick as many as apply; type in the filter box to find them). A schedule change applies from the current
-month on; months already past keep the schedule they had, so history is never rewritten. A new activity
-counts from the start of the observation period, so earlier months can still be recorded.
+(tick as many as apply; type in the filter box to find them; out-of-scope controls are marked). Months you
+tick show up straight away, including earlier in the year. Unticking a month removes it only from months
+still ahead: a month already past stays, so a missed activity cannot disappear. To add an activity for one
+month only, click **+** in that month's empty cell. Rows are grouped into Manual and Automated; drag them (or
+use ↑ ↓) to arrange them. Activities you create are always shown, even when linked only to out-of-scope
+controls.
 **Retire** hides an activity from now on and keeps everything recorded. **Delete** is only possible while
 nothing has been recorded for it.
 
