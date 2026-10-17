@@ -21,7 +21,7 @@ often; check the vendors' current sites before comparing.
 | Policy management and acknowledgments | ✓ Policies as code (PR approval), versioned acknowledgments, reminders | No policy template library beyond samples |
 | Access reviews | Partial: quarterly task with user populations from collectors | Campaign UI (reviewer per system, keep/remove decisions) is roadmap |
 | Risk register | Partial: `registers/risks.yaml`, validated, linked to controls | Risk scoring UI and heat map are roadmap |
-| Vendor risk management | Partial: `registers/vendors.yaml`, review tasks, subservice and CUEC fields | Vendor questionnaires and portal page are roadmap |
+| Vendor risk management | ✓ Vendors page: tiers, contacts, annual review with sign-off, CUEC mapping, onboarding and offboarding checklists, reminders, editable questionnaire with Excel download | No vendor portal, external risk scores or AI report extraction (by design for v1) |
 | Personnel / HR onboarding and offboarding | Partial: leaver reconciliation from HR export, Entra users | HRIS API connectors are roadmap |
 | Device monitoring | ✓ via Intune collector | No own endpoint agent (by design) |
 | Trust center for customers | Not yet | Roadmap: static public page generated from control status and approved documents |
@@ -46,7 +46,7 @@ produces evidence an auditor can test.
    weekly digest.
 3. **Restore command**: rebuild a clean instance from a `grcpal backup` file (backup and verify are done).
 4. **Risk register UI** with likelihood and impact scoring, treatment owners and review cycle. (CC3)
-5. **Vendor page** with review status, SOC 2 report expiry reminders and CUEC tracking. (CC9.2)
+5. ~~**Vendor page**~~ (done: Vendors page and security questionnaire, CC9.2).
 
 **Later**
 6. **Trust center**: a static, public page of selected controls and documents, published from the

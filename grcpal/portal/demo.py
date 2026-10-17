@@ -122,4 +122,62 @@ def seed(portal) -> bool:
 
     data = report.build(portal.catalog, portal.evidence, portal.today, portal=portal.report_inputs())
     portal.ai_review(ADMIN, "HR-01", next((c for c in data["controls"] if c["id"] == "HR-01"), None))
+    _vendors(portal)
     return True
+
+
+def _vendors(portal) -> None:
+    """Vendors in every state: imported, signed off with CUECs, waiting for sign-off, onboarding, offboarding."""
+    real_mailer, portal.mailer = portal.mailer, NullMailer("demo@localhost", sync=True)
+    today = portal.today
+    portal.import_vendors(ADMIN)
+    contacts = {"owner_name": "Ivan IT", "owner_title": "IT lead", "owner_email": IT.email, "owner_phone": "+1 555 0100",
+                "backup_name": "Sam Security", "backup_title": "Security engineer", "backup_email": ADMIN2.email,
+                "ext_name": "Jordan Pike", "ext_title": "Customer success manager", "ext_email": "jordan@backup.example.com",
+                "support_text": "Email support@backup.example.com or call the 24/7 line in the contract.\n"
+                                "P1 = a restore that fails. The account number is on the invoice.",
+                "support_url": "https://support.backup.example.com",
+                "docs_text": "Ask Jordan for the SOC 2 report; it is sent under NDA within 5 business days.",
+                "docs_url": "https://trust.backup.example.com"}
+    v = portal.create_vendor(ADMIN, {"name": "Contoso Backup", "service": "Offsite backup of production databases",
+                                     "tier": "critical", "data_access": ["Customer data"], "subservice": "inclusive",
+                                     "contract_terms": "yes", "dpa": "yes", "contract_note": "Renews 2027-06-30",
+                                     "assurance": "soc2_type2", "period_start": (today - dt.timedelta(days=470)).isoformat(),
+                                     "period_end": (today - dt.timedelta(days=105)).isoformat(), "opinion": "qualified",
+                                     "start_date": (today - dt.timedelta(days=330)).isoformat(), **contacts})
+    vid = v["RowKey"]
+    portal.add_vendor_file(IT, vid, "contoso-backup-soc2-type2.pdf", _pdf("Contoso Backup SOC 2"), "report", "SOC 2 Type 2")
+    for key in ("risk", "assurance", "contract"):
+        portal.update_checklist(IT, vid, key, True, "Checked during onboarding")
+    portal.save_cuec(ADMIN, vid, "new", {"text": "Customers verify backups by restoring sample data.",
+                                         "controls": ["BCP-03"], "how": "Annual restore test (DR test report)",
+                                         "status": "met"})
+    portal.save_cuec(ADMIN, vid, "new", {"text": "Customers restrict who can delete backup sets.", "controls": [],
+                                         "how": "", "status": "not_mapped"})
+    portal.decide_review(ADMIN2, vid, "approve", "Qualified opinion (restore testing) accepted: we run our own test.")
+    portal.store.update("vendors", "v", vid, {"last_review": (today - dt.timedelta(days=345)).isoformat()})
+    payroll = portal.create_vendor(ADMIN, {"name": "Northwind Payroll", "service": "Payroll and benefits", "tier": "high",
+                                           "data_access": ["Employee data", "Financial data"], "contract_terms": "yes",
+                                           "assurance": "soc2_type2", "period_end": (today - dt.timedelta(days=60)).isoformat(),
+                                           "owner_name": "Harper HR", "owner_title": "HR lead", "owner_email": HR.email})
+    portal.add_vendor_file(ADMIN, payroll["RowKey"], "northwind-soc2.pdf", _pdf("Northwind SOC 2"), "report", "")
+    for key in ("risk", "assurance", "contract"):
+        portal.update_checklist(ADMIN, payroll["RowKey"], key, True, "Checked")
+    portal.decide_review(ADMIN2, payroll["RowKey"], "approve", "")
+    portal.store.update("vendors", "v", payroll["RowKey"], {"last_review": (today - dt.timedelta(days=380)).isoformat()})
+    portal.start_annual_review(HR, payroll["RowKey"])
+    portal.add_vendor_file(HR, payroll["RowKey"], "northwind-soc2-2026.pdf", _pdf("Northwind SOC 2 2026"), "report", "")
+    portal.save_review_answers(HR, payroll["RowKey"], {"covers_service": "yes", "exceptions": "no", "concerns": "na",
+                                                       "data_change": "no"}, submit=True)
+    portal.create_vendor(ENG, {"name": "Tailspin Mail", "service": "Transactional email", "tier": "high",
+                               "data_access": ["Customer data"], "notes": "Sends password-reset and receipt emails."})
+    old = portal.create_vendor(ADMIN, {"name": "Litware Translation", "service": "Document translation", "tier": "moderate",
+                                       "data_access": ["Customer data"], "owner_email": ENG.email, "owner_name": "Erin"})
+    for key in ("risk", "assurance", "contract"):
+        portal.update_checklist(ADMIN, old["RowKey"], key, True, "Checked")
+    portal.add_vendor_file(ADMIN, old["RowKey"], "litware-questionnaire.xlsx",
+                           portal.questionnaire_xlsx(portal.questionnaire_version(), old), "questionnaire", "")
+    portal.decide_review(ADMIN2, old["RowKey"], "approve", "Contract terms checked by Legal.")
+    portal.start_offboarding(ADMIN, old["RowKey"], "Moved translation in-house")
+    portal.update_checklist(ADMIN, old["RowKey"], "access", True, "SSO app removed in Entra ID")
+    portal.mailer = real_mailer

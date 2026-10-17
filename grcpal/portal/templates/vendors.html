@@ -1,0 +1,46 @@
+{% extends "base.html" %}{% block title %}Vendors{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Vendors</h1>
+<div class="sub">{% if user.is_contributor %}Vendors you own. Once a year, upload their report or returned questionnaire and answer four questions.
+{% else %}Every vendor that stores, processes or can reach company or customer data (SOC 2 CC9.2). Each one is reviewed once a year; the tier decides what the review needs.{% endif %}</div></div>
+<div class="head-actions">
+{% if user.can_write %}<a class="btn" href="/vendors/new">{{ 'Add vendor' if user.is_admin else 'Request a new vendor' }}</a>{% endif %}
+<a class="btn ghost" href="/vendors/questionnaire">Security questionnaire</a>
+{% if user.sees_everything %}<a class="btn ghost" href="/cycles">Export for auditor</a>{% endif %}
+</div></div>
+
+{% if importable %}<div class="card card-info mb"><div class="row-between"><div><b>{{ importable|length }} vendor{{ 's' if importable|length != 1 }} in registers/vendors.yaml {{ 'are' if importable|length != 1 else 'is' }} not in the register yet</b>
+<div class="sub">{{ importable|map(attribute='name')|join(', ') }}. Import copies them in as Active with every original field kept; nothing already here is changed.</div></div>
+<form method="post" action="/vendors/import"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" type="submit">Import from vendors.yaml</button></form></div></div>{% endif %}
+
+<div class="grid v-stats mb">
+<a class="stat stat-link{{ ' stat-active' if not show }}" href="/vendors"><div class="n">{{ counts.all }}</div><div class="l">{{ 'Your vendors' if user.is_contributor else 'Vendors in use' }}</div></a>
+<a class="stat stat-link{{ ' stat-active' if show == 'overdue' }}" href="/vendors?show=overdue"><div class="n{{ ' bad-text' if counts.overdue }}">{{ counts.overdue }}</div><div class="l">Annual review overdue</div></a>
+<a class="stat stat-link{{ ' stat-active' if show == 'soon' }}" href="/vendors?show=soon"><div class="n">{{ counts.soon }}</div><div class="l">Due in 30 days or incomplete</div></a>
+<a class="stat stat-link{{ ' stat-active' if show == 'signoff' }}" href="/vendors?show=signoff"><div class="n">{{ counts.signoff }}</div><div class="l">Waiting for sign-off</div></a>
+<a class="stat stat-link{{ ' stat-active' if show == 'lifecycle' }}" href="/vendors?show=lifecycle"><div class="n">{{ counts.lifecycle }}</div><div class="l">Onboarding or offboarding</div></a>
+{% if not user.is_contributor %}<a class="stat stat-link{{ ' stat-active' if show == 'subservice' }}" href="/vendors?show=subservice"><div class="n">{{ counts.subservice }}</div><div class="l">Subservice organizations</div></a>{% endif %}
+</div>
+
+<form class="filters" method="get" action="/vendors">
+{% if show %}<input type="hidden" name="show" value="{{ show }}">{% endif %}
+<input class="grow" type="search" name="q" value="{{ q }}" placeholder="Search by name or service" aria-label="Search vendors">
+<select name="tier" aria-label="Tier"><option value="">All tiers</option>{% for k, label in tiers.items() %}<option value="{{ k }}"{% if tier == k %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+<button class="btn ghost small" type="submit">Filter</button>
+{% if counts.closed %}<a class="sub" href="/vendors?show=closed">Offboarded and not approved ({{ counts.closed }})</a>{% endif %}
+</form>
+
+<div class="card"><div class="table-wrap"><table>
+<thead><tr><th>Vendor</th><th>Tier</th><th>Data access</th><th>Internal owner</th><th>Status</th><th>Next review</th></tr></thead>
+<tbody>{% for v in rows %}<tr>
+<td><a href="/vendors/{{ v.RowKey }}"><b>{{ v.name }}</b></a><div class="sub">{{ v.service }}</div>
+{% if v.subservice in ('carved_out', 'inclusive') %}<div class="sub v-flag">Subservice organization · {{ subservice[v.subservice] }}</div>{% endif %}</td>
+<td><span class="v-tier v-{{ v.tier }}">{{ tiers.get(v.tier, '') }}</span></td>
+<td><div class="tags">{% for d in v.data_access or [] %}<span>{{ d }}</span>{% endfor %}</div></td>
+<td>{% if user.is_auditor %}{{ v.owner_title or ('Set' if v.owner_set else 'Not set') }}{% else %}{{ v.owner_name or v.owner_email or 'Not set' }}<div class="sub">{{ v.owner_title }}</div>{% endif %}</td>
+<td><span class="pill v-h-{{ v.health[0] }}">{{ v.health[1] }}</span><div class="sub">{{ statuses[v.status] }}</div></td>
+<td class="nowrap">{% if v.next_review %}<span class="mono">{{ v.next_review }}</span><div class="sub">{% if v.due_in < 0 %}{{ -v.due_in }} days overdue{% elif v.due_in == 0 %}due today{% else %}in {{ v.due_in }} days{% endif %}</div>{% else %}<span class="sub">{{ 'After onboarding' if v.status == 'onboarding' else '' }}</span>{% endif %}</td>
+</tr>{% else %}<tr><td colspan="6"><div class="empty">{% if user.is_contributor %}You do not own any vendors yet. Use “Request a new vendor” when you start working with a new provider.{% elif counts.all == 0 and not show %}No vendors yet. Add your first vendor{% if importable %} or import them from vendors.yaml{% endif %}.{% else %}No vendors match these filters.{% endif %}</div></td></tr>{% endfor %}</tbody>
+</table></div>
+<div class="hint mt">What a review needs: critical and high vendors need a SOC 2 report or ISO certificate and our questionnaire; moderate vendors need one of them; low vendors need only an NDA or standard terms.</div></div>
+{% endblock %}

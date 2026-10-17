@@ -1,0 +1,196 @@
+{% extends "base.html" %}{% from "_macros.html" import when %}{% from "_vendor.html" import contacts %}
+{% block title %}{{ v.name }}{% endblock %}
+{% macro person(name, title, email, phone, label) -%}
+<div class="v-person"><div class="v-label">{{ label }}</div>
+{% if name or email %}<b>{{ name or email }}</b>{% if title %}<div class="sub">{{ title }}</div>{% endif %}
+{% if email %}<div class="mono">{{ email }}</div>{% endif %}{% if phone %}<div class="mono">{{ phone }}</div>{% endif %}
+{% else %}<div class="sub">Not set</div>{% endif %}</div>
+{%- endmacro %}
+{% macro file_row(f) -%}
+<li><a href="/vendors/{{ v.RowKey }}/files/{{ f.RowKey }}">{{ f.filename }}</a> <span class="tags"><span>{{ file_kinds.get(f.kind, f.kind) }}</span></span>
+<div class="sub">{{ f.uploaded_by }} · {{ when(f.uploaded_at) }} · <span class="mono">sha256 {{ f.sha256[:16] }}…</span>{% if f.comment %} · {{ f.comment }}{% endif %}</div></li>
+{%- endmacro %}
+{% macro cuec_form(c) -%}
+<form method="post" action="/vendors/{{ v.RowKey }}/cuecs" class="mt-s"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="cuec" value="{{ c.id }}">
+<label for="ct-{{ c.id }}">CUEC text</label><textarea id="ct-{{ c.id }}" name="text" required maxlength="600">{{ c.text }}</textarea>
+<label for="cf-{{ c.id }}">Our controls</label><input id="cf-{{ c.id }}" type="search" placeholder="Filter, for example IAM" aria-label="Filter controls" data-filter-list="cl-{{ c.id }}">
+<div class="cal-picker" id="cl-{{ c.id }}">{% for ctl in controls %}<label class="cal-pick" data-filter-text="{{ ctl.id }} {{ ctl.title }}"><input type="checkbox" name="controls" value="{{ ctl.id }}"{% if ctl.id in c.controls %} checked{% endif %}> <b>{{ ctl.id }}</b> {{ ctl.title }}</label>{% endfor %}</div>
+<label for="ch-{{ c.id }}">How we meet it</label><input id="ch-{{ c.id }}" name="how" maxlength="1000" value="{{ c.how }}">
+<label for="cs-{{ c.id }}">Status</label><select id="cs-{{ c.id }}" name="status">{% for k, label in cuec_status.items() %}<option value="{{ k }}"{% if c.status == k %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+<div class="actions"><button class="btn small" type="submit">Save CUEC</button>{% if c.id != 'new' %}<button class="btn ghost small" name="action" value="remove" type="submit">Remove</button>{% endif %}</div></form>
+{%- endmacro %}
+{% block content %}
+<div class="mb"><a href="/vendors">‹ Vendors</a></div>
+<div class="page-head"><div><h1>{{ v.name }}</h1><div class="sub">{{ v.service }}</div></div>
+<div class="head-actions"><span class="v-tier v-{{ v.tier }}">{{ tiers.get(v.tier, '') }}</span><span class="pill v-h-{{ v.health[0] }}">{{ v.health[1] }}</span></div></div>
+
+<nav class="v-tabs" aria-label="Vendor sections">{% for k, label in tabs.items() %}<a href="/vendors/{{ v.RowKey }}?tab={{ k }}" class="{{ 'on' if tab == k }}"{% if tab == k %} aria-current="page"{% endif %}>{{ label }}{% if k == 'cuecs' %} ({{ (v.cuecs or [])|length }}){% endif %}</a>{% endfor %}</nav>
+
+<div class="grid g-main">
+<div>
+{% if tab == 'overview' %}
+<section class="card"><dl class="kv">
+<dt>What they do for us</dt><dd>{{ v.service or '—' }}</dd>
+<dt>Tier</dt><dd>{{ tiers.get(v.tier, '') }}</dd>
+<dt>Data access</dt><dd><div class="tags">{% for d in v.data_access or [] %}<span>{{ d }}</span>{% else %}Not recorded{% endfor %}</div></dd>
+<dt>Internal owner</dt><dd>{% if user.is_auditor %}{{ v.owner_title or ('Set' if v.owner_set else 'Not set') }}{% else %}{{ v.owner_name or v.owner_email or 'Not set' }}{% if v.owner_title %}, {{ v.owner_title }}{% endif %}{% endif %}</dd>
+<dt>Status</dt><dd>{{ statuses[v.status] }}{% if v.approved_at %} · approved {{ v.approved_at[:10] }}{% endif %}{% if v.end_date %} · ended {{ v.end_date }}{% endif %}</dd>
+<dt>Subservice organization</dt><dd>{{ subservice.get(v.subservice, 'No') }}{% if v.subservice in ('carved_out', 'inclusive') %} <span class="sub">(listed in the auditor export for our system description)</span>{% endif %}</dd>
+<dt>Contract security terms</dt><dd>{{ contract.get(v.contract_terms, 'Not checked') }}{% if v.contract_note %} · {{ v.contract_note }}{% endif %}</dd>
+<dt>Data processing agreement</dt><dd>{{ contract.get(v.dpa, 'Not checked') }}</dd>
+<dt>Assurance report</dt><dd>{{ assurance.get(v.assurance or '', '') }}{% if v.period_end %} · period {{ v.period_start or '?' }} to {{ v.period_end }}{% endif %}{% if v.opinion %} · {{ opinions.get(v.opinion, '') }}{% endif %}</dd>
+<dt>Sharing data since</dt><dd>{{ v.start_date or '—' }}</dd>
+<dt>Last review</dt><dd>{{ v.last_review or 'Never' }}</dd>
+<dt>Next review</dt><dd>{{ v.next_review or '—' }}{% if v.next_review_override %} <span class="sub">(moved by an admin)</span>{% endif %}</dd>
+{% if v.notes %}<dt>Notes</dt><dd class="v-pre">{{ v.notes }}</dd>{% endif %}
+<dt>Controls</dt><dd>{% for c in ['VEN-01', 'VEN-02', 'VEN-03', 'VEN-05'] %}<a class="mono" href="/controls/{{ c }}">{{ c }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</dd>
+</dl>
+{% if user.is_admin %}<div class="actions mt-l"><a class="btn ghost" href="/vendors/{{ v.RowKey }}/edit">Edit vendor</a></div>
+{% elif user.is_auditor %}<p class="hint mt">Read-only. Contact details are not shown to auditors.</p>
+{% else %}<p class="hint mt">Tier, status and contract details are set by an admin. You can update contacts and support notes.</p>{% endif %}
+</section>
+{% if user.is_admin and v.status == 'active' %}<section class="card"><h2>Offboarding</h2>
+<p class="sub">When the relationship ends: remove access, get our data back or deleted, close the contract. The checklist needs evidence before it can be closed.</p>
+<form method="post" action="/vendors/{{ v.RowKey }}/offboard" data-confirm="Start offboarding {{ v.name }}?"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label for="off-reason">Why is the vendor being offboarded?</label><input id="off-reason" name="reason" required maxlength="500">
+<div class="actions"><button class="btn ghost" type="submit">Start offboarding</button></div></form></section>{% endif %}
+
+{% elif tab == 'contacts' %}
+<section class="card"><div class="grid g2">
+{{ person(v.owner_name, v.owner_title, v.owner_email, v.owner_phone, 'Internal owner (maintains the contract)') }}
+{{ person(v.backup_name, v.backup_title, v.backup_email, '', 'Internal backup') }}
+{{ person(v.ext_name, v.ext_title, v.ext_email, v.ext_phone, 'Vendor contract contact') }}
+</div></section>
+<section class="card"><h2>How to open a support ticket</h2>
+{% if v.support_text %}<div class="v-pre">{{ v.support_text }}</div>{% else %}<p class="sub">Not written yet.</p>{% endif %}
+{% if v.support_url %}<p class="mt"><a href="{{ v.support_url }}" target="_blank" rel="noopener noreferrer">{{ v.support_url }}</a></p>{% endif %}
+<h2 class="mt-l">How to request their SOC 2 report, ISO certificate or a questionnaire</h2>
+{% if v.docs_text %}<div class="v-pre">{{ v.docs_text }}</div>{% else %}<p class="sub">Not written yet.</p>{% endif %}
+{% if v.docs_url %}<p class="mt"><a href="{{ v.docs_url }}" target="_blank" rel="noopener noreferrer">{{ v.docs_url }}</a></p>{% endif %}</section>
+{% if can_work %}<section class="card"><details><summary><b>Edit contacts and support notes</b></summary>
+<form method="post" action="/vendors/{{ v.RowKey }}/contacts" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+{{ contacts(v, user.is_admin) }}
+<div class="actions"><button class="btn" type="submit">Save contacts</button></div></form></details>
+{% if not user.is_admin %}<p class="hint mt">Only an admin can change who the owner and backup are, because that decides who can see this vendor.</p>{% endif %}</section>{% endif %}
+
+{% elif tab == 'review' %}
+{% if r %}
+<section class="card"><div class="row-between"><h2>{{ review_kinds[r.kind] }}</h2><span class="pill v-r-{{ r.status }}">{{ review_statuses[r.status] }}</span></div>
+<p class="sub">Started by {{ r.opened_by }} on {{ r.opened_at[:10] }}{% if r.questionnaire_version %} · questionnaire v{{ r.questionnaire_version }} sent {{ r.questionnaire_sent_at[:10] }}{% endif %}{% if r.submitted_by %} · submitted by {{ r.submitted_by }}{% endif %}</p>
+{% if r.status == 'returned' and r.returned_note %}<div class="hint-box">Returned: {{ r.returned_note }}</div>{% endif %}
+{% if r.kind == 'annual' %}<ol class="v-steps"><li class="{{ 'done' if r.file_ids }}">Upload the report or returned questionnaire</li>
+<li class="{{ 'done' if r.status in ('submitted', 'approved') }}">Owner answers four questions</li>
+<li class="{{ 'done' if v.cuecs and not (v.cuecs|selectattr('status', 'equalto', 'not_mapped')|list) }}">Security maps CUECs</li><li>An admin signs off</li></ol>{% endif %}
+
+<h3 class="mt-l">Files for this {{ review_kinds[r.kind]|lower }}</h3>
+<ul class="v-files">{% for fid in r.file_ids or [] %}{% if fid in files_by_id %}{{ file_row(files_by_id[fid]) }}{% endif %}{% else %}<li class="sub">No files yet.</li>{% endfor %}</ul>
+{% if can_work and (user.is_admin or r.status != 'submitted') %}
+<form method="post" action="/vendors/{{ v.RowKey }}/files" enctype="multipart/form-data" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="drop" data-drop><input type="file" name="file" required aria-label="Vendor file"><div data-file-label>Drop a file here or choose one · up to {{ max_mb }} MB</div>
+<div class="hint">PDF, Office files, screenshots, CSV, text or email. Stored write-once with a SHA-256 checksum.</div></div>
+<div class="form-row"><div><label for="kind">What is this file?</label><select id="kind" name="kind">{% for k, label in file_kinds.items() %}{% if r.kind == 'offboarding' or k != 'offboarding' %}<option value="{{ k }}"{% if (r.kind == 'offboarding' and k == 'offboarding') %} selected{% endif %}>{{ label }}</option>{% endif %}{% endfor %}</select></div>
+<div><label for="fcomment">Note (optional)</label><input id="fcomment" name="comment" maxlength="2000" placeholder="For example: SOC 2 Type 2, Jul 2025 to Jun 2026"></div></div>
+<div class="actions"><button class="btn" type="submit">Upload</button></div></form>{% endif %}
+{% if can_work and r.kind != 'offboarding' %}<form method="post" action="/vendors/{{ v.RowKey }}/questionnaire" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+<button class="btn ghost small" type="submit">Download our questionnaire for {{ v.name }} (.xlsx, v{{ latest_q.version }})</button>
+<span class="hint">Send it to {{ v.ext_name or 'the vendor contact' }}, then upload the returned file here.</span></form>{% endif %}
+</section>
+
+{% if r.kind == 'annual' %}<section class="card"><h2>Owner's questions</h2>
+{% set locked = not can_work or (r.status == 'submitted' and not user.is_admin) %}
+<form method="post" action="/vendors/{{ v.RowKey }}/review/answers"><input type="hidden" name="csrf" value="{{ csrf }}">
+{% for key, label, opts in questions %}<fieldset class="v-q"><legend>{{ label }}</legend><div class="v-opts">
+{% for o in opts %}<label class="inline-check"><input type="radio" name="{{ key }}" value="{{ o }}"{% if (r.answers or {}).get(key) == o %} checked{% endif %}{% if locked %} disabled{% endif %}> {{ answer_labels[o] }}</label>{% endfor %}</div></fieldset>{% endfor %}
+{% if not locked %}<div class="actions"><button class="btn ghost" name="action" value="save" type="submit">Save answers</button>
+{% if r.status != 'submitted' %}<button class="btn" name="action" value="submit" type="submit">Mark my part done</button>{% endif %}</div>
+<p class="hint">{{ 'Security maps the CUECs and signs off. You get an email when it is done.' if not user.is_admin else 'Owners usually answer these. Another admin signs off a review you submit.' }}</p>{% endif %}
+</form></section>{% else %}
+<section class="card"><h2>Checklist</h2><ul class="checklist">
+{% for i in r.checklist or [] %}<li class="{{ 'ok' if i.done else 'warn' }}"><span class="mark">{{ '✓' if i.done else '○' }}</span><div><b>{{ i.label }}</b>
+{% if i.note %}<div class="sub">{{ i.note }} · {{ i.by }} {{ when(i.at) }}</div>{% endif %}
+{% if can_work %}<details class="mt-s"><summary>{{ 'Change' if i.done else 'Mark done' }}</summary>
+<form method="post" action="/vendors/{{ v.RowKey }}/review/checklist" class="mt-s"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="key" value="{{ i.key }}">
+<label for="ck-{{ i.key }}">How was it done?</label><input id="ck-{{ i.key }}" name="note" maxlength="1000" value="{{ i.note }}" placeholder="What, when, and where the evidence is">
+<div class="actions"><button class="btn small" name="done" value="1" type="submit">Mark done</button>{% if i.done %}<button class="btn ghost small" name="done" value="0" type="submit">Mark not done</button>{% endif %}</div></form></details>{% endif %}
+</div></li>{% endfor %}</ul></section>{% endif %}
+
+{% if user.is_admin %}
+{% if r.kind == 'annual' %}<section class="card"><h2>Exceptions in the vendor's report</h2>
+{% for x in r.exceptions or [] %}<div class="v-exc"><b>{{ x.text }}</b>{% if x.impact %}<div class="sub">Impact on us: {{ x.impact }}</div>{% endif %}<div class="sub">Our response: {{ x.response }}</div>
+<form method="post" action="/vendors/{{ v.RowKey }}/review/exception" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ghost small" name="remove" value="{{ x.id }}" type="submit">Remove</button></form></div>
+{% else %}<p class="sub">None recorded. If the vendor's auditor noted exceptions (the “results of tests” column), record each one and how we handle it.</p>{% endfor %}
+<details class="mt"><summary>Record an exception</summary><form method="post" action="/vendors/{{ v.RowKey }}/review/exception" class="mt-s"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label for="x-text">Exception (from their report)</label><input id="x-text" name="text" required maxlength="500">
+<label for="x-impact">Impact on us</label><input id="x-impact" name="impact" maxlength="500">
+<label for="x-resp">Our response</label><input id="x-resp" name="response" required maxlength="1000" placeholder="Accepted, compensating control, or follow-up issue">
+<div class="actions"><button class="btn small" type="submit">Record</button></div></form></details>
+<p class="hint mt">Report type, period and opinion: <a href="/vendors/{{ v.RowKey }}/edit">edit the vendor</a>. CUECs: <a href="/vendors/{{ v.RowKey }}?tab=cuecs">CUECs tab</a>.</p></section>{% endif %}
+<section class="card"><h2>{{ 'Approve or reject' if r.kind == 'onboarding' else 'Sign off' }}</h2>
+{% if gaps %}<div class="hint-box"><b>Open items for a {{ tiers.get(v.tier, '')|lower }} vendor:</b><ul class="list mt-s">{% for g in gaps %}<li>{{ g }}</li>{% endfor %}</ul>
+To sign off anyway, write why these are accepted. The note and the list go to the auditor export.</div>{% else %}<p class="sub">Everything this tier needs is in place.</p>{% endif %}
+<form method="post" action="/vendors/{{ v.RowKey }}/review/decide" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label for="d-note">Note{{ ' (required: why the open items are accepted)' if gaps }}</label><textarea id="d-note" name="note" maxlength="2000" placeholder="Returning? Say what is missing."></textarea>
+<div class="actions"><button class="btn" name="decision" value="approve" type="submit">{{ 'Approve vendor' if r.kind == 'onboarding' else ('Close offboarding' if r.kind == 'offboarding' else 'Sign off review') }}</button>
+<button class="btn ghost" name="decision" value="return" type="submit">Return to owner</button>
+{% if r.kind == 'onboarding' %}<button class="btn danger" name="decision" value="reject" type="submit">Do not approve</button>{% endif %}</div>
+<p class="hint">You cannot sign off a review you submitted while another admin is active (segregation of duties).</p></form></section>
+{% endif %}
+
+{% else %}
+<section class="card"><h2>Annual review</h2>
+{% if v.status == 'active' %}<p>Last review: <b>{{ v.last_review or 'never' }}</b> · next review due <b>{{ v.next_review }}</b>.</p>
+{% if can_work %}<div class="actions"><form method="post" action="/vendors/{{ v.RowKey }}/review/start"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" type="submit">Start the annual review</button></form>
+<form method="post" action="/vendors/{{ v.RowKey }}/questionnaire"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ghost" type="submit">Download our questionnaire (.xlsx)</button></form></div>
+<p class="hint">Downloading the questionnaire also starts the review and records which version was sent.</p>{% endif %}
+{% else %}<p class="sub">{{ statuses[v.status] }}. No review is open.</p>{% endif %}
+<h3 class="mt-l">What a {{ tiers.get(v.tier, '')|lower }} vendor needs each year</h3>
+<dl class="kv">{% for item, need in v.needs %}<dt>{{ item }}</dt><dd>{{ need }}</dd>{% endfor %}</dl></section>
+{% endif %}
+
+<section class="card"><h2>Past reviews</h2>
+{% set done = reviews|selectattr('status', 'equalto', 'approved')|list %}
+{% if done %}<div class="table-wrap"><table><thead><tr><th>Review</th><th>Result</th><th>Signed off</th><th>Files</th></tr></thead><tbody>
+{% for x in done %}<tr><td>{{ review_kinds[x.kind] }}<div class="sub">started {{ x.opened_at[:10] }}</div></td>
+<td>{{ {'approve': 'Signed off', 'reject': 'Not approved', 'superseded': 'Closed (offboarding started)'}.get(x.decision, x.decision) }}
+{% if x.accepted_gaps %}<div class="sub">Accepted open items: {{ x.accepted_gaps|join('; ') }}</div>{% endif %}
+{% if x.decision_note %}<div class="sub">{{ x.decision_note }}</div>{% endif %}{% if x.self_approved %}<div class="sub bad-text">Self-approved (only one admin)</div>{% endif %}</td>
+<td>{{ x.approved_by }}<div class="sub">{{ (x.approved_at or '')[:10] }}</div></td>
+<td><ul class="v-files">{% for fid in x.file_ids or [] %}{% if fid in files_by_id %}<li><a href="/vendors/{{ v.RowKey }}/files/{{ fid }}">{{ files_by_id[fid].filename }}</a></li>{% endif %}{% endfor %}</ul></td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="sub">No signed-off reviews yet.</p>{% endif %}</section>
+
+{% elif tab == 'cuecs' %}
+<section class="card"><h2>Complementary user entity controls (CUECs)</h2>
+<p class="sub">Things the vendor's auditor assumes we do. Copy each one from the vendor's SOC 2 report and point it at the control of ours that covers it.</p>
+{% if v.cuecs %}<div class="table-wrap"><table><thead><tr><th>CUEC (from their report)</th><th>Our control</th><th>How we meet it</th><th>Status</th></tr></thead><tbody>
+{% for c in v.cuecs %}<tr id="c-{{ c.id }}"><td>{{ c.text }}</td><td>{% for cid in c.controls %}<a class="mono" href="/controls/{{ cid }}">{{ cid }}</a>{% if not loop.last %} · {% endif %}{% else %}—{% endfor %}</td>
+<td>{{ c.how or '—' }}</td><td><span class="pill v-c-{{ c.status }}">{{ cuec_status.get(c.status, c.status) }}</span></td></tr>
+{% if user.is_admin %}<tr><td colspan="4"><details><summary>Edit</summary>{{ cuec_form(c) }}</details></td></tr>{% endif %}{% endfor %}
+</tbody></table></div>{% else %}<p class="sub">No CUECs recorded.</p>{% endif %}
+{% if user.is_admin %}<details class="mt"><summary><b>Add a CUEC</b></summary>{{ cuec_form({'id': 'new', 'text': '', 'controls': [], 'how': '', 'status': 'not_mapped'}) }}</details>{% endif %}
+</section>
+
+{% elif tab == 'history' %}
+<section class="card"><h2>Activity</h2>
+{% if history %}<div class="table-wrap"><table><thead><tr><th>When</th><th>Who</th><th>What</th><th>Details</th></tr></thead><tbody>
+{% for e in history %}<tr><td class="nowrap">{{ when(e.at) }}</td><td>{{ e.actor }}</td><td class="mono">{{ e.action }}</td>
+<td class="sub">{% if e.detail.changed %}Changed: {{ e.detail.changed|join(', ') }}{% endif %}{% if e.detail.reason %} · {{ e.detail.reason }}{% endif %}{% if e.detail.file %}{{ e.detail.file }}{% endif %}{% if e.detail.item %}{{ e.detail.item }}{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="sub">No activity yet.</p>{% endif %}
+<p class="hint mt">From the tamper-evident audit log. Contact changes are recorded without the contact details.</p></section>
+<section class="card"><h2>Versions of this record</h2><div class="table-wrap"><table><thead><tr><th>Version</th><th>When</th><th>Who</th><th>Reason</th></tr></thead><tbody>
+{% for ver in versions %}<tr><td class="mono">{{ ver.RowKey|int }}</td><td class="nowrap">{{ when(ver.at) }}</td><td>{{ ver.by }}</td><td>{{ ver.reason }}</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endif %}
+</div>
+
+<aside>
+{% if not user.is_auditor %}<section class="card"><h2>Who to call</h2>
+{{ person(v.owner_name, v.owner_title, v.owner_email, v.owner_phone, 'Internal owner') }}
+{% if v.ext_name or v.ext_email %}<div class="mt">{{ person(v.ext_name, v.ext_title, v.ext_email, v.ext_phone, 'Vendor contact') }}</div>{% endif %}
+<p class="mt"><a href="/vendors/{{ v.RowKey }}?tab=contacts">All contacts and support steps</a></p></section>{% endif %}
+<section class="card"><h2>Annual review</h2><dl class="kv">
+<dt>Last review</dt><dd>{{ v.last_review or 'Never' }}</dd><dt>Next review</dt><dd>{{ v.next_review or '—' }}</dd></dl>
+<p class="hint mt">The owner and admins get an email 30 days before the review is due, then weekly while it is overdue. Reviews also show on the security calendar.</p></section>
+<section class="card"><h2>Auditor export</h2><p class="sub">This vendor's record, reviews, CUECs and files (with SHA-256) are in the cycle export. Contact details are left out.</p></section>
+</aside>
+</div>
+{% endblock %}

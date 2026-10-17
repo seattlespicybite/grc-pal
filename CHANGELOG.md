@@ -5,6 +5,12 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Security
+- **Vendor contact details are never shown to auditors**: removed on the server, left out of the export, and
+  contact changes and vendor emails are written to the audit log without names or addresses. Vendor files can
+  only be downloaded by admins, auditors and that vendor's owners, are not in the evidence review queue and
+  are never sent to AI. Control owners cannot change who owns a vendor. Links must start with https://.
+- **Spreadsheet formula injection blocked in the cycle export.** Every CSV cell that starts with = + - @ is
+  now written as text (this was only done for the calendar CSV before).
 - **Azure backup check every 15 minutes** (was hourly; `backupCheckCron`): still one scheduled backup a day,
   and "Back up now" starts within about 15 minutes. A check that finds a backup still running skips, so a
   long backup is never made twice.
@@ -19,6 +25,21 @@ All notable changes are listed here. The project follows [semantic versioning](h
 - `grcpal backup run-due` prints one JSON line (`"event": "backup.run_due"`) so logs and alerts can read it.
 
 ### Added
+- **Vendors page (SOC 2 CC9.2).** A vendor register in the portal, imported once from `registers/vendors.yaml`
+  (every original field kept). Each vendor has a tier, data access, status, subservice flag, contract and
+  report details, an internal owner and backup (name, title, email, phone), the vendor's contract contact,
+  and how to open a support ticket or request their SOC 2 report or questionnaire. One review a year; the tier
+  decides what it needs. The owner uploads the report or returned questionnaire and answers four questions; an
+  admin records exceptions, maps CUECs to our controls and signs off (never a review they submitted while
+  another admin is active; open items need a written reason). Onboarding and offboarding checklists (new
+  control **VEN-05 Vendor offboarding**). Reminders 30 days before a review and while overdue, through the
+  existing weekly `grcpal remind --overdue` job. A row on the security calendar. Demo data included.
+- **Security questionnaire.** An editable vendor questionnaire (47 starter questions in 10 sections, mapped to
+  SOC 2 criteria) with drafts, numbered versions, moving questions across sections, and an Excel download
+  (locked questions, answer and comment columns, Yes/No/N/A lists) written with the standard library.
+- **Auditor export:** `vendors.csv`, `vendor_reviews.csv`, `vendor_exceptions.csv`, `vendor_cuecs.csv`,
+  `vendor_files.csv` with the files, `vendor_register_history.csv`, `subservice_organizations.csv` and
+  `questionnaire_versions.csv`.
 - **Updates page: newer releases with "Do I need it?"** Lists every release newer than yours from GitHub's
   public release list (checked at most every 12 hours, nothing about the instance is sent, SSRF-guarded,
   links limited to github.com; off with `GRCPAL_UPDATE_CHECK=off`, and on VMs only when downloads are allowed).

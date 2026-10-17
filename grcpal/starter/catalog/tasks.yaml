@@ -201,8 +201,8 @@ tasks:
     owner: security-lead
     approver: executive-sponsor
     checklist:
-      - For each critical vendor in registers/vendors.yaml, attach the current SOC 2 report or questionnaire
-      - Map their CUECs to the company's controls (include Microsoft for physical security)
+      - On the Vendors page, check that every vendor's annual review is signed off or under way (reviews come due 12 months after the last one)
+      - Map their CUECs to the company's controls on each vendor's CUECs tab (include Microsoft for physical security)
       - Review office physical access controls
 
   privacy-review:
@@ -416,7 +416,7 @@ tasks:
     approver: executive-sponsor
     controls: [VEN-01, VEN-03]
     checklist:
-      - List vendors added this quarter
+      - List vendors added this quarter (Vendors page; each starts in Onboarding)
       - Confirm each has a security review, an assurance report or certificate, and security terms in the contract
 
   security-objectives:

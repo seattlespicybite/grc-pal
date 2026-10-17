@@ -16,7 +16,7 @@ Program operations
 Portal administration (uses GRCPAL_TABLES_URL or GRCPAL_SQLITE)
     grcpal users add you@example.com --role admin
     grcpal users list
-    grcpal remind --overdue [--dry-run]   email owners of overdue requests
+    grcpal remind --overdue [--dry-run]   email owners of overdue requests and vendor reviews due soon
     grcpal audit verify                   check the tamper-evident audit log
     grcpal checks run                     run custom HTTP, TLS and command checks
     grcpal ai review --control HR-01      AI evidence review of one control
@@ -351,9 +351,15 @@ def cmd_remind(args) -> int:
     if args.dry_run:
         for a in overdue:
             print(f"(dry run) overdue {a['due']} {a['label'].splitlines()[0]} -> {a['assignee']}")
+        for v in portal.vendors(SYSTEM):
+            if v["next_review"] and v["due_in"] is not None and v["due_in"] <= 30:
+                print(f"(dry run) vendor review {'overdue' if v['due_in'] < 0 else 'due'} {v['next_review']} {v['name']}")
         return 0
     for r in portal.remind_overdue(SYSTEM):
         print(f"{r['label'].splitlines()[0]}: sent {', '.join(r['sent']) or '-'}; skipped {', '.join(r['skipped']) or '-'}")
+    # Annual vendor reviews: 30 days before the due date (once), then on every run while overdue.
+    for r in portal.remind_vendor_reviews(SYSTEM):
+        print(f"Vendor review {'overdue' if r['overdue'] else 'due'} {r['due']} {r['vendor']}: sent {', '.join(r['sent']) or '-'}")
     portal.mailer._pool and portal.mailer._pool.shutdown(wait=True)
     return 0
 
@@ -646,7 +652,7 @@ def main(argv: list[str] | None = None) -> int:
     ca.add_argument("--name")
     ca.set_defaults(fn=cmd_create_admin)
 
-    rm = sub.add_parser("remind", help="email people with overdue requests")
+    rm = sub.add_parser("remind", help="email people with overdue requests and vendor reviews coming due")
     rm.add_argument("--overdue", action="store_true", required=True)
     rm.add_argument("--dry-run", action="store_true")
     rm.set_defaults(fn=cmd_remind)

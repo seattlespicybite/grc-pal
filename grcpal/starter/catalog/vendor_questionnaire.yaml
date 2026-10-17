@@ -1,0 +1,286 @@
+# Starter vendor security questionnaire (our own words; not SIG or CAIQ text).
+# Copied into the portal the first time the Vendors > Security questionnaire page opens, then edited there.
+# Each question: id (permanent, never reused), text, type (yesno | text), guidance (shown to the vendor),
+# criteria (the SOC 2 criteria the answer helps us assess; for our auditor, not shown to the vendor).
+# Sections and questions can be added, moved and removed in the portal; every saved version is kept.
+title: Vendor security questionnaire
+intro: >
+  Thank you for completing this questionnaire. We use it, together with your SOC 2 report or ISO 27001
+  certificate if you have one, to review the security of vendors that store, process or can reach our data.
+  Answer each question for the service you provide to us. Use the Comments column to add detail or to
+  point to a document, and attach that document when you return the file.
+sections:
+  - id: S-01
+    title: Company, contacts and assurance
+    questions:
+      - id: Q-001
+        text: Who is your named security contact for us (name, title, email)?
+        type: text
+        guidance: A person or team that can answer security questions and receives incident reports.
+        criteria: [CC2.3, CC9.2]
+      - id: Q-002
+        text: Do you have a current SOC 2 Type 2 report covering the service you provide to us?
+        type: yesno
+        guidance: If yes, give the report period and attach the report or tell us how to request it. Include a bridge letter if the period ended more than three months ago.
+        criteria: [CC9.2]
+      - id: Q-003
+        text: Do you hold a current ISO/IEC 27001 certificate? If yes, give the certificate scope and expiry date.
+        type: yesno
+        guidance: Attach the certificate and the Statement of Applicability if you can share it.
+        criteria: [CC9.2]
+      - id: Q-004
+        text: Did your most recent audit report or certification audit note any exceptions, qualifications or major nonconformities?
+        type: yesno
+        guidance: If yes, describe each one and what you did to fix it.
+        criteria: [CC9.2]
+      - id: Q-005
+        text: Has an independent firm run a penetration test of the service in the last 12 months?
+        type: yesno
+        guidance: Give the test date and confirm that critical and high findings were fixed. An executive summary is enough.
+        criteria: [CC4.1, CC7.1]
+
+  - id: S-02
+    title: Security governance and people
+    questions:
+      - id: Q-006
+        text: Do you have written information security policies that management approves and reviews at least once a year?
+        type: yesno
+        guidance: Attach the policy list or table of contents.
+        criteria: [CC1.1, CC5.3]
+      - id: Q-007
+        text: Is a named person or team accountable for your security program?
+        type: yesno
+        guidance: Give their title.
+        criteria: [CC1.3]
+      - id: Q-008
+        text: Do you perform a security risk assessment at least once a year?
+        type: yesno
+        guidance: Describe how risks are rated and who approves the treatment.
+        criteria: [CC3.1, CC3.2]
+      - id: Q-009
+        text: Do employees and contractors complete security awareness training when they join and at least once a year?
+        type: yesno
+        guidance: Include phishing awareness if you run it.
+        criteria: [CC1.4, CC2.2]
+      - id: Q-010
+        text: Do you run background checks on staff who can access customer data, where local law allows?
+        type: yesno
+        guidance: ""
+        criteria: [CC1.4]
+      - id: Q-011
+        text: Do employees and contractors sign confidentiality agreements before they get access to customer data?
+        type: yesno
+        guidance: ""
+        criteria: [CC1.1, C1.1]
+
+  - id: S-03
+    title: Access control
+    questions:
+      - id: Q-012
+        text: Is multi-factor authentication required for all staff access to systems that store or process our data, including remote access and administrator accounts?
+        type: yesno
+        guidance: Name any exceptions.
+        criteria: [CC6.1]
+      - id: Q-013
+        text: Is access to our data limited to staff who need it for their role (least privilege)?
+        type: yesno
+        guidance: Explain how access is requested and approved.
+        criteria: [CC6.1, CC6.3]
+      - id: Q-014
+        text: Do you review who has access to production systems and customer data at least every quarter?
+        type: yesno
+        guidance: ""
+        criteria: [CC6.2, CC6.3]
+      - id: Q-015
+        text: How quickly do you remove access when an employee or contractor leaves?
+        type: text
+        guidance: For example, the same day or within 24 hours.
+        criteria: [CC6.2]
+      - id: Q-016
+        text: Are privileged and administrator accounts separate from everyday accounts and logged?
+        type: yesno
+        guidance: ""
+        criteria: [CC6.1, CC6.3]
+      - id: Q-017
+        text: Can we sign in to your service with our own single sign-on (SAML or OpenID Connect) and enforce our multi-factor authentication?
+        type: yesno
+        guidance: Say if this needs a specific plan or add-on.
+        criteria: [CC6.1]
+
+  - id: S-04
+    title: Data protection
+    questions:
+      - id: Q-018
+        text: Is our data encrypted in transit with TLS 1.2 or newer?
+        type: yesno
+        guidance: ""
+        criteria: [CC6.1, CC6.7]
+      - id: Q-019
+        text: Is our data encrypted at rest, including backups? Name the method.
+        type: yesno
+        guidance: For example, AES-256 managed by your cloud provider's key service.
+        criteria: [CC6.1, C1.1]
+      - id: Q-020
+        text: Who manages the encryption keys, and is access to the keys restricted and logged?
+        type: text
+        guidance: ""
+        criteria: [CC6.1]
+      - id: Q-021
+        text: In which countries or cloud regions is our data stored and processed, including backups and support access?
+        type: text
+        guidance: ""
+        criteria: [CC9.2, C1.1]
+      - id: Q-022
+        text: Is our data logically separated from other customers' data? How?
+        type: text
+        guidance: For example, a separate database per customer, or a tenant ID enforced on every query.
+        criteria: [CC6.1]
+      - id: Q-023
+        text: Do you use our data for any purpose other than providing the service to us, including training AI or machine learning models?
+        type: yesno
+        guidance: If yes, describe the purpose and how we can opt out.
+        criteria: [C1.1, CC9.2]
+      - id: Q-024
+        text: When the contract ends, will you return or delete our data and confirm the deletion in writing? Within how many days?
+        type: text
+        guidance: Include backups and copies held by your subprocessors.
+        criteria: [C1.2, CC9.2]
+
+  - id: S-05
+    title: Secure development and change management
+    questions:
+      - id: Q-025
+        text: Are code and configuration changes to the service reviewed and approved by someone other than the author before release?
+        type: yesno
+        guidance: ""
+        criteria: [CC8.1]
+      - id: Q-026
+        text: Are production changes tested and released through a controlled process with a rollback plan?
+        type: yesno
+        guidance: ""
+        criteria: [CC8.1]
+      - id: Q-027
+        text: Do you scan code and dependencies for security vulnerabilities before release?
+        type: yesno
+        guidance: For example, static analysis and software composition analysis in the build pipeline.
+        criteria: [CC7.1, CC8.1]
+      - id: Q-028
+        text: Is customer production data kept out of development and test environments?
+        type: yesno
+        guidance: If not, describe how it is masked and protected.
+        criteria: [CC8.1, C1.1]
+
+  - id: S-06
+    title: Infrastructure, monitoring and vulnerabilities
+    questions:
+      - id: Q-029
+        text: Do you scan your infrastructure for vulnerabilities at least monthly?
+        type: yesno
+        guidance: ""
+        criteria: [CC7.1]
+      - id: Q-030
+        text: What are your time limits for fixing critical and high vulnerabilities?
+        type: text
+        guidance: For example, critical within 7 days and high within 30 days.
+        criteria: [CC7.1]
+      - id: Q-031
+        text: Do you collect security logs from production systems and keep them for at least 12 months?
+        type: yesno
+        guidance: ""
+        criteria: [CC7.2]
+      - id: Q-032
+        text: Are security alerts monitored and handled 24 hours a day, by your team or a provider?
+        type: yesno
+        guidance: ""
+        criteria: [CC7.2, CC7.3]
+      - id: Q-033
+        text: Do company laptops and servers have endpoint protection, disk encryption and automatic updates?
+        type: yesno
+        guidance: ""
+        criteria: [CC6.8]
+      - id: Q-034
+        text: Are network access to production and firewall rules restricted and reviewed?
+        type: yesno
+        guidance: ""
+        criteria: [CC6.6]
+
+  - id: S-07
+    title: Incident response
+    questions:
+      - id: Q-035
+        text: Do you have a written incident response plan that you test at least once a year?
+        type: yesno
+        guidance: Give the date of the last test or tabletop exercise.
+        criteria: [CC7.3, CC7.4]
+      - id: Q-036
+        text: Within how many hours will you notify us after you confirm a security incident that affects our data?
+        type: text
+        guidance: We expect 72 hours or less. Tell us who will contact us and how.
+        criteria: [CC2.3, CC7.4, CC9.2]
+      - id: Q-037
+        text: Have you had a security incident or data breach affecting customer data in the last 3 years?
+        type: yesno
+        guidance: If yes, describe what happened and what changed afterwards.
+        criteria: [CC7.4, CC7.5]
+
+  - id: S-08
+    title: Availability, backups and continuity
+    questions:
+      - id: Q-038
+        text: Do you back up the data and systems needed to run the service, and test restores at least once a year?
+        type: yesno
+        guidance: Give the date of the last successful restore test.
+        criteria: [A1.2, A1.3]
+      - id: Q-039
+        text: Do you have a business continuity and disaster recovery plan for the service? What are the recovery time and recovery point objectives?
+        type: text
+        guidance: For example, restore within 8 hours and lose no more than 1 hour of data.
+        criteria: [A1.2, A1.3, CC9.1]
+      - id: Q-040
+        text: What availability do you commit to in the contract, and where can we see current status and past outages?
+        type: text
+        guidance: For example, 99.9% monthly uptime and a public status page.
+        criteria: [A1.1, CC2.3]
+
+  - id: S-09
+    title: Subprocessors and your own vendors
+    questions:
+      - id: Q-041
+        text: List the subprocessors that store, process or can access our data, with the service each one provides and its location.
+        type: text
+        guidance: A link to your public subprocessor list is fine.
+        criteria: [CC9.2]
+      - id: Q-042
+        text: Do you review the security of your subprocessors before using them and at least once a year?
+        type: yesno
+        guidance: For example, by reviewing their SOC 2 reports.
+        criteria: [CC9.2]
+      - id: Q-043
+        text: Will you tell us before you add or change a subprocessor that handles our data?
+        type: yesno
+        guidance: Say how much notice you give.
+        criteria: [CC9.2, CC2.3]
+
+  - id: S-10
+    title: Contract, privacy and insurance
+    questions:
+      - id: Q-044
+        text: Will you sign a data processing agreement that covers confidentiality, security, breach notification, subprocessors and data deletion?
+        type: yesno
+        guidance: Attach your standard agreement if you have one.
+        criteria: [CC9.2, C1.1]
+      - id: Q-045
+        text: Which privacy and security laws or standards do you comply with for this service (for example GDPR, CCPA, HIPAA, PCI DSS)?
+        type: text
+        guidance: ""
+        criteria: [CC2.3]
+      - id: Q-046
+        text: Do you carry cyber liability insurance? Give the coverage amount.
+        type: text
+        guidance: ""
+        criteria: [CC9.1]
+      - id: Q-047
+        text: Will you give us reasonable notice of material changes to your security program or to how the service handles our data?
+        type: yesno
+        guidance: ""
+        criteria: [CC9.2, CC2.3]

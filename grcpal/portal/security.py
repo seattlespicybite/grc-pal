@@ -93,3 +93,10 @@ def validate_upload(filename: str, data: bytes) -> str | None:
         except UnicodeDecodeError:
             return "Text files must be UTF-8."
     return None
+
+
+def csv_cell(value) -> str:
+    """Stop spreadsheet formula injection: text starting with = + - @ (or a tab or carriage return) is prefixed
+    with a quote, so Excel shows it as text instead of running it."""
+    text = ", ".join(map(str, value)) if isinstance(value, list) else str(value if value is not None else "")
+    return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
