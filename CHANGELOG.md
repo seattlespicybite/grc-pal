@@ -4,6 +4,24 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Fixed
+- **Calendar: months you tick now show up straight away**, including months earlier in the year (a new
+  activity for March, or extra months added to the vendor review in October, appeared only next year).
+  Unticking a month still never removes one that has already passed, so a missed activity cannot vanish.
+- **Calendar: activities you create are never hidden** by the scope filter (one linked only to an
+  out-of-scope control disappeared). Starter and automated activities for out-of-scope areas stay hidden.
+  The control picker marks out-of-scope controls.
+
+### Added
+- **Calendar: one-off months.** Click **+** in an empty month of a manual activity to add it for that month
+  only (audited as `calendar.occurrence.add`); the regular schedule does not change.
+- **Calendar: arrange rows.** Drag and drop rows within Manual or Automated, or use the ↑ ↓ buttons; the order
+  is saved for everyone and audited (`calendar.order`). New activities go to the bottom.
+
+### Changed
+- Calendar rows are grouped only into **Manual** and **Automated**.
+
+
 ### Changed
 - **Security calendar redesigned** as one year page for admins (activities on the left, months on the
   right). Month and List views are gone; auditors get the calendar through the cycle export.

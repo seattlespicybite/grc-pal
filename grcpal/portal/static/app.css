@@ -315,3 +315,17 @@ a.cal-cell:hover { text-decoration: none; filter: brightness(.9); }
 .files { list-style: none; margin: 4px 0 0; padding: 0; } .files li { padding: 3px 0; overflow-wrap: anywhere; }
 @media (max-width: 700px) { .cal-months { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .cal-wide { width: 100%; box-sizing: border-box; }
+.cal-year col.cal-move-col { width: 64px; }
+.cal-move { white-space: nowrap; text-align: right; padding: 4px 2px; }
+.cal-move form { display: inline-flex; gap: 2px; }
+.cal-arrow { font: inherit; font-size: 13px; width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); color: var(--muted); cursor: pointer; padding: 0; }
+.cal-arrow:hover:not([disabled]) { color: var(--accent); border-color: var(--accent); }
+.cal-arrow[disabled] { opacity: .35; cursor: default; }
+.cal-grip { color: var(--idle); cursor: grab; margin-right: 6px; user-select: none; letter-spacing: -2px; }
+tr.cal-dragging { opacity: .45; }
+tr.cal-drop-target td { border-top: 2px solid var(--accent); }
+.cal-add { display: inline-block; width: 24px; line-height: 22px; border-radius: 999px; color: var(--idle); opacity: .35;
+  border: 1px dashed transparent; }
+td:hover > .cal-add, .cal-add:focus { opacity: 1; border-color: var(--idle); text-decoration: none; }
+.cal-year .cal-cell { font-size: 11px; overflow: hidden; text-overflow: ellipsis; }

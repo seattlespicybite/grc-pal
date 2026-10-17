@@ -10,7 +10,7 @@ from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse
 
 from grcpal.portal.auth import User
-from grcpal.portal.calendar import AUTO_STATUSES, DUE_DAYS, STATUSES
+from grcpal.portal.calendar import AUTO_STATUSES, DUE_DAYS, KEY_RE, STATUSES
 from grcpal.portal.service import Forbidden, Invalid
 
 MONTHS = [_cal.month_abbr[m] for m in range(1, 13)]
@@ -31,16 +31,6 @@ def register(app, h) -> None:
     def clamp_year(year: int) -> int:
         return year if 2000 <= year <= 2100 else p().today.year
 
-    def group_rows(rows: list[dict]) -> list[dict]:
-        groups = [("Monthly", lambda n: n == 12), ("Quarterly", lambda n: n == 4), ("Annual", lambda n: n == 1),
-                  ("Other schedules", lambda n: n not in (1, 4, 12))]
-        out = []
-        for title, test in groups:
-            items = [r for r in rows if test(len(r["months"]))]
-            if items:
-                out.append({"title": title, "rows": items})
-        return out
-
     @app.get("/calendar", response_class=HTMLResponse)
     def calendar_page(request: Request, year: int = 0, auto: str = "1", user: User = Depends(current_user)):
         admin(user)
@@ -55,7 +45,7 @@ def register(app, h) -> None:
                   "activities": len(data["manual"]), "automated": len(data["automated"])}
         this_month = portal.today.month if year == portal.today.year else 0
         return render(request, user, "calendar.html", nav_active="calendar", year=year, show_auto=show_auto,
-                      groups=group_rows(data["manual"]), automated=data["automated"], counts=counts,
+                      manual=data["manual"], automated=data["automated"], counts=counts,
                       months=MONTHS, this_month=this_month, labels=STATUSES, auto_labels=AUTO_STATUSES,
                       program_start=portal.calendar_program_start())
 
@@ -82,6 +72,16 @@ def register(app, h) -> None:
         try:
             occ = portal.calendar_occurrence(key)
         except Invalid as exc:
+            m = KEY_RE.match(key or "")
+            act = None
+            if m and 1 <= int(m.group(3)) <= 12:
+                try:
+                    act = portal.calendar_activity(m.group(1))
+                except Invalid:
+                    act = None
+            if act and act["kind"] == "manual" and act["status"] == "active":
+                return render(request, user, "calendar_add.html", nav_active="calendar", act=act, key=key,
+                              year=int(m.group(2)), month_name=_cal.month_name[int(m.group(3))])
             raise h.HTTPError(404, str(exc)) from exc
         in_scope = set(portal.catalog.in_scope_criteria)
         window_start = f"{occ['year']}-{occ['month']:02d}-01"
@@ -99,6 +99,45 @@ def register(app, h) -> None:
         return render(request, user, "calendar_occurrence.html", nav_active="calendar", occ=occ,
                       act=occ["activity_info"], controls=controls, labels=STATUSES,
                       month_name=_cal.month_name[occ["month"]], window_end=window_end[:7])
+
+    @app.post("/calendar/o/{key}/add")
+    async def calendar_occurrence_add(request: Request, key: str, user: User = Depends(current_user)):
+        form = await request.form()
+        h.check_csrf(request, user.email, form.get("csrf"))
+        try:
+            p().add_occurrence(user, key)
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back("/calendar", err=str(exc))
+        h.invalidate()
+        return back(f"/calendar/o/{key}", msg="Added for this month")
+
+    @app.post("/calendar/order")
+    async def calendar_order(request: Request, user: User = Depends(current_user)):
+        """Drag and drop: the new order of one group, as comma-separated ids."""
+        form = await request.form()
+        h.check_csrf(request, user.email, form.get("csrf"))
+        ids = [i.strip() for i in str(form.get("ids", "")).split(",") if i.strip()][:500]
+        try:
+            p().set_calendar_order(user, str(form.get("kind", "")), ids)
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back("/calendar", err=str(exc))
+        return back(h.safe_dest(str(form.get("return_to", "")), "/calendar"))
+
+    @app.post("/calendar/a/{aid}/move")
+    async def calendar_move(request: Request, aid: str, user: User = Depends(current_user)):
+        form = await request.form()
+        h.check_csrf(request, user.email, form.get("csrf"))
+        try:
+            p().move_activity(user, aid, str(form.get("direction", "")))
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back("/calendar", err=str(exc))
+        return back(h.safe_dest(str(form.get("return_to", "")), "/calendar") + f"#row-{aid}")
 
     @app.post("/calendar/o/{key}")
     async def calendar_occurrence_save(request: Request, key: str, user: User = Depends(current_user)):
@@ -123,7 +162,7 @@ def register(app, h) -> None:
         sources = portal.automated_sources()
         return render(request, user, "calendar_activity.html", nav_active="calendar", act=act, form=form or act,
                       selected=selected, controls=controls, months=MONTHS, due_days=DUE_DAYS, sources=sources,
-                      page_err=error)
+                      in_scope=portal.in_scope_controls(), page_err=error)
 
     @app.get("/calendar/a/new", response_class=HTMLResponse)
     def calendar_activity_new(request: Request, user: User = Depends(current_user)):

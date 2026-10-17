@@ -335,3 +335,75 @@ def test_manifest_cache_is_per_run(portal):
     make_run(portal, "intune_devices", at="2026-09-01T02:30:00")
     assert cells(portal, "auto-intune_devices")[9]["status"] == "passed"
     assert isinstance(portal.evidence, EvidenceStore) and len(portal._run_status_cache) == 1
+
+
+# ---------------------------------------------------------------- months added, scope, one-off months, order
+def test_months_added_show_this_year_and_removed_past_months_stay(portal):
+    """Ticking Jan, Feb and Aug in October shows them this year; unticking July keeps July (already past)."""
+    portal.save_activity(ADMIN, "vendor-review", form(title="Annual critical vendor review",
+                                                      months=["1", "2", "8"], controls=["VEN-02", "VEN-04"]))
+    assert set(cells(portal, "vendor-review")) == {1, 2, 7, 8}
+    assert set(cells(portal, "vendor-review", 2027)) == {1, 2, 8}
+
+
+def test_new_activity_shows_months_earlier_in_the_year(portal):
+    row = portal.save_activity(ADMIN, "new", form(title="Audit kickoff meeting", months=["3"]))
+    assert set(cells(portal, row["id"])) == {3}
+
+
+def test_activities_admins_create_are_never_hidden_by_scope(portal):
+    row = portal.save_activity(ADMIN, "new", form(title="Firewall audit", months=["10"], controls=["PI-03"]))
+    assert row["id"] in {a["id"] for a in portal.calendar_activities()}
+    assert set(cells(portal, row["id"])) == {10}
+    assert "privacy-review" not in {a["id"] for a in portal.calendar_activities()}  # starter, out of scope
+    assert "PI-03" not in portal.in_scope_controls() and "IAM-05" in portal.in_scope_controls()
+
+
+def test_one_off_month(portal, client):
+    portal.add_occurrence(ADMIN, "dr-test~2026-06")
+    c = cells(portal, "dr-test")
+    assert set(c) == {6, 11} and c[6]["status"] == "planned" and c[6]["past_due"] is True
+    with pytest.raises(Invalid, match="already"):
+        portal.add_occurrence(ADMIN, "dr-test~2026-11")
+    with pytest.raises(Forbidden):
+        portal.add_occurrence(HR, "dr-test~2026-05")
+    with pytest.raises(Invalid):
+        portal.add_occurrence(ADMIN, "auto-entra_users~2026-05")
+    as_(client, ADMIN)
+    page = client.get("/calendar/o/dr-test~2026-05")
+    assert page.status_code == 200 and "Add for May" in page.text
+    r = client.post("/calendar/o/dr-test~2026-05/add", data={"csrf": csrf(client, "/calendar")}, follow_redirects=False)
+    assert r.status_code == 303 and 5 in cells(portal, "dr-test")
+    assert any(e["action"] == "calendar.occurrence.add" for e in portal.log.records())
+
+
+def test_admins_arrange_rows_and_order_is_kept(portal, client):
+    ids = [a["id"] for a in portal.calendar_activities() if a["kind"] == "manual"]
+    portal.move_activity(ADMIN, ids[1], "up")
+    assert [a["id"] for a in portal.calendar_activities() if a["kind"] == "manual"][:2] == [ids[1], ids[0]]
+    portal.set_calendar_order(ADMIN, "manual", ["dr-test", "nope", "access-review"])
+    order = [a["id"] for a in portal.calendar_activities() if a["kind"] == "manual"]
+    assert order[:2] == ["dr-test", "access-review"] and len(order) == len(ids)
+    new = portal.save_activity(ADMIN, "new", form())
+    assert [a["id"] for a in portal.calendar_activities() if a["kind"] == "manual"][-1] == new["id"]
+    with pytest.raises(Forbidden):
+        portal.set_calendar_order(HR, "manual", ids)
+    assert any(e["action"] == "calendar.order" for e in portal.log.records())
+    as_(client, ADMIN)
+    token = csrf(client, "/calendar")
+    r = client.post("/calendar/order", data={"csrf": token, "kind": "manual", "ids": "access-review,dr-test",
+                                             "return_to": "/calendar?year=2026"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/calendar?year=2026")
+    assert [a["id"] for a in portal.calendar_activities() if a["kind"] == "manual"][:2] == ["access-review", "dr-test"]
+    r = client.post("/calendar/a/dr-test/move", data={"csrf": token, "direction": "up", "return_to": "//evil.example"},
+                    follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/calendar")
+    assert [a["id"] for a in portal.calendar_activities() if a["kind"] == "manual"][0] == "dr-test"
+
+
+def test_page_has_only_manual_and_automated_groups(client):
+    page = as_(client, ADMIN).get("/calendar").text
+    assert "Manual (" in page and "Automated, set by GRC-pal" in page
+    assert "Quarterly (" not in page and "Monthly (" not in page and "Annual (" not in page
+    assert 'data-sortable="manual"' in page and 'aria-label="Move' in page
+    assert "(out of scope)" in client.get("/calendar/a/access-review").text

@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}Add {{ act.title }}{% endblock %}
+{% block content %}
+<div class="mb"><a href="/calendar?year={{ year }}">‹ Security calendar {{ year }}</a></div>
+<div class="page-head"><div><h1>Add {{ act.title }} in {{ month_name }} {{ year }}?</h1>
+<div class="sub">This activity is not scheduled for {{ month_name }}. Adding it creates a one-off occurrence for that month only; the regular schedule does not change. To change the schedule, <a href="/calendar/a/{{ act.id }}">edit the activity</a>.</div></div></div>
+<form method="post" action="/calendar/o/{{ key }}/add" class="card"><input type="hidden" name="csrf" value="{{ csrf }}">
+<p>It starts as <b>Planned</b>. You can then record Performed or Missed, or move its date. The addition is kept in the history and the audit log.</p>
+<div class="actions"><button class="btn" type="submit">Add for {{ month_name }}</button> <a class="btn ghost" href="/calendar?year={{ year }}">Cancel</a></div></form>
+{% endblock %}
