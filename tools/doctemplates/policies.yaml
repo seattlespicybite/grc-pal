@@ -1,0 +1,387 @@
+# Content of the Tier 1 and Tier 2 policy templates. Each item is "statement || how an auditor tests it".
+# Text in [square brackets] is filled in by the company. "Must" is used only for things the company can
+# evidence today; the builder adds the guidance, document control table and revision history.
+isp:
+  purpose: >
+    This policy sets out how [Company Name] protects the confidentiality, integrity and availability of
+    company and customer information, and states the commitments that every other security document
+    inherits from.
+  scope: >
+    All employees, contractors and third parties with access to [Company Name] information or systems;
+    all systems, applications and data owned, operated or managed by [Company Name], in all locations.
+  sections:
+    - h: Security objectives and commitments
+      guide: Keep objectives few and measurable elsewhere (standards, control health reporting). Commit only to what the company will sustain.
+      items:
+        - "[Company Name] protects customer and company information in line with its contracts, service commitments and applicable laws. || Service commitments register; sample of customer contracts"
+        - "Security objectives are set by leadership at least annually: [objective 1], [objective 2], [objective 3]. || Dated objectives approved by leadership"
+        - "Controls are chosen on the basis of risk and reviewed for effectiveness. || Risk register; control health review"
+    - h: Governance
+      items:
+        - "Leadership owns information security and approves this policy and every topic policy at least once a year. || Approval records with dates"
+        - "A security oversight forum of [roles] meets at least [quarterly] and keeps minutes. || Meeting minutes"
+        - "The [security lead] reports to [executive role] and has authority to stop or escalate security-relevant work. || Org chart; role description"
+        - "Every document has one named owner, an approver, a version and a next review date. || Document control table of any sampled document"
+    - h: Risk-based approach
+      items:
+        - "Risks are identified, assessed and treated as described in the Risk Management Policy. || Risk register and review log"
+    - h: Documentation framework
+      guide: Describe your tiers (policy, standard, procedure, record) and who may approve each.
+      items:
+        - "Policies state commitments. Standards hold measurable parameters. Procedures describe the steps performed. Records are evidence that controls operated. || Document library structure"
+        - "Policies are reviewed within [12] months of approval, or sooner after a significant change. || Next review dates; review log"
+        - "A change to a commitment is a major version; a wording change is a minor version. || Revision history"
+    - h: Policy exceptions
+      items:
+        - "An exception is requested in writing with the reason, the risk, compensating controls and an end date, and is approved by [role] before it takes effect. || Exception register entries with approvals"
+        - "Exceptions are reviewed at least [quarterly] and expire on their end date unless renewed. || Exception register review log"
+    - h: Compliance, monitoring and enforcement
+      items:
+        - "Compliance with this policy is monitored through [internal control monitoring and periodic reviews]. || Control monitoring records"
+        - "Violations may lead to disciplinary action up to and including termination, as set out in the Human Resources Security Policy. || HR sanctions process; sample of cases"
+    - h: Acknowledgment
+      items:
+        - "All personnel read and acknowledge this policy at hire and at least once a year. || Acknowledgment records per person and version"
+  roles:
+    - "Executive leadership || Approves this policy, sets objectives, funds the program"
+    - "Security lead || Owns this policy, runs the program, reports to leadership"
+    - "Document owners || Keep their documents current and reviewed on time"
+    - "All personnel || Read, acknowledge and follow policies; report incidents and concerns"
+  related: "Index of Tier 2 policies (P-01 to P-13); Policy Management Procedure"
+
+p-01:
+  purpose: >
+    To identify, assess, treat and monitor risks to [Company Name]'s information, systems and service
+    commitments in a consistent, documented way.
+  scope: >
+    Risks to confidentiality, integrity and availability across all systems, processes, vendors and people
+    in scope of the Information Security Policy, including fraud risk and emerging threats.
+  sections:
+    - h: Risk assessment
+      items:
+        - "A formal risk assessment is performed at least [annually] and after a significant change to systems, vendors, services or the threat landscape. || Risk assessment report with date; trigger list"
+        - "Risks are recorded in a risk register with owner, likelihood, impact, rating and treatment decision. || Risk register extract"
+        - "The assessment includes the risk of fraud, including incentives, opportunity and rationalization. || Fraud risk section of the register"
+        - "Threat information from [sources] is reviewed at least [monthly] and fed into the register. || Threat review notes"
+    - h: Risk treatment and acceptance
+      items:
+        - "Each risk is treated (mitigate, transfer, avoid or accept) and has a named owner and target date. || Treatment columns in the register"
+        - "Risks above [threshold] are accepted only by [role] in writing, with an expiry date. || Risk acceptance records"
+    - h: Monitoring and reporting
+      items:
+        - "The register is reviewed at least [quarterly] by the security oversight forum. || Meeting minutes"
+        - "Control effectiveness is monitored [monthly]; failures are logged as deficiencies and tracked to closure. || Control health reviews; deficiency log"
+        - "Significant changes in business, vendors or systems trigger an update of the register. || Change tickets linked to register entries"
+  roles:
+    - "Security lead || Owns the process and the register"
+    - "Risk owners || Treat and report on assigned risks"
+    - "Executive leadership || Accepts high risks; reviews the register with the oversight forum"
+  related: "Risk Assessment Procedure; Internal Control Monitoring Procedure; Security Oversight Charter"
+
+p-02:
+  purpose: >
+    To set the standards of ethical behavior and the acceptable use of [Company Name] information,
+    systems and equipment.
+  scope: "All personnel, on company and (where permitted) personal devices, in the office and when working remotely."
+  sections:
+    - h: Code of conduct
+      items:
+        - "Personnel act honestly, respect confidentiality and avoid conflicts of interest, and disclose any potential conflict to [role]. || Conflict-of-interest disclosures"
+        - "Concerns can be raised confidentially through [channel], and retaliation against anyone who raises a concern in good faith is not tolerated. || Whistleblower channel description; case log"
+        - "Personnel read and sign the code of conduct at hire and annually. || Acknowledgment records"
+    - h: Acceptable use
+      items:
+        - "Company systems and data are used for business purposes; limited personal use is allowed where it does not create risk. || Policy text; sample of monitoring alerts"
+        - "Personnel must not share credentials, bypass security controls or install unapproved software on company devices. || Endpoint management configuration"
+        - "Company data is stored and shared only in approved systems. || Approved systems list"
+        - "Personnel report lost devices, suspected phishing and other incidents immediately via [channel]. || Incident tickets"
+    - h: Remote work
+      items:
+        - "Remote work uses company-managed or approved devices, current software, a secured network and a locked screen when unattended. || Device compliance report"
+    - h: Discipline
+      items:
+        - "Violations are handled under the disciplinary process, proportionate to the severity and consistently applied. || Disciplinary case log"
+  roles:
+    - "HR lead || Owns the code and the disciplinary process"
+    - "Security lead || Owns the acceptable use rules and monitoring"
+    - "All personnel || Follow the code and report concerns"
+  related: "Human Resources Security Policy; Asset Management and Data Classification Policy; AI Acceptable Use and Governance Policy"
+
+p-03:
+  purpose: >
+    To ensure personnel are suitable, understand their security responsibilities, and have access removed
+    when their role ends.
+  scope: "Candidates, employees, contractors and interns, from hiring through termination."
+  sections:
+    - h: Before employment
+      items:
+        - "Background checks are completed before access is granted, within the limits of local law and in proportion to the role: [checks]. || Check completion record per hire"
+        - "Offers and contracts include confidentiality and security responsibilities. || Signed agreements for sampled hires"
+    - h: During employment
+      items:
+        - "Security awareness training is completed within [30] days of hire and at least annually, by all personnel. || Training completion report"
+        - "Role-specific training is provided to [engineering, administrators, support]. || Training records"
+        - "Personnel acknowledge security policies at hire and annually. || Acknowledgment records"
+        - "Performance and conduct expectations include security responsibilities. || Role descriptions; review template"
+    - h: Changes of role and termination
+      items:
+        - "Access is reviewed on a role change and removed within [one business day] of termination. || Offboarding tickets with timestamps"
+        - "Company assets are returned and confidentiality obligations are reminded at exit. || Offboarding checklist"
+        - "Contractor access ends on the contract end date unless renewed in writing. || Contractor access list"
+  roles:
+    - "HR lead || Runs hiring, onboarding, offboarding and sanctions"
+    - "Managers || Request access changes and confirm training completion"
+    - "Security lead || Owns training content and access removal checks"
+  related: "Security Awareness Training Standard; Onboarding and Offboarding Procedure; Background Check Procedure"
+
+p-04:
+  purpose: >
+    To know what information and assets [Company Name] has, classify information by sensitivity, and
+    handle, retain and dispose of it appropriately.
+  scope: "All information assets, hardware, software, cloud services and data in any form or location."
+  sections:
+    - h: Asset management
+      items:
+        - "An inventory of systems, devices and cloud services is maintained with an owner for each asset and reviewed at least [quarterly]. || Inventory export with review dates"
+        - "Assets are returned or wiped before reuse or disposal. || Wipe or disposal certificates"
+    - h: Data classification
+      items:
+        - "Information is classified as [Public, Internal, Confidential, Restricted] according to the Data Classification and Handling Standard. || Classification scheme; sample labeled documents"
+        - "Information has an owner who decides its classification and who may access it. || Data inventory with owners"
+    - h: Handling
+      items:
+        - "Each classification level has rules for storage, sharing and transmission, and personnel follow them. || Handling standard; DLP or sharing settings"
+        - "Customer data is used only for the purposes agreed in the contract. || Contract and data flow review"
+    - h: Retention and disposal
+      items:
+        - "Data is retained only as long as the Data Retention Schedule requires and is securely deleted afterwards. || Retention schedule; deletion logs"
+        - "Customer data is returned or deleted at contract end within [days] and confirmed on request. || Offboarding records"
+  roles:
+    - "IT lead || Maintains the asset inventory and disposal process"
+    - "Data owners || Classify data and approve access"
+    - "Legal lead || Sets retention requirements"
+  related: "Data Classification and Handling Standard; Data Retention Schedule; Asset Inventory Procedure; Media and Data Disposal Procedure"
+
+p-05:
+  purpose: "To ensure access to systems and data is limited to authorized people, for the least access they need, for as long as they need it."
+  scope: "All users, accounts (human, service and shared) and systems, including cloud services and third-party applications."
+  sections:
+    - h: Principles
+      items:
+        - "Access is granted on need-to-know and least privilege, and approved by the system or data owner. || Access request tickets with approval"
+        - "Each user has a unique identity; shared accounts are prohibited unless approved and controlled. || Account listing; exception register"
+        - "Duties are separated so that no one person can complete a high-risk action alone, where practical. || Role design; approval workflow settings"
+    - h: Authentication
+      items:
+        - "Multi-factor authentication is required for [all workforce access, remote access and administrator access]. || Identity provider policy export"
+        - "Passwords or passphrases meet the Authentication and Password Standard. || Configuration screenshot or export"
+        - "Service accounts have an owner, a documented purpose and protected credentials. || Service account inventory"
+    - h: Privileged access
+      items:
+        - "Administrator rights are granted separately from normal accounts, approved by [role], and reviewed at least [quarterly]. || Privileged role listing and review package"
+    - h: Provisioning, review and removal
+      items:
+        - "Access is removed within [one business day] of termination and on role change. || Termination tickets compared to account disable dates"
+        - "Access to in-scope systems is reviewed at least [quarterly] by the system owner, and findings are corrected within [days]. || Signed review package"
+        - "Remote and third-party access is restricted to approved methods and is logged. || VPN or access gateway configuration"
+  roles:
+    - "Security lead || Owns this policy and the review process"
+    - "System and data owners || Approve and review access"
+    - "IT and engineering || Provision and remove access as approved"
+  related: "Authentication and Password Standard; Privileged Access Standard; User Access Provisioning Procedure; User Access Review Procedure"
+
+p-06:
+  purpose: "To protect the confidentiality and integrity of information through approved cryptography and sound key management."
+  scope: "Data at rest and in transit, secrets, certificates and cryptographic keys in all company and customer systems."
+  sections:
+    - h: Use of encryption
+      items:
+        - "Customer and confidential data is encrypted in transit using the protocols and versions in the Encryption Standard. || TLS scan report"
+        - "Customer and confidential data is encrypted at rest using approved algorithms. || Storage and database encryption settings"
+        - "Laptops and mobile devices that hold company data use full-disk encryption. || Device compliance report"
+    - h: Key and secret management
+      items:
+        - "Keys and secrets are generated, stored and rotated in an approved service and are never kept in source code or shared chat. || Key vault configuration; secret scan results"
+        - "Access to keys is limited to the roles that need it and is logged. || Key vault access policy and logs"
+        - "Keys are rotated at the intervals in the Encryption Standard and revoked when compromised. || Rotation logs"
+    - h: Certificates
+      items:
+        - "Certificates are inventoried, renewed before expiry and issued by approved authorities. || Certificate inventory; expiry monitoring"
+  roles:
+    - "Engineering lead || Owns this policy and key management"
+    - "Security lead || Approves algorithms and reviews exceptions"
+  related: "Encryption Standard; Secure Coding and Code Review Standard"
+
+p-07:
+  purpose: "To ensure systems are operated securely, with vulnerabilities fixed, activity logged and monitored, malware prevented and capacity managed."
+  scope: "Production, corporate and cloud systems, endpoints, networks and supporting tools."
+  sections:
+    - h: Vulnerability and patch management
+      items:
+        - "Systems are scanned at the frequency set in the Vulnerability and Patch Management Standard. || Scan schedule and results"
+        - "Vulnerabilities are fixed or formally excepted within the deadlines for their severity. || Remediation tickets with dates; exceptions"
+        - "Operating systems and software receive security updates within the window in the Endpoint Security Standard. || Patch compliance report"
+    - h: Logging and monitoring
+      items:
+        - "Security-relevant events from [sources] are logged centrally and kept for [retention]. || Log source list; retention settings"
+        - "Logs are protected from change and access is restricted. || Log store permissions"
+        - "Alerts are reviewed and triaged within [time], and incidents are escalated under the Incident Response Policy. || Alert tickets"
+    - h: Malware and endpoint protection
+      items:
+        - "Endpoints run managed protection that is kept current and cannot be disabled by users. || Endpoint management report"
+    - h: Network security
+      items:
+        - "Networks are segmented, default-deny rules are used for inbound traffic, and firewall rules are reviewed at least [semi-annually]. || Firewall rule review record"
+    - h: Configuration and capacity
+      items:
+        - "Systems are built from approved secure baselines and deviations are recorded. || Baseline compliance report"
+        - "Capacity is monitored against thresholds and reviewed at least [quarterly]. || Capacity review notes"
+  roles:
+    - "IT lead || Operates endpoints, networks and patching"
+    - "Engineering lead || Operates production systems"
+    - "Security lead || Owns monitoring and vulnerability oversight"
+  related: "Endpoint Security Standard; Vulnerability and Patch Management Standard; Logging and Monitoring Standard; Secure Configuration Baselines"
+
+p-08:
+  purpose: "To ensure software and infrastructure changes are designed, reviewed, tested, approved and released in a controlled way."
+  scope: "Application code, infrastructure as code, configuration, third-party components and the environments they run in."
+  sections:
+    - h: Secure development
+      items:
+        - "Security requirements are considered in design for changes that affect customer data, authentication or external interfaces. || Design or ticket templates with a security section"
+        - "Developers follow the Secure Coding and Code Review Standard. || Standard; repository settings"
+        - "Dependencies and secrets in code are scanned automatically. || Scanner results"
+    - h: Change management
+      items:
+        - "Every change to production is recorded in a ticket or pull request, reviewed by someone other than the author, and tested before release. || Sampled pull requests with reviews"
+        - "Protected branches enforce review and passing checks before merge. || Branch protection export"
+        - "Emergency changes follow an expedited path and are reviewed after release within [business days]. || Emergency change tickets and reviews"
+        - "Failed changes can be rolled back. || Deployment logs; rollback records"
+    - h: Environments
+      items:
+        - "Development, test and production environments are separated; production data is not used in test unless protected. || Environment architecture; access lists"
+        - "Developers do not have unreviewed write access to production. || Production access list"
+  roles:
+    - "Engineering lead || Owns this policy and release process"
+    - "Reviewers || Approve changes"
+    - "Security lead || Defines security requirements and reviews exceptions"
+  related: "Secure Coding and Code Review Standard; Change Management Procedure"
+
+p-09:
+  purpose: "To manage the security risk of vendors, cloud services and other third parties that handle company or customer information or support the service."
+  scope: "All vendors and subservice organizations, from selection through offboarding."
+  sections:
+    - h: Selection and onboarding
+      items:
+        - "Each vendor is assigned a risk tier under the Vendor Risk Tiering Standard before data is shared. || Vendor register with tier"
+        - "Due diligence is performed in proportion to the tier and includes review of assurance reports or a security questionnaire. || Completed assessments; collected reports"
+        - "Contracts include confidentiality, security and incident notification terms. || Contract clause review"
+    - h: Ongoing management
+      items:
+        - "Vendors are reviewed at least annually at the frequency of their tier, including review of the latest assurance report and any exceptions. || Annual review records"
+        - "Complementary subservice organization controls and user entity controls are identified and tracked. || CSOC and CUEC register"
+        - "Material vendor incidents or changes trigger an off-cycle review. || Review log"
+    - h: Offboarding
+      items:
+        - "At contract end, access is removed, keys are revoked and data is returned or deleted with confirmation. || Offboarding checklist"
+  roles:
+    - "Security lead || Owns the program and reviews high-risk vendors"
+    - "Business owner of each vendor || Manages the relationship and requests reviews"
+    - "Finance and legal || Support contracts and renewals"
+  related: "Vendor Risk Tiering Standard; Vendor Onboarding and Review Procedure"
+
+p-10:
+  purpose: "To detect, respond to, recover from and learn from security incidents, and to meet notification obligations."
+  scope: "All suspected and confirmed events that affect the confidentiality, integrity or availability of company or customer information."
+  sections:
+    - h: Preparation and reporting
+      items:
+        - "Personnel report suspected incidents immediately through [channel]; there is a 24-hour way to reach the response team. || Reporting channel; on-call schedule"
+        - "A documented Incident Response Plan defines roles, severity levels, communication and escalation. || Plan with approval date"
+    - h: Response
+      items:
+        - "Every incident is recorded, triaged by severity, assigned an incident lead and tracked to closure. || Incident ticket sample"
+        - "Evidence is preserved and handled so that it can be relied on. || Evidence handling log"
+        - "Containment, eradication and recovery steps are documented in the ticket. || Ticket timeline"
+    - h: Notification
+      items:
+        - "Affected customers and regulators are notified within the time required by contract and law ([hours/days]), after review by [legal role]. || Notification records"
+        - "Customer-facing status communications follow the Customer Security Communication Procedure. || Status page history"
+    - h: Learning
+      items:
+        - "A post-incident review is held for every high-severity incident within [days] and corrective actions are tracked. || Post-incident reviews; action log"
+        - "The plan is tested at least annually with a tabletop exercise. || Tabletop report"
+  roles:
+    - "Security lead || Owns the plan and leads response"
+    - "Legal lead || Advises on notification"
+    - "All personnel || Report suspected incidents"
+  related: "Incident Response Plan and Playbooks; Tabletop Exercise Procedure; Customer Security Communication Procedure"
+
+p-11:
+  purpose: "To keep critical services available and recoverable through backups, resilience and tested recovery plans."
+  scope: "Production systems, data and the people and suppliers needed to restore them."
+  sections:
+    - h: Business impact and planning
+      items:
+        - "Critical services are identified with recovery time and recovery point objectives approved by leadership. || Business impact analysis"
+        - "A business continuity and disaster recovery plan covers loss of systems, locations, people and key suppliers. || Plan with approval date"
+    - h: Backup
+      items:
+        - "Production data is backed up as set in the Backup Standard and stored in a separate, protected location. || Backup configuration and job reports"
+        - "Backups are encrypted and access is restricted. || Storage settings"
+    - h: Resilience
+      items:
+        - "Critical components are designed for availability across [zones/regions] where practical. || Architecture diagram"
+        - "Availability is monitored and capacity is reviewed. || Monitoring dashboard; capacity notes"
+    - h: Testing
+      items:
+        - "Restores are tested at least [annually] and the plan is exercised at least [annually]; results and fixes are recorded. || Restore test and DR test reports"
+  roles:
+    - "Engineering lead || Owns backups, recovery and resilience"
+    - "Security lead || Oversees testing and reporting"
+    - "Executive leadership || Approves objectives and plan"
+  related: "Backup Standard; Business Continuity and Disaster Recovery Plan; Backup and Restore Test Procedure"
+
+p-12:
+  purpose: "To prevent unauthorized physical access, damage and loss affecting company information and equipment."
+  scope: "Offices, remote workspaces, equipment and storage media. Data centers operated by cloud providers are covered through the Vendor and Third-Party Management Policy."
+  sections:
+    - h: Premises
+      items:
+        - "Entry to company premises is restricted to authorized people and visitors are signed in and escorted. || Access list; visitor log"
+        - "Areas with sensitive equipment are locked and access is reviewed at least [annually]. || Review record"
+    - h: Equipment and workspace
+      items:
+        - "Equipment is protected from loss and environmental risk and is recorded in the asset inventory. || Inventory"
+        - "Screens are locked when unattended and sensitive material is cleared from desks and printers. || Spot-check records"
+        - "Lost or stolen equipment is reported immediately and remote wipe is used where available. || Incident tickets"
+    - h: Cloud provider facilities
+      items:
+        - "Physical security of cloud data centers is covered by the provider's assurance report, reviewed annually. || Collected report and review notes"
+  roles:
+    - "IT lead || Owns this policy"
+    - "Facilities or office manager || Operates physical controls"
+  related: "Asset Management and Data Classification Policy; Vendor and Third-Party Management Policy"
+
+p-13:
+  purpose: "To allow the benefits of AI tools while protecting company and customer data and managing AI-related risk."
+  scope: "Any generative AI, machine learning or automated decision tool used by personnel or built into company products."
+  sections:
+    - h: Approved use
+      items:
+        - "Only AI tools on the approved list are used for company work, and the list names the allowed purposes and data. || Approved tools list"
+        - "New AI tools are reviewed by [role] for security, privacy, data use and contract terms before approval. || Review records"
+    - h: Data rules
+      items:
+        - "Customer data, credentials, source code marked [classification] and other restricted data are not entered into AI tools unless the tool is approved for that data. || Data rules; tool settings"
+        - "Vendors are not allowed to train on company or customer data without written approval. || Contract and settings review"
+    - h: Oversight
+      items:
+        - "AI output is reviewed by a person before it is relied on or sent to customers. || Process description; samples"
+        - "AI-related incidents, such as data exposure or harmful output, are reported as security incidents. || Incident tickets"
+        - "AI vendors are included in vendor risk management. || Vendor register"
+  roles:
+    - "Security lead || Owns this policy and the approved list"
+    - "Legal lead || Reviews terms and privacy impact"
+    - "All personnel || Use only approved tools and follow the data rules"
+  related: "Acceptable Use Policy; Vendor and Third-Party Management Policy; Data Classification and Handling Standard"

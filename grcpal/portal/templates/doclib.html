@@ -1,0 +1,49 @@
+{% extends "base.html" %}{% from "_macros.html" import when %}{% block title %}Document library{% endblock %}
+{% macro size(n) -%}{{ ('%.0f KB' % (n / 1024)) if n >= 1024 else ((n or 0) ~ ' B') }}{%- endmacro %}
+{% macro status(v) -%}<span class="pill dl-{{ v.status }}">{{ statuses.get(v.status, 'Template') }}</span>{%- endmacro %}
+{% block content %}
+<div class="page-head"><div><h1>Document library</h1>
+<div class="sub">{% if user.sees_everything %}Policies, standards, procedures and SOC 2 documents: the built-in templates and your official versions, with every old version kept.{% else %}Approved company documents. Download the current copy; policies you must accept are on the Policies page.{% endif %}</div></div>
+<div class="head-actions"><div class="tabs" role="tablist" aria-label="View">
+<a href="/library?view=docs&amp;f={{ folder }}&amp;q={{ q|urlencode }}" class="{{ 'on' if lview == 'docs' }}">Documents</a>
+<a href="/library?view=files&amp;f={{ folder }}&amp;q={{ q|urlencode }}" class="{{ 'on' if lview == 'files' }}">All files</a></div></div></div>
+
+<div class="lib">
+<nav class="card lib-tree" aria-label="Folders">
+<a href="/library?view={{ lview }}" class="{{ 'on' if not folder }}"><span>All documents</span><span class="lib-n">{{ lib.total }}</span></a>
+{% for fo in lib.folders %}<a href="/library?f={{ fo.id }}&amp;view={{ lview }}" class="{{ 'on' if folder == fo.id }}"><span>{{ fo.name }}</span><span class="lib-n">{{ fo.count }}</span></a>{% endfor %}
+</nav>
+
+<section>
+<form method="get" action="/library" class="filters"><input type="hidden" name="f" value="{{ folder }}"><input type="hidden" name="view" value="{{ lview }}">
+<input class="grow" type="search" name="q" value="{{ q }}" placeholder="Search by number, title or owner" aria-label="Search documents">
+<button class="btn ghost small" type="submit">Search</button>{% if q or folder %}<a class="btn ghost small" href="/library?view={{ lview }}">Clear</a>{% endif %}</form>
+{% for fo in lib.folders if fo.id == folder %}<p class="sub">{{ fo.note }}</p>{% endfor %}
+
+{% if lview == 'docs' %}
+<div class="card table-wrap">{% if lib.docs %}<table class="lib-table lib-index"><thead><tr><th>No.</th><th>Title</th><th>Owner</th><th>Official version</th><th>Next review</th><th>Last change</th></tr></thead><tbody>
+{% for d in lib.docs %}<tr><td class="mono">{{ d.number or '—' }}</td>
+<td><a href="/library/{{ d.id }}"><b>{{ d.title }}</b></a>{% if d.custom %} <span class="pill custom">Added</span>{% endif %}{% if user.sees_everything and d.template_source == 'Custom' %} <span class="pill custom">Custom template</span>{% endif %}{% if d.pending and user.sees_everything %} <span class="pill dl-draft">{{ d.pending }} pending</span>{% endif %}</td>
+<td>{{ d.owner_name or '—' }}</td>
+<td>{% if d.current %}{% for c in d.current[:2] %}<div><span class="pill dl-approved">v{{ c.label }}</span>{% if c.variant %} <span class="sub">{{ c.variant }}</span>{% endif %}</div>{% endfor %}{% if d.current|length > 2 %}<div class="sub">+{{ d.current|length - 2 }} more</div>{% endif %}{% else %}<span class="sub">None yet</span>{% endif %}</td>
+<td>{% if d.review_state %}<span class="pill dl-rev-{{ d.review_state }}">{{ d.next_review }}</span>{% else %}<span class="sub">{{ d.next_review or '—' }}</span>{% endif %}</td>
+<td class="mono">{{ d.last_change[:10] if d.last_change else '—' }}</td></tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty">{% if user.sees_everything %}No documents match.{% else %}No approved documents have been published yet.{% endif %}</div>{% endif %}</div>
+
+{% else %}
+<div class="card table-wrap">{% if files %}<table class="lib-table"><thead><tr><th>File</th><th>Document</th><th>Version</th><th>Product / variant</th><th>Status</th><th>Size</th><th>Added by</th><th>SHA-256</th></tr></thead><tbody>
+{% for f in files %}<tr><td><a href="/library/{{ f.PartitionKey }}/files/{{ f.RowKey }}">{{ f.filename }}</a></td>
+<td><a href="/library/{{ f.PartitionKey }}">{{ f.doc.number }} {{ f.doc.title }}</a></td><td>v{{ f.label }}</td><td>{{ f.variant or '—' }}</td><td>{{ status(f) }}</td>
+<td>{{ size(f.size) }}</td><td>{% if f.uploaded_at %}{{ when(f.uploaded_at) }}{% endif %}<div class="sub">{{ f.uploaded_by }}</div></td><td class="mono">{{ f.sha256[:12] }}…</td></tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty">No files match.</div>{% endif %}</div>
+{% endif %}
+
+{% if user.is_admin %}<details class="card mt"><summary><b>Add a document</b> <span class="sub">(something not in the built-in set)</span></summary>
+<form method="post" action="/library/add" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="form-row"><div><label for="ad-folder">Folder</label><select id="ad-folder" name="folder">{% for fo in lib.folders %}<option value="{{ fo.id }}"{% if folder == fo.id %} selected{% endif %}>{{ fo.name }}</option>{% endfor %}</select></div>
+<div><label for="ad-kind">Type</label><select id="ad-kind" name="kind">{% for k, label in kinds.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></div>
+<div><label for="ad-num">Number (optional)</label><input id="ad-num" name="number" maxlength="20" placeholder="P-14"></div>
+<div class="grow2"><label for="ad-title">Title</label><input id="ad-title" name="title" required minlength="3" maxlength="160"></div></div>
+<div class="actions"><button class="btn" type="submit">Add document</button></div></form></details>{% endif %}
+</section></div>
+{% endblock %}

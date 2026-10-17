@@ -4,6 +4,19 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Added
+- **Document library** (menu: Document library). An Explorer-style repository for the whole policy hierarchy:
+  53 built-in Word templates (the umbrella policy and 13 topic policies as full templates with a "How it is
+  tested" column; 13 standards, 20 procedures and 6 SOC 2 documents as skeletons), written without any
+  organization name. Admins download a template, adapt it and upload it as the **official version**
+  (major/minor numbering, an optional product/variant label, draft, in review, approved, superseded, archived);
+  approval needs a second admin; every old version is kept and downloadable. A template can be **replaced**
+  by uploading your own (history kept, built-in restorable), titles and owners can be changed (the document
+  number stays), and admins can add their own documents. Staff see only approved versions; auditors see
+  everything read-only. Files are write-once with SHA-256 and every action is in the audit log. New tables
+  `docs` and `docversions` (no migration needed); `python-docx` joins the `dev` extra to rebuild templates
+  with `python tools/build_doc_templates.py`.
+
 ### Security
 - **Vendor contact details are never shown to auditors**: removed on the server, left out of the export, and
   contact changes and vendor emails are written to the audit log without names or addresses. Vendor files can
