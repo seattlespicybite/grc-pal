@@ -109,3 +109,26 @@ def test_job_arguments_never_look_like_azure_cli_options():
         if "run_job " in line and not line.strip().startswith(("#", "run_job()")):
             after = line.split("run_job ", 1)[1].split()[1:]
             assert not any(w.strip('"').startswith("--") for w in after if not w.startswith((">", "||", "2>"))), line
+
+
+def test_workflow_never_installs_on_its_own():
+    """Updates are manual: the scheduled run only reports; installing needs a person-entered version."""
+    wf = (ROOT / "grcpal" / "starter" / "github" / "workflows" / "grcpal-update.yml").read_text()
+    assert "--auto" not in wf
+    assert '--status | tee -a "$GITHUB_STEP_SUMMARY"' in wf
+
+
+def test_progress_is_shown_as_percent_steps(azure):
+    r, _, _ = azure("--auto")
+    import re
+    pcts = [int(p) for p in re.findall(r"==> \[(\d+)%\]", r.stdout)]
+    assert pcts == sorted(pcts) and pcts[0] > 0 and pcts[-1] == 100
+
+
+def test_status_lists_newer_releases_with_advice(azure):
+    rows = [{"tag_name": "v0.2.1", "body": "### Security\n- fix", "html_url": "https://github.com/o/r/releases/tag/v0.2.1"},
+            {"tag_name": "v0.3.0", "body": "### Added\n- feature"}, {"tag_name": "v0.1.0"}]
+    r, st, _ = azure("--status", FAKE_RELEASES=json.dumps(rows))
+    assert r.returncode == 0, r.stderr
+    assert "- 0.3.0 (minor): New features" in r.stdout and "- 0.2.1 (patch): Contains security fixes" in r.stdout
+    assert "0.1.0" not in r.stdout and job_args(st) == []  # status changes nothing

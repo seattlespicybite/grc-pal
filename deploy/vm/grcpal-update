@@ -54,9 +54,10 @@ VERSION_RE = re.compile(r"^\d{1,4}\.\d{1,4}\.\d{1,4}$")
 BACKUP_RE = re.compile(r"^grcpal-[a-z0-9][a-z0-9-]{0,39}-\d{8}T\d{6}Z-(scheduled|manual|pre-update)\.grcbak$")
 JOBS = {"backup": ["backup", "run-due"], "collect": ["collect", "--all", "--checks"], "tasks": ["tasks"],
         "remind": ["remind", "--overdue"]}
-DEFAULT_POLICY = {"auto_patch": True, "online": False, "repository": "seattlespicybite/grc-pal"}
+DEFAULT_POLICY = {"auto_patch": False, "online": False, "repository": "seattlespicybite/grc-pal"}
 SMALL_DATA = ("grcpal.db", "grcpal.db-wal", "grcpal.db-shm", "config", "inbox", "keys")  # copied before a switch
 KEEP_ROLLBACKS = 2
+ROLLBACK_DAYS = 30
 
 
 class Failed(Exception):
@@ -89,8 +90,14 @@ def read_json(path: Path, default=None):
         return default
 
 
+# How far an update or restore has got, shown as a progress bar on the Updates page.
+PROGRESS = {"checking": 5, "backing_up": 15, "trial": 40, "switching": 65, "health": 80, "restoring": 50,
+            "rolling_back": 90, "done": 100}
+
+
 def status(state: str, message: str, **extra) -> None:
-    write_json(STATE / "status.json", {"state": state, "message": message, "at": now(), **extra})
+    write_json(STATE / "status.json", {"state": state, "message": message, "at": now(),
+                                       "percent": PROGRESS.get(state), **extra})
     log(f"[{state}] {message}")
 
 
@@ -286,10 +293,14 @@ def put_back_small_data(saved: Path, failed: Path) -> None:
 
 
 def prune_rollbacks() -> None:
+    """Data copies from before each update: keep the newest KEEP_ROLLBACKS and every one from the last
+    ROLLBACK_DAYS days (the rollback window)."""
     if ROLLBACK.is_dir():
         dirs = sorted(p for p in ROLLBACK.iterdir() if p.is_dir() and not p.name.endswith("-before-restore"))
+        cutoff = f"{dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=ROLLBACK_DAYS):%Y%m%dT%H%M%SZ}"
         for old in dirs[:-KEEP_ROLLBACKS]:
-            shutil.rmtree(old, ignore_errors=True)
+            if old.name[:16] < cutoff:
+                shutil.rmtree(old, ignore_errors=True)
 
 
 def fresh_dir(path: Path) -> Path:

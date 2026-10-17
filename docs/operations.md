@@ -206,7 +206,7 @@ password manager; the installer kit or this repository at the version you run.
 ## Upgrades
 
 Updates are applied by the updater of each deployment, never by hand: on a VM from the Updates page or a
-signed update file ([deploy-vm.md](deploy-vm.md#updates)), on Azure by the monthly workflow in your program
+signed update file ([deploy-vm.md](deploy-vm.md#updates)), on Azure by the update workflow (run with a version) in your program
 repository ([deploy-azure.md](deploy-azure.md#updates)). Both back up first, try the new version on a copy of
 the data, check it before users get it, and roll back by themselves. Read the CHANGELOG before approving a
 feature or major release, and keep the repository variable `GRCPAL_VERSION` (used by your program

@@ -123,7 +123,7 @@ itself if a check fails.
 | Sign-in | GRC-pal accounts (email and password) | Entra ID (MFA, Conditional Access, compliant devices) |
 | Data | One folder on the VM | Azure Tables and write-once Blob storage |
 | Backups | Nightly to the VM, plus your network share; Backups page | Nightly to a write-once container; Backups page |
-| Updates | Signed update files (no internet needed); patches monthly, others on Approve | Monthly workflow in your program repository; new version checked before it gets traffic |
+| Updates | Signed update files (no internet needed); every update waits for Approve, with a live progress bar | Workflow in your program repository, run with the version; new version checked before it gets traffic |
 | Guide | [deploy-vm.md](docs/deploy-vm.md) | [deploy-azure.md](docs/deploy-azure.md) |
 
 ### VM, in short
@@ -204,8 +204,8 @@ Command line, any install: `grcpal backup create FILE`, `grcpal backup verify FI
 
 | | VM | Azure |
 | --- | --- | --- |
-| Bug and security fixes (0.3.x) | Installed by the monthly check | Installed by the monthly workflow in your program repository |
-| New features (0.4, 1.0) | **Administration → Updates → Approve** after reading the release notes | Actions → **GRC-pal update** → Run workflow with the version |
+| See what is available | **Administration → Updates**: newer releases, each with *Do I need it?* | Same page, or the weekly run summary of the **GRC-pal update** workflow |
+| Install (fixes or features) | **Administration → Updates → Approve**; the page shows each step and its percentage | Actions → **GRC-pal update** → Run workflow with the version; the log shows each step and its percentage |
 | No internet | `sudo grcpal-update apply grcpal-<version>.grcupdate` (signed file) | n/a |
 | Go back | `sudo grcpal-update rollback` | Run the workflow with **rollback** |
 

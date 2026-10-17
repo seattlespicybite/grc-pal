@@ -329,3 +329,11 @@ tr.cal-drop-target td { border-top: 2px solid var(--accent); }
   border: 1px dashed transparent; }
 td:hover > .cal-add, .cal-add:focus { opacity: 1; border-color: var(--idle); text-decoration: none; }
 .cal-year .cal-cell { font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+/* Updates page: live progress */
+.update-progress { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+.update-progress progress { flex: 1; height: 12px; accent-color: var(--accent); }
+.update-steps { display: flex; flex-wrap: wrap; gap: 6px 18px; padding-left: 20px; margin: 8px 0; color: var(--muted); }
+.update-steps li.done { color: var(--ok); }
+.update-steps li.current { color: var(--text); font-weight: 600; }
+.pill.adv-security { color: var(--bad); } .pill.adv-major { color: var(--warn); }
+.pill.adv-fixes { color: var(--info); } .pill.adv-features { color: var(--idle); }

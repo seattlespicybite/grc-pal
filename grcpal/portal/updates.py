@@ -5,9 +5,24 @@ Admins only, every request audited: update.approved, update.policy_requested, re
 """
 from __future__ import annotations
 
+import datetime as dt
+import logging
 import os
+import time
 
 from grcpal import __version__, backup_store, update
+from grcpal.checks import Blocked
+
+log = logging.getLogger("grcpal.updates")
+
+# Steps of an update as the host updater reports them in status.json (deploy/vm/grcpal-update, PROGRESS).
+UPDATE_STEPS = (("checking", "Check the update file"), ("backing_up", "Backup"), ("trial", "Trial on a copy"),
+                ("switching", "Switch"), ("health", "Health check"), ("done", "Done"))
+ACTIVE_STATES = ("checking", "backing_up", "trial", "switching", "health", "restoring", "rolling_back")
+
+# Release list from GitHub, kept in memory: one small request per 12 hours (15 minutes after a failure).
+_FEED: dict = {}
+FEED_TTL, FEED_RETRY = 12 * 3600, 15 * 60
 
 
 class UpdatesMixin:
@@ -18,6 +33,28 @@ class UpdatesMixin:
             return "vm"
         return "azure" if os.getenv("GRCPAL_TABLES_URL") else "manual"
 
+    def release_feed(self, online: bool) -> dict:
+        """Releases newer than this one, with a "do I need it?" answer each. Read from GitHub's public release
+        list (nothing about this instance is sent). Off with GRCPAL_UPDATE_CHECK=off; on VMs only when the admin
+        allowed the server to download releases (`online`)."""
+        if os.getenv("GRCPAL_UPDATE_CHECK", "on").strip().lower() == "off" or (self.deployment == "vm" and not online):
+            return {"enabled": False, "releases": []}
+        repo = os.getenv("GRCPAL_UPDATE_REPO", "seattlespicybite/grc-pal")
+        now = time.time()
+        hit = _FEED.get(repo)
+        if not hit or now - hit["at"] > (FEED_RETRY if hit["error"] else FEED_TTL):
+            try:
+                hit = {"at": now, "rows": update.fetch_releases(repo), "error": ""}
+            except (update.UpdateError, Blocked, OSError, ValueError) as exc:
+                log.warning("update check failed: %s", exc)
+                hit = {"at": now, "rows": (hit or {}).get("rows", []), "error": "Could not reach GitHub to check for "
+                                                                                  "new releases; trying again later."}
+            _FEED[repo] = hit
+        releases = update.newer_releases(hit["rows"], __version__)
+        return {"enabled": True, "releases": releases, "error": hit["error"],
+                "checked": dt.datetime.fromtimestamp(hit["at"], dt.timezone.utc).isoformat(timespec="seconds"),
+                "security": any(r["advice"]["level"] == "security" for r in releases)}
+
     def updates_overview(self, actor) -> dict:
         from grcpal import migrations
 
@@ -26,11 +63,24 @@ class UpdatesMixin:
             model = migrations.check(self.store.backend)
         except migrations.SchemaError as exc:
             model = {"error": str(exc)}
+        policy = {"auto_patch": False, "online": False, **(update.read_state("policy.json", {}) or {})}
         return {"deployment": self.deployment, "version": __version__, "data_model": model,
                 "status": update.read_state("status.json", {}) or {},
                 "available": update.read_state("available.json", {}) or {},
-                "policy": {"auto_patch": True, "online": False, **(update.read_state("policy.json", {}) or {})},
-                "history": update.history(), "pending": update.pending_requests()}
+                "policy": policy, "feed": self.release_feed(bool(policy.get("online"))),
+                "history": update.history(), "pending": update.pending_requests(), "steps": UPDATE_STEPS,
+                "progress": self.update_progress(actor)}
+
+    def update_progress(self, actor) -> dict:
+        """What the updater is doing now, for the live progress bar (polled by the Updates page)."""
+        self._admin(actor)
+        st = update.read_state("status.json", {}) or {}
+        pending = bool(update.pending_requests())
+        state = str(st.get("state") or "")
+        percent = st.get("percent")
+        return {"state": state, "message": str(st.get("message") or ""), "at": str(st.get("at") or ""),
+                "percent": percent if isinstance(percent, int) and 0 <= percent <= 100 else None,
+                "active": pending or state in ACTIVE_STATES, "pending": pending}
 
     def approve_update(self, actor, version: str) -> dict:
         self._admin(actor)

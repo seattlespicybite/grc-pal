@@ -261,9 +261,14 @@ def due(sched: dict, existing: list[dict], now: dt.datetime | None = None) -> bo
     return not any(b["created"].date() == now.date() for b in scheduled)
 
 
-def to_keep(existing: list[dict], sched: dict) -> set[str]:
+ROLLBACK_DAYS = 30  # an update can be undone for this long, so its pre-update backup is kept at least as long
+
+
+def to_keep(existing: list[dict], sched: dict, now: dt.datetime | None = None) -> set[str]:
     """Grandfather-father-son: newest backup of each of the last N days, weeks and months; pre-update backups
-    are kept separately (newest N). The newest verified backup is always kept."""
+    are kept separately (newest N, and every one from the last ROLLBACK_DAYS). The newest verified backup is
+    always kept."""
+    now = now or dt.datetime.now(dt.timezone.utc)
     keep: set[str] = set()
     regular = sorted((b for b in existing if b["kind"] != "pre-update"), key=lambda b: b["created"], reverse=True)
     for count, period in ((sched["keep_daily"], lambda d: d.date()),
@@ -279,6 +284,7 @@ def to_keep(existing: list[dict], sched: dict) -> set[str]:
                 keep.add(b["name"])
     pre = sorted((b for b in existing if b["kind"] == "pre-update"), key=lambda b: b["created"], reverse=True)
     keep |= {b["name"] for b in pre[: sched["keep_pre_update"]]}
+    keep |= {b["name"] for b in pre if b["created"] > now - dt.timedelta(days=ROLLBACK_DAYS)}
     verified = [b for b in regular if (b.get("summary") or {}).get("verified_ok")]
     if verified:
         keep.add(verified[0]["name"])

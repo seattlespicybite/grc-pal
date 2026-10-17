@@ -148,7 +148,7 @@ if [ -n "$GITHUB_REPO" ]; then
     echo "Set these in GitHub > $GITHUB_REPO > Settings > Secrets and variables > Actions > Variables:"
     printf '  %s\n' "${VARS[@]}"
   fi
-  echo "Monthly updates: create the environment 'grcpal-update' in GitHub > $GITHUB_REPO > Settings > Environments"
+  echo "Updates: create the environment 'grcpal-update' in GitHub > $GITHUB_REPO > Settings > Environments"
   echo "(add yourself as a required reviewer to approve every update). Details: docs/deploy-azure.md, 'Updates'."
   echo "Then grant read access for collectors: ./deploy/azure/grant-permissions.ps1 -PrincipalId $(get collectorPrincipalId) -Scope /subscriptions/$(az account show --query id -o tsv)"
 fi
