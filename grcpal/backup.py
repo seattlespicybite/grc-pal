@@ -647,9 +647,11 @@ def verify(path: Path, key: bytes) -> dict:
 
 
 # ====================================================================== restore
-def restore(path: Path, key: bytes, inst: Instance, accept_audit_problems: bool = False) -> dict:
+def restore(path: Path, key: bytes, inst: Instance, accept_audit_problems: bool = False,
+            tables_only: bool = False) -> dict:
     """Restore a verified backup into an EMPTY instance. Nothing is written unless the whole file verifies;
-    every file is re-hashed while it is written, so a file swapped after the check is caught too."""
+    every file is re-hashed while it is written, so a file swapped after the check is caught too.
+    tables_only: the updater's trial run (tables and migrations only; evidence is never migrated)."""
     report = verify(path, key)
     m = report["manifest"]
     audit_only = all(p.startswith("audit log of tenant") for p in report["problems"])
@@ -661,11 +663,11 @@ def restore(path: Path, key: bytes, inst: Instance, accept_audit_problems: bool 
         raise BackupError(f"This backup was made by GRC-pal {m.get('app_version')} (data model "
                           f"{m.get('schema_version')}); this is {__version__} (data model {SCHEMA_VERSION}). "
                           f"Install {m.get('app_version')} or newer, then restore.")
-    needed = {f["name"].split("/", 1)[0] for f in m.get("files", [])}
+    needed = set() if tables_only else {f["name"].split("/", 1)[0] for f in m.get("files", [])}
     if needed - inst.areas.keys():
         raise BackupError(f"This instance has no place for the backup's {', '.join(sorted(needed - inst.areas.keys()))}")
     busy = (["portal tables"] if not inst.base.is_empty() else []) + \
-        [a for a, area in inst.areas.items() if not area.is_empty()]
+        ([] if tables_only else [a for a, area in inst.areas.items() if not area.is_empty()])
     if busy:
         raise BackupError(f"Restore only goes into an empty instance or a new folder (--into); this one already "
                           f"has data in: {', '.join(busy)}. Nothing was restored.")
@@ -690,6 +692,8 @@ def restore(path: Path, key: bytes, inst: Instance, accept_audit_problems: bool 
                                 inst.base.upsert(table, json.loads(line))
                                 rows += 1
                         continue
+                    if tables_only:
+                        continue  # still authenticated by the decrypting reader; just not written
                     area, rel = name.split("/", 1)
                     want = expected.get(name)
                     if want is None:

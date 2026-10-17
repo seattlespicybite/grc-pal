@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import stat
+import tempfile
+from pathlib import Path
 
 import pytest
 from test_backup import FakeContainer, make_instance, write_raw
@@ -261,3 +263,31 @@ def test_a_table_listed_in_the_manifest_but_missing_is_still_caught(tmp_path, ke
     write_raw(cut, key, members)
     report = backup.verify(cut, key)
     assert not report["ok"] and "table users is missing" in report["problems"]
+
+
+def test_cli_restores_a_backup_by_name_from_a_backup_location(tmp_path, monkeypatch, capsys):
+    """Azure path: the restore job finds the backup in the instance's backup location by name."""
+    from grcpal import backup_store, cli
+
+    make_instance(tmp_path / "src")
+    for var in ("GRCPAL_TABLES_URL", "GRCPAL_EVIDENCE_ACCOUNT_URL", "GRCPAL_BACKUP_KEY", "GRCPAL_BACKUP_KEY_FILE",
+                "GRCPAL_BACKUP_DIR_2"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("GRCPAL_SQLITE", str(tmp_path / "src" / "grcpal.db"))
+    store_dir = tmp_path / "location"
+    store_dir.mkdir()
+    monkeypatch.setenv("GRCPAL_BACKUP_DIR", str(store_dir))
+    ev = ["--evidence", str(tmp_path / "src" / "evidence")]
+    assert cli.main(ev + ["backup", "keygen"]) == 0
+    name = backup_store.file_name("acme", "manual")
+    assert cli.main(ev + ["backup", "create", str(store_dir / name)]) == 0
+    capsys.readouterr()
+    assert cli.main(ev + ["backup", "restore", name, "--key-file", str(tmp_path / "src" / "keys" / "backup.key"),
+                          "--into", str(tmp_path / "new")]) == 0
+    assert '"ok": true' in capsys.readouterr().out
+    assert not list(Path(tempfile.gettempdir()).glob("tmp*.grcbak"))  # the downloaded copy is removed
+    # an unknown name or a non-backup name is refused clearly
+    assert cli.main(ev + ["backup", "restore", "grcpal-acme-20200101T000000Z-manual.grcbak", "--into",
+                          str(tmp_path / "new2")]) == 2
+    assert "No backup named" in capsys.readouterr().err
+    assert cli.main(ev + ["backup", "restore", "../../etc/passwd", "--into", str(tmp_path / "new3")]) == 2

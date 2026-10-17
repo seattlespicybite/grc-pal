@@ -7,7 +7,11 @@
 #   --name NAME            instance name, also the resource group suffix and GRC-pal tenant ID (required)
 #   --admins EMAILS        comma-separated emails that become admins at first sign-in (required)
 #   --location REGION      Azure region (default eastus2)
-#   --image IMAGE          container image (default ghcr.io/seattlespicybite/grc-pal:latest)
+#   --image IMAGE          container image (default: the version already running, else this checkout's
+#                          version, e.g. ghcr.io/seattlespicybite/grc-pal:0.3.0). Change versions with
+#                          update.sh, which checks the new version before it gets traffic.
+#   --restore-from FILE    rebuild a NEW instance from a backup file (.grcbak); needs --kit
+#   --kit FILE             recovery kit (backup key and app key) that belongs to that backup
 #   --github-repo O/R      your program repository; creates a keyless identity for its collectors
 #   --mail-from ADDRESS    shared mailbox that sends notifications through Microsoft Graph
 #   --require-assignment   only users assigned to the enterprise app may sign in (defense in depth)
@@ -18,7 +22,7 @@
 # re-running rotates the sign-in client secret.
 set -euo pipefail
 
-NAME="" ; ADMINS="" ; LOCATION="eastus2" ; IMAGE="ghcr.io/seattlespicybite/grc-pal:latest"
+NAME="" ; ADMINS="" ; LOCATION="eastus2" ; IMAGE="" ; RESTORE_FROM="" ; KIT=""
 GITHUB_REPO="" ; MAIL_FROM="" ; REQUIRE_ASSIGNMENT="false" ; WHAT_IF=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -26,6 +30,8 @@ while [ $# -gt 0 ]; do
     --admins) ADMINS="$2"; shift 2 ;;
     --location) LOCATION="$2"; shift 2 ;;
     --image) IMAGE="$2"; shift 2 ;;
+    --restore-from) RESTORE_FROM="$2"; shift 2 ;;
+    --kit) KIT="$2"; shift 2 ;;
     --github-repo) GITHUB_REPO="$2"; shift 2 ;;
     --mail-from) MAIL_FROM="$2"; shift 2 ;;
     --require-assignment) REQUIRE_ASSIGNMENT="true"; shift ;;
@@ -38,6 +44,11 @@ done
 [ -n "$ADMINS" ] || { echo "--admins is required (your work email)"; exit 1; }
 command -v az >/dev/null || { echo "Install the Azure CLI first: https://aka.ms/azcli"; exit 1; }
 HERE="$(cd "$(dirname "$0")" && pwd)"
+if [ -n "$RESTORE_FROM" ]; then
+  [ -f "$RESTORE_FROM" ] && [ -f "$KIT" ] || { echo "--restore-from needs the backup file and --kit FILE"; exit 1; }
+  [[ "$(basename "$RESTORE_FROM")" =~ ^grcpal-[a-z0-9][a-z0-9-]{0,39}-[0-9]{8}T[0-9]{6}Z-(scheduled|manual|pre-update)\.grcbak$ ]] || {
+    echo "Keep the backup's original file name (grcpal-<org>-<time>-<kind>.grcbak)"; exit 1; }
+fi
 RG="rg-grcpal-$NAME"
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 
@@ -76,10 +87,35 @@ if [ -z "$ENCRYPTION_KEY" ]; then
 else
   echo "reusing the existing encryption key"
 fi
+# Backup key: stable across re-runs (existing backups need it); from the recovery kit when restoring.
+BACKUP_KEY=""
+if az containerapp show -g "$RG" -n "$APP" -o none 2>/dev/null; then
+  BACKUP_KEY=$(az containerapp secret show -g "$RG" -n "$APP" --secret-name backup-key --query value -o tsv 2>/dev/null || true)
+  [ -n "$RESTORE_FROM" ] && { echo "--restore-from only builds a new instance; $APP already exists"; exit 1; }
+fi
+if [ -n "$RESTORE_FROM" ]; then
+  BACKUP_KEY=$(python3 -c 'import json,sys; k=json.load(open(sys.argv[1])); assert k["format"]=="grcpal-recovery-kit-1"; print(k["backup_key"])' "$KIT")
+  KIT_APP_KEY=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("settings_key") or "")' "$KIT")
+  [ -n "$KIT_APP_KEY" ] && ENCRYPTION_KEY="$KIT_APP_KEY" && echo "using the app key from the recovery kit"
+fi
+if [ -z "$BACKUP_KEY" ]; then
+  BACKUP_KEY=$(openssl rand -base64 32)
+  echo "generated a new backup key (download the recovery kit from Administration > Backups after sign-in)"
+fi
+# Image: never change versions here by accident; update.sh does that with its checks.
+if [ -z "$IMAGE" ]; then
+  IMAGE=$(az containerapp show -g "$RG" -n "$APP" --query "properties.template.containers[0].image" -o tsv 2>/dev/null || true)
+fi
+if [ -z "$IMAGE" ]; then
+  VERSION=$(python3 -c 'import re,sys; print(re.search(r"__version__ = \"([0-9.]+)\"", open(sys.argv[1]).read()).group(1))' "$HERE/../../grcpal/__init__.py")
+  IMAGE="ghcr.io/seattlespicybite/grc-pal:$VERSION"
+fi
+echo "image: $IMAGE"
 GRCPAL_SECRET=$(openssl rand -hex 32)
 
 PARAMS=(instanceName="$NAME" image="$IMAGE" entraClientId="$APP_ID" entraClientSecret="$CLIENT_SECRET"
-        grcpalSecret="$GRCPAL_SECRET" encryptionKey="$ENCRYPTION_KEY" bootstrapAdmins="$ADMINS" githubRepo="$GITHUB_REPO")
+        grcpalSecret="$GRCPAL_SECRET" encryptionKey="$ENCRYPTION_KEY" backupKey="$BACKUP_KEY" bootstrapAdmins="$ADMINS"
+        githubRepo="$GITHUB_REPO")
 [ -n "$MAIL_FROM" ] && PARAMS+=(mailBackend=graph mailFrom="$MAIL_FROM")
 
 if [ -n "$WHAT_IF" ]; then
@@ -101,6 +137,7 @@ if [ -n "$GITHUB_REPO" ]; then
   step "GitHub repository variables for collectors ($GITHUB_REPO)"
   VARS=(AZURE_CLIENT_ID="$(get collectorClientId)" AZURE_TENANT_ID="$TENANT_ID" GRCPAL_TENANT="$NAME"
         GRCPAL_EVIDENCE_ACCOUNT_URL="$(get evidenceAccountUrl)" GRCPAL_TABLES_URL="$(get tablesUrl)")
+  VARS+=(AZURE_UPDATER_CLIENT_ID="$(get updaterClientId)" GRCPAL_INSTANCE="$NAME" AZURE_SUBSCRIPTION_ID="$(az account show --query id -o tsv)")
   if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
     for kv in "${VARS[@]}"; do gh variable set "${kv%%=*}" --body "${kv#*=}" --repo "$GITHUB_REPO"; done
     echo "set ${#VARS[@]} variables with the GitHub CLI"
@@ -108,6 +145,8 @@ if [ -n "$GITHUB_REPO" ]; then
     echo "Set these in GitHub > $GITHUB_REPO > Settings > Secrets and variables > Actions > Variables:"
     printf '  %s\n' "${VARS[@]}"
   fi
+  echo "Monthly updates: create the environment 'grcpal-update' in GitHub > $GITHUB_REPO > Settings > Environments"
+  echo "(add yourself as a required reviewer to approve every update). Details: docs/deploy-azure.md, 'Updates'."
   echo "Then grant read access for collectors: ./deploy/azure/grant-permissions.ps1 -PrincipalId $(get collectorPrincipalId) -Scope /subscriptions/$(az account show --query id -o tsv)"
 fi
 
@@ -121,6 +160,32 @@ This uses RBAC for Applications, so do NOT grant tenant-wide Mail.Send in Entra 
   New-ManagementScope -Name "GRC-pal $NAME sender" -RecipientRestrictionFilter "PrimarySmtpAddress -eq '$MAIL_FROM'"
   New-ManagementRoleAssignment -App $(get portalIdentityClientId) -Role "Application Mail.Send" -CustomResourceScope "GRC-pal $NAME sender"
 EOF
+fi
+
+if [ -n "$RESTORE_FROM" ]; then
+  step "Restoring $(basename "$RESTORE_FROM") into the new instance"
+  SA=$(get storageAccount)
+  ME=$(az ad signed-in-user show --query id -o tsv)
+  SCOPE="$(az storage account show -g "$RG" -n "$SA" --query id -o tsv)/blobServices/default/containers/backups"
+  az role assignment create --assignee-object-id "$ME" --assignee-principal-type User \
+     --role "Storage Blob Data Contributor" --scope "$SCOPE" -o none 2>/dev/null || true
+  for i in $(seq 1 20); do   # role assignments take a minute or two to apply
+    az storage blob upload --auth-mode login --account-name "$SA" -c backups -f "$RESTORE_FROM" \
+       -n "$(basename "$RESTORE_FROM")" -o none 2>/dev/null && break
+    [ "$i" = 20 ] && { echo "Could not upload the backup (permission not active yet). Re-run with the same options."; exit 1; }
+    sleep 15
+  done
+  JOB=$(echo "job-$NAME-backup" | cut -c1-32)
+  EX=$(az containerapp job start -g "$RG" -n "$JOB" --image "$IMAGE" --container-name backup \
+       --command grcpal --args backup restore "$(basename "$RESTORE_FROM")" --query name -o tsv)
+  echo "restore running as job execution $EX"
+  for i in $(seq 1 120); do
+    ST=$(az containerapp job execution show -g "$RG" -n "$JOB" --job-execution-name "$EX" --query properties.status -o tsv)
+    case "$ST" in Succeeded) echo "restore finished"; break ;; Failed|Stopped|Degraded)
+      echo "The restore did not finish ($ST). Logs: az containerapp job logs show -g $RG -n $JOB --execution $EX --container backup"; exit 1 ;; esac
+    sleep 15
+  done
+  az role assignment delete --assignee "$ME" --role "Storage Blob Data Contributor" --scope "$SCOPE" -o none 2>/dev/null || true
 fi
 
 step "Done"

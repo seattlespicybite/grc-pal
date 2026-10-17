@@ -107,45 +107,30 @@ Every rule is enforced on the server and every change is in the audit log. Detai
 
 ## Deploy for your organization
 
-Choose where it runs. Every option keeps the data in your own systems.
+Two supported ways to run it. Both keep the data in your own systems, back up every night, and update
+without risking data: each update is backed up, tried on a copy of the data, checked, and rolled back by
+itself if a check fails.
 
-| | VM in your network | Docker | Azure Container Apps |
-| --- | --- | --- | --- |
-| Best for | Most teams; consultants running one client's program | Teams that already run containers | Teams on Azure who want Entra ID single sign-on |
-| Sign-in | GRC-pal accounts (email and password) | GRC-pal accounts | Entra ID (Microsoft sign-in, Conditional Access, MFA) |
-| Data | SQLite file and evidence folder on the VM | A Docker volume | Azure Tables and Blob storage |
-| Scheduled jobs | cron | cron on the host | Created by the template |
-| Guide | [quickstart.md, section 4](docs/quickstart.md#4-on-a-vm-for-your-team-production-local-accounts) | [same section, option B](docs/quickstart.md#option-b-docker) | [deploy-azure.md](docs/deploy-azure.md) |
+| | VM in your network | Azure Container Apps |
+| --- | --- | --- |
+| Best for | Privacy: everything stays on your network (staff on site or on VPN) | Remote staff; MSPs and vCISOs (one instance per client) |
+| Runs on | Debian 13 minimal + Docker, one install script | Your Azure subscription, one deploy script |
+| Sign-in | GRC-pal accounts (email and password) | Entra ID (MFA, Conditional Access, compliant devices) |
+| Data | One folder on the VM | Azure Tables and write-once Blob storage |
+| Backups | Nightly to the VM, plus your network share; Backups page | Nightly to a write-once container; Backups page |
+| Updates | Signed update files (no internet needed); patches monthly, others on Approve | Monthly workflow in your program repository; new version checked before it gets traffic |
+| Guide | [deploy-vm.md](docs/deploy-vm.md) | [deploy-azure.md](docs/deploy-azure.md) |
 
-### VM (Python), in short
-
-```bash
-python3 -m venv /var/lib/grcpal/venv
-/var/lib/grcpal/venv/bin/pip install "grc-pal[portal] @ git+https://github.com/seattlespicybite/grc-pal@main"
-# /etc/grcpal.env: GRCPAL_ENV=production, GRCPAL_SECRET, GRCPAL_ENCRYPTION_KEY, GRCPAL_PUBLIC_URL,
-#                  GRCPAL_SQLITE and GRCPAL_EVIDENCE_DIR (see the guide)
-grcpal create-admin you@example.com --name "Your Name"     # asks for the password twice
-uvicorn grcpal.portal.app:app --host 127.0.0.1 --port 8000 --proxy-headers   # as a systemd service
-```
-
-Put it behind HTTPS (Caddy, nginx or IIS with your certificate) and add the cron jobs for daily
-collection, monthly recurring activities, weekly reminders and nightly backups. The guide has the
-complete service file, settings file and crontab.
-
-### Docker, in short
+### VM, in short
 
 ```bash
-docker build -t grc-pal .
-docker run -d --name grcpal --restart unless-stopped -p 127.0.0.1:8000:8000 \
-  -v grcpal-data:/data --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
-  -e GRCPAL_PUBLIC_URL=https://grc.internal.example.com \
-  -e GRCPAL_SQLITE=/data/grcpal.db -e GRCPAL_EVIDENCE_DIR=/data/evidence \
-  --env-file /etc/grcpal.secrets grc-pal
-docker exec -it grcpal grcpal create-admin you@example.com --name "Your Name"
+sudo ./install.sh --hostname grc.internal.example.com --version 0.3.0   # from the release's installer kit
+sudo grcpal create-admin you@example.com --name "Your Name"
 ```
 
-The image runs as a non-root user in production mode with local accounts. `/etc/grcpal.secrets`
-holds `GRCPAL_SECRET` and `GRCPAL_ENCRYPTION_KEY`.
+It installs Docker, Caddy (HTTPS), a firewall and automatic security updates, then GRC-pal with its
+scheduled jobs, nightly backups and the updater. Then open Administration → Backups and download the
+recovery kit.
 
 ### Azure, in short
 
@@ -155,7 +140,11 @@ grcpal init acme-grc --org "Acme Inc"     # your program repository; push it to 
 ```
 
 About 10 minutes. It creates the storage account, the portal on Azure Container Apps behind Entra
-ID sign-in, logs, scheduled jobs and a keyless identity for your repository's workflows.
+ID sign-in, logs, scheduled jobs (including backups), and keyless identities for your repository's
+collector and update workflows.
+
+The Python install (`pip install`, `grcpal serve`) and Docker Compose are for trying GRC-pal and for
+development only.
 
 ### After deploying (any option)
 

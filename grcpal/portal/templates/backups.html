@@ -59,12 +59,20 @@
 <td class="actions-cell">
 <form method="post" action="/backups/verify" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="destination" value="{{ d.id }}"><input type="hidden" name="name" value="{{ b.name }}"><button class="btn ghost small" type="submit">Check</button></form>
 <form method="post" action="/backups/download" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="destination" value="{{ d.id }}"><input type="hidden" name="name" value="{{ b.name }}"><button class="btn ghost small" type="submit">Download</button></form>
-</td></tr>{% endfor %}
+</td></tr>
+{% if data.can_restore and d.id == 'local' and b.summary.verified_ok %}<tr class="restore-row"><td colspan="6">
+<details><summary>Restore this backup</summary>
+<form method="post" action="/backups/restore" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="destination" value="{{ d.id }}"><input type="hidden" name="name" value="{{ b.name }}">
+<p class="sub">Everything goes back to {{ when(b.created.isoformat()) }} UTC: changes and evidence added after that are no longer shown. A safety backup is taken first and today's data is kept aside on the server, so this can be undone. GRC-pal is unavailable for a few minutes.</p>
+<label for="c-{{ loop.index }}">Type RESTORE to confirm</label><input id="c-{{ loop.index }}" name="confirm" autocomplete="off" required pattern="RESTORE">
+<div class="actions"><button class="btn danger" type="submit">Restore</button></div></form></details></td></tr>{% endif %}
+{% endfor %}
 </tbody></table>{% else %}<div class="empty">No backups here yet.</div>{% endif %}
 </section>
 {% endfor %}
 
 <section class="card"><h2>Restore</h2>
+{% if data.can_restore %}<p>To go back to a backup on this server, open <strong>Restore this backup</strong> under it in the list above.</p>{% endif %}
 <p>To rebuild on a clean machine, install GRC-pal, copy a backup file and your recovery kit to the server, and run:</p>
 <p class="mono">grcpal backup restore FILE.grcbak --kit recovery-kit.json</p>
 <p class="sub">Restore checks the whole file first and only fills an empty instance or a new folder, so it can never overwrite data. Everyone signs in again afterwards with their existing accounts. Details: docs/operations.md, "Restore".</p>

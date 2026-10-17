@@ -61,3 +61,45 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes
+      - name: VM installer kit (install.sh, updater, systemd units, update signing public key)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          tar -czf "grcpal-vm-installer-${TAG#v}.tar.gz" -C deploy vm
+          gh release upload "$TAG" "grcpal-vm-installer-${TAG#v}.tar.gz" --repo "$GITHUB_REPOSITORY"
+      - name: Signed update file for VM installs (.grcupdate, linux/amd64)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/grc-pal
+          DIGEST: ${{ steps.build.outputs.digest }}
+          GRCPAL_UPDATE_SIGNING_KEY: ${{ secrets.GRCPAL_UPDATE_SIGNING_KEY }}
+        run: |
+          if [ -z "$GRCPAL_UPDATE_SIGNING_KEY" ]; then
+            echo "::warning::The GRCPAL_UPDATE_SIGNING_KEY secret is not set, so no signed update file was made (docs/deploy-vm.md, 'Release signing key')"
+            exit 0
+          fi
+          if ! grep -q "BEGIN PUBLIC KEY" deploy/vm/update-signing.pub; then
+            echo "::error::deploy/vm/update-signing.pub is empty: VMs could not check this update file. Commit the public key first."
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          REF="$IMAGE:$VERSION"
+          docker pull --platform linux/amd64 "$IMAGE@$DIGEST"
+          docker tag "$IMAGE@$DIGEST" "$REF"
+          docker save -o image.tar "$REF"
+          # The image ID a VM's Docker reports after `docker load` is the digest of the image config inside the file.
+          IMAGE_ID=$(python3 - <<'PY'
+          import json, tarfile
+          with tarfile.open("image.tar") as t:
+              cfg = json.load(t.extractfile("manifest.json"))[0]["Config"]
+          print("sha256:" + cfg.rsplit("/", 1)[-1].removesuffix(".json"))
+          PY
+          )
+          printf 'GRC-pal %s. Release notes: %s/%s/releases/tag/%s\n' "$VERSION" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$TAG" > notes.txt
+          grcpal update bundle --out "grcpal-$VERSION.grcupdate" --image-tar image.tar --version "$VERSION" \
+            --image-ref "$REF" --image-id "$IMAGE_ID" --notes-file notes.txt
+          grcpal update verify "grcpal-$VERSION.grcupdate" --public-key deploy/vm/update-signing.pub
+          sha256sum "grcpal-$VERSION.grcupdate" > "grcpal-$VERSION.grcupdate.sha256"
+          gh release upload "$TAG" "grcpal-$VERSION.grcupdate" "grcpal-$VERSION.grcupdate.sha256" --repo "$GITHUB_REPOSITORY"

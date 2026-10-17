@@ -1,0 +1,67 @@
+name: GRC-pal update (monthly, Azure)
+# Patch releases install on the 8th of each month. Feature (minor) and major releases install only when a
+# person runs this workflow with a version: that run, and the environment approval if you require one, is the
+# change record. Each run backs up first, tries the new version on a copy, checks it before it gets traffic and
+# keeps the previous version ready (see docs/deploy-azure.md, "Updates").
+# Setup: deploy.sh sets the variables; create the environment "grcpal-update" (Settings > Environments) and,
+# to approve every update, add required reviewers there.
+on:
+  schedule:
+    - cron: "23 11 8 * *"   # 07:23 America/New_York (EDT) on the 8th
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to install, e.g. 0.3.0 (empty: latest patch release only)"
+        required: false
+        default: ""
+      major:
+        description: "Allow a major release (read its release notes first)"
+        type: boolean
+        default: false
+      rollback:
+        description: "Go back to the previous version instead"
+        type: boolean
+        default: false
+permissions: {}
+concurrency: {group: grcpal-update, cancel-in-progress: false}
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    environment: grcpal-update   # the only place the updater identity can be used from
+    permissions:
+      id-token: write   # OIDC login to Azure, no stored secrets
+      contents: read
+    env:
+      NAME: ${{ vars.GRCPAL_INSTANCE }}
+    steps:
+      - uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2.3.1
+        with:
+          client-id: ${{ vars.AZURE_UPDATER_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Installed version (its own update script runs the update)
+        id: current
+        run: |
+          APP_ID=$(az containerapp show -g "rg-grcpal-$NAME" -n "grcpal-$NAME" --query id -o tsv)
+          V=$(az tag list --resource-id "$APP_ID" --query 'properties.tags."grcpal-version"' -o tsv)
+          [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Unknown installed version; run deploy/azure/update.sh by hand once"; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: seattlespicybite/grc-pal
+          ref: v${{ steps.current.outputs.version }}
+          path: grc-pal
+          persist-credentials: false
+      - name: Update
+        env:
+          GH_TOKEN: ${{ github.token }}   # build provenance check (gh attestation verify)
+          VERSION: ${{ inputs.version }}
+          MAJOR: ${{ inputs.major }}
+          ROLLBACK: ${{ inputs.rollback }}
+        run: |
+          cd grc-pal
+          if [ "$ROLLBACK" = "true" ]; then exec ./deploy/azure/update.sh --name "$NAME" --rollback --yes; fi
+          ARGS=(--name "$NAME" --yes)
+          if [ -n "$VERSION" ]; then ARGS+=(--version "$VERSION"); else ARGS+=(--auto); fi
+          if [ "$MAJOR" = "true" ]; then ARGS+=(--major); fi
+          ./deploy/azure/update.sh "${ARGS[@]}"

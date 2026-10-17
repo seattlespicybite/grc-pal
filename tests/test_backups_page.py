@@ -243,3 +243,102 @@ def test_blob_destination_is_write_once(site):
         dest.delete(result.name)
     import tempfile
     assert not [p for p in os.listdir(tempfile.gettempdir()) if p.startswith(("grcpal-backup-", "grcpal-verify-"))]
+
+
+# ================================================================ Updates page and in-app restore (VM)
+@pytest.fixture()
+def vm_site(site, monkeypatch):
+    portal, client, tmp = site
+    (tmp / "requests").mkdir()
+    (tmp / "state").mkdir()
+    monkeypatch.setenv("GRCPAL_UPDATE_REQUESTS", str(tmp / "requests"))
+    monkeypatch.setenv("GRCPAL_UPDATE_STATE", str(tmp / "state"))
+    return portal, client, tmp
+
+
+def requests_in(tmp):
+    return [json.loads(p.read_text()) for p in sorted((tmp / "requests").glob("*.json"))]
+
+
+def test_approve_only_what_the_updater_offered(vm_site):
+    portal, client, tmp = vm_site
+    with pytest.raises(Invalid, match="not waiting"):
+        portal.approve_update(ADMIN, "0.3.0")
+    (tmp / "state" / "available.json").write_text(json.dumps({"version": "0.3.0", "kind": "minor", "notes": "New"}))
+    as_(client, ADMIN)
+    page = client.get("/updates")
+    assert "Approve and install 0.3.0" in page.text
+    r = client.post("/updates/approve", data={"version": "0.3.0", "csrf": csrf(client, "/updates")}, follow_redirects=False)
+    assert r.status_code == 303
+    assert requests_in(tmp) == [{**requests_in(tmp)[0], "action": "apply", "version": "0.3.0", "by": ADMIN.email}]
+    assert portal.log.records()[-1]["action"] == "update.approved"
+    with pytest.raises(Invalid):
+        portal.approve_update(ADMIN, "9.9.9")
+
+
+@pytest.mark.parametrize("who", [CONTRIB, AUDITOR])
+def test_updates_are_admin_only(vm_site, who):
+    portal, client, tmp = vm_site
+    (tmp / "state" / "available.json").write_text(json.dumps({"version": "0.3.0", "kind": "minor"}))
+    with pytest.raises(Forbidden):
+        portal.approve_update(who, "0.3.0")
+    with pytest.raises(Forbidden):
+        portal.set_update_policy(who, False, False)
+    assert as_(client, who).get("/updates").status_code == 403
+    assert requests_in(tmp) == []
+
+
+def test_policy_request_is_audited(vm_site):
+    portal, _, tmp = vm_site
+    portal.set_update_policy(ADMIN, auto_patch=False, online=True)
+    assert requests_in(tmp)[0]["auto_patch"] is False and requests_in(tmp)[0]["online"] is True
+    assert portal.log.records()[-1]["action"] == "update.policy_requested"
+
+
+def test_status_and_history_from_the_updater_are_shown(vm_site):
+    portal, client, tmp = vm_site
+    (tmp / "state" / "status.json").write_text(json.dumps({"state": "rolled_back", "message": "Back on 0.2.0: self-test failed",
+                                                           "at": "2026-10-15T01:00:00+00:00"}))
+    (tmp / "state" / "history.jsonl").write_text(json.dumps({"at": "2026-10-15T01:00:00+00:00", "event": "update.rolled_back",
+                                                             "from": "0.3.0", "to": "0.2.0"}) + "\n")
+    page = as_(client, ADMIN).get("/updates").text
+    assert "Back on 0.2.0" in page and "update rolled back" in page
+
+
+def test_in_app_restore_needs_a_checked_backup_and_typed_confirmation(vm_site):
+    portal, client, tmp = vm_site
+    portal.backup_now(ADMIN, "local")
+    name = next((tmp / "backups").glob("*.grcbak")).name
+    with pytest.raises(Invalid, match="RESTORE"):
+        portal.request_restore(ADMIN, "local", name, "yes")
+    with pytest.raises(Invalid, match="Unknown"):
+        portal.request_restore(ADMIN, "local", "../grcpal.db", "RESTORE")
+    with pytest.raises(Forbidden):
+        portal.request_restore(CONTRIB, "local", name, "RESTORE")
+    as_(client, ADMIN)
+    assert "Restore this backup" in client.get("/backups").text
+    r = client.post("/backups/restore", data={"destination": "local", "name": name, "confirm": "RESTORE",
+                                              "csrf": csrf(client, "/backups")}, follow_redirects=False)
+    assert r.status_code == 303 and "/updates" in r.headers["location"]
+    assert requests_in(tmp)[-1]["action"] == "restore" and requests_in(tmp)[-1]["backup"] == name
+    assert portal.log.records()[-1]["action"] == "restore.requested"
+
+
+def test_unchecked_backup_cannot_be_restored(vm_site):
+    portal, _, tmp = vm_site
+    folder = tmp / "backups"
+    folder.mkdir()
+    name = backup_store.file_name("acme", "manual")
+    (folder / name).write_bytes(b"x")  # no summary: never checked
+    with pytest.raises(Invalid, match="Check this backup first"):
+        portal.request_restore(ADMIN, "local", name, "RESTORE")
+
+
+def test_without_the_vm_updater_there_is_no_in_app_restore(site):
+    portal, client, tmp = site
+    portal.backup_now(ADMIN, "local")
+    name = next((tmp / "backups").glob("*.grcbak")).name
+    with pytest.raises(Invalid, match="VM updater"):
+        portal.request_restore(ADMIN, "local", name, "RESTORE")
+    assert "Restore this backup" not in as_(client, ADMIN).get("/backups").text
+    assert "Manual installation" in client.get("/updates").text

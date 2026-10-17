@@ -31,6 +31,43 @@ All notable changes are listed here. The project follows [semantic versioning](h
   "not performed" or "not applicable" as Missed.
 
 ### Added
+- **VM installs (Debian 13 minimal + Docker)**: `deploy/vm/install.sh` installs only docker.io, Caddy
+  (HTTPS), nftables (firewall: SSH, HTTP, HTTPS), unattended-upgrades and Python's cryptography from Debian,
+  keeps all data in `/var/lib/grcpal`, runs the portal as a non-root, read-only container on 127.0.0.1, and
+  sets up systemd timers for the jobs, the hourly backup runner and the monthly update check. It installs from
+  a version, from an offline update file, or rebuilds from a backup and recovery kit. Guide:
+  `docs/deploy-vm.md`. The Python and plain Docker setups are now for trying GRC-pal and development only.
+- **Signed update files** (`.grcupdate`): the image plus an Ed25519-signed manifest, built by the release
+  workflow when the `GRCPAL_UPDATE_SIGNING_KEY` secret is set; the release also carries the VM installer kit.
+- **VM updater** (`grcpal-update`, runs on the host, never inside the app): the running version checks the
+  signature and checksum; mandatory checked backup; trial of the new version on a copy of the data; switch;
+  health gate (portal answers; data model, audit chains, evidence hashes, no table lost rows); automatic
+  rollback of image and data; the last two versions are kept. Patch releases install during the monthly
+  check, feature and major releases after **Approve**. An optional second backup location (for example a
+  network share) is mounted when `GRCPAL_BACKUP_DIR_2_HOST` points to a folder outside `/var/lib/grcpal`.
+- **Updates page** (Administration → Updates, admins): installed version, data model, waiting update with
+  release notes, Approve, automatic patches and downloads on or off, history. On VMs, **Restore this
+  backup** on the Backups page (typed confirmation; a safety backup first, today's data kept aside). The portal
+  only leaves requests; the updater checks them again. Audited: `update.approved`, `update.policy_requested`,
+  `restore.requested`, plus the updater's `update.applied`, `update.trial_failed`, `update.rolled_back`,
+  `restore.completed`.
+- **Azure updates** (`deploy/azure/update.sh` and the program repository's monthly `grcpal-update.yml`
+  workflow): image pinned by digest with a build provenance check, backup with the current version, trial of
+  the new version on a copy of the tables (`grcpal update trial`), new revision with no traffic, health gate
+  (`/healthz` and `grcpal update selftest-saved`), then traffic moves; `--rollback` returns to the revision
+  labelled `previous`. Patch releases only on the schedule; feature and major releases need a person to run
+  the workflow with the version. The updater identity is usable only from the repository's `grcpal-update`
+  environment and may change only the container app and its jobs.
+- **Azure backups**: a `backups` container with time-based write protection (35 days by default), a backup
+  key secret kept across re-deployments, and an hourly backup job. `deploy.sh --restore-from FILE --kit KIT`
+  builds a new instance from a backup. `grcpal backup restore NAME` also finds a backup by name in the
+  instance's backup locations.
+
+### Changed (deployment)
+- Azure Container Apps now runs in multiple-revision mode (needed for checked updates).
+- `deploy.sh` never changes the running version: without `--image` it keeps the image that is running, or
+  uses this checkout's version for a new instance (instead of `:latest`).
+
 - **Edit the calendar in the portal**: add, edit, retire and delete activities; tick the months they are
   due, the due day (1st, 15th or last day) and any number of linked controls at once. Schedule edits apply
   from the current month on (versioned in the new `calendarversions` table); past months never change.

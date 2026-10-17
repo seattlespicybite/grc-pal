@@ -130,11 +130,87 @@ az storage container immutability-policy show -g rg-grcpal-acme --account-name <
 az storage container immutability-policy lock -g rg-grcpal-acme --account-name <storage> -c evidence --if-match <etag>
 ```
 
-## Updating
+## Backups
 
-- **New GRC-pal version:** re-run `deploy.sh` with `--image ghcr.io/seattlespicybite/grc-pal:<version>`
-  (or `az containerapp update -n grcpal-acme -g rg-grcpal-acme --image ...`). Also set the
-  repository variable `GRCPAL_VERSION` to the same tag so workflows match.
+`deploy.sh` sets up everything: a `backups` container whose files are write-protected for 35 days
+(`backupRetentionDays`), a backup key stored as a Container Apps secret, and an hourly backup job that runs
+the schedule and any **Back up now** from **Administration → Backups**. The default is a nightly backup,
+kept 7 days, 4 weeks and 12 months. A backup cannot be changed or deleted before its protection ends, even by
+an admin, which also protects against ransomware.
+
+Download the **recovery kit** from the Backups page after the first sign-in and keep it in your password
+manager. It holds the backup key and the app key; with a backup file it rebuilds the instance anywhere.
+
+Evidence itself is also in write-once storage (step 6) and geo-redundant by default, so the backup file is
+your second, portable copy.
+
+## Updates
+
+Updates run from the **GRC-pal update** workflow in your program repository (`grcpal init` adds it as
+`.github/workflows/grcpal-update.yml`; for an existing repository copy it from
+`grcpal/starter/github/workflows/`. `deploy.sh --github-repo` sets its variables). The portal never
+updates itself. One-time setup: in GitHub → your program repository → Settings → Environments, create
+**`grcpal-update`**. Add yourself as a required reviewer if every update should wait for your approval.
+The updater identity can only be used by workflow runs in that environment, and may change only this
+container app and its jobs (plus using its Container Apps environment).
+
+| Release | Installs |
+| --- | --- |
+| Patch (0.3.0 → 0.3.1) | Automatically on the 8th of each month |
+| Feature (0.3 → 0.4) | When someone runs the workflow with the version number (Actions → GRC-pal update → Run workflow) |
+| Major (0.x → 1.0) | Same, with **major** ticked, after reading the release notes |
+
+What every update does (users stay on the current version until the last step):
+
+1. Pins the new image by its digest and checks its build provenance (built by GRC-pal's release workflow).
+2. Takes a backup with the current version and checks it.
+3. **Trial:** the new version copies every table into a scratch database, runs its data upgrades there and
+   checks the copy. A failure stops the update with nothing changed.
+4. Starts the new version as a new revision **with no traffic**. It applies its data upgrades, which only add,
+   so the current version keeps working on the same data.
+5. **Health check:** the new revision must answer, and its self-test on the live data must pass (data model,
+   every audit chain, no table with fewer rows than before).
+6. Moves all traffic to the new revision and switches the jobs to it. The previous revision stays ready
+   (label `previous`).
+
+If step 4 or 5 fails, traffic never moves and the new revision is switched off. Each result is in the audit
+log: `update.applied`, `update.trial_failed`, `update.rolled_back`.
+
+**Roll back:** run the workflow with **rollback** ticked, or `./deploy/azure/update.sh --name acme --rollback`.
+Traffic and jobs go back to the previous revision; the data needs nothing because updates only add.
+
+From your own computer (Azure CLI and GitHub CLI signed in):
+
+```bash
+./deploy/azure/update.sh --name acme --status            # running, previous and latest versions
+./deploy/azure/update.sh --name acme --version 0.3.1     # install a release (asks first)
+./deploy/azure/update.sh --name acme --rollback
+```
+
+`deploy.sh` never changes the version: re-running it (for example to rotate the sign-in secret) keeps the
+version that is running.
+
+**Instances on 0.2.0** (before the updater existed): move to 0.3.0 once with
+`./deploy/azure/deploy.sh --name acme --admins you@acme.com --image ghcr.io/seattlespicybite/grc-pal:0.3.0`
+after a backup; from then on the workflow does it.
+
+## Rebuild from a backup
+
+To recover from a lost resource group or subscription, or to move to another region, build a **new** instance
+from a backup file and its recovery kit:
+
+```bash
+./deploy/azure/deploy.sh --name acme2 --admins you@acme.com \
+    --restore-from grcpal-acme-20261001T020000Z-scheduled.grcbak --kit recovery-kit.json
+```
+
+It deploys a new, empty instance with the kit's keys, uploads the backup to its `backups` container (giving
+you temporary permission there), and runs the restore as a job. The restore checks the whole file and
+writes nothing unless it is intact. Point your users to the new address afterwards. If the old instance is
+still running, retire it only after you have checked the new one.
+
+## Other changes
+
 - **Catalog or policy change:** pull request in your program repository; merging publishes it.
 - **Rotate the sign-in secret:** re-run `deploy.sh` once a year (it rotates automatically).
 

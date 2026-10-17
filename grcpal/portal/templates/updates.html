@@ -1,0 +1,55 @@
+{% extends "base.html" %}{% from "_macros.html" import when %}{% block title %}Updates{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Updates</h1>
+<div class="sub">GRC-pal {{ data.version }}{% if data.data_model.schema_version %} · data model {{ data.data_model.schema_version }}{% endif %}</div></div>
+<a class="btn ghost small" href="/backups">Backups</a></div>
+
+{% if data.data_model.error %}<div class="flash err" role="alert">{{ data.data_model.error }}</div>{% endif %}
+
+{% if data.deployment == 'vm' %}
+{% set st = data.status %}
+{% if st.state %}<section class="card{{ ' backup-warn' if st.state in ('failed', 'rolled_back', 'waiting') }}"><h2>Status</h2>
+<p><span class="pill {{ 'ok' if st.state in ('done', 'idle') else 'error' if st.state in ('failed', 'rolled_back') else 'pending' }}">{{ st.state|replace('_', ' ')|capitalize }}</span> {{ st.message }}</p>
+<p class="sub">{{ when(st.at) }} UTC</p></section>{% endif %}
+
+{% if data.pending %}<section class="card"><h2>Waiting for the updater</h2><ul>
+{% for r in data.pending %}<li>{{ r.action|capitalize }}{% if r.version %} {{ r.version }}{% endif %}{% if r.backup %} {{ r.backup }}{% endif %}, asked by {{ r.by }} at {{ when(r.at) }} UTC</li>{% endfor %}
+</ul><p class="sub">The updater on the server picks requests up within a minute.</p></section>{% endif %}
+
+{% set av = data.available %}
+{% if av.version %}<section class="card"><h2>GRC-pal {{ av.version }} is ready</h2>
+<p>{{ {'patch': 'A patch release (fixes only, no change to stored data).', 'minor': 'A feature release. It may add to the data model; the previous version can still read the data, so going back stays easy.', 'major': 'A major release. Take a VM snapshot first (docs/deploy-vm.md). Going back needs the backup taken before the update.'}[av.kind] }}</p>
+{% if av.notes %}<details><summary>Release notes</summary><pre class="note">{{ av.notes }}</pre></details>{% endif %}
+<p class="sub mt">Before switching, the updater takes and checks a backup, tries the new version on a copy of the data, and after the switch checks the data, the audit log and the evidence. If anything fails it goes back to {{ data.version }} automatically.</p>
+<form method="post" action="/updates/approve" class="actions"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="version" value="{{ av.version }}">
+<button class="btn" type="submit">Approve and install {{ av.version }}</button></form></section>
+{% else %}<section class="card"><h2>No update waiting</h2><p class="sub">Copy a signed update file (grcpal-X.Y.Z.grcupdate) to /var/lib/grcpal/updates on the server; the monthly check (or <span class="mono">sudo grcpal-update check</span>) finds it.</p></section>{% endif %}
+
+<section class="card"><h2>Settings</h2>
+<form method="post" action="/updates/policy"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label class="check"><input type="checkbox" name="auto_patch"{% if data.policy.auto_patch %} checked{% endif %}> Install patch releases automatically during the monthly check (recommended)</label>
+<label class="check"><input type="checkbox" name="online"{% if data.policy.online %} checked{% endif %}> Download new releases from GitHub (needs internet access from the server)</label>
+<p class="sub">Feature and major releases always wait for an admin to approve them here.</p>
+<div class="actions"><button class="btn" type="submit">Save</button></div></form></section>
+
+<section class="card table-wrap"><h2>History</h2>
+{% if data.history %}<table><thead><tr><th>When</th><th>What</th><th>Details</th></tr></thead><tbody>
+{% for e in data.history %}<tr><td class="nowrap">{{ when(e.at) }}</td><td>{{ e.event|replace('.', ' ')|replace('_', ' ') }}</td>
+<td class="sub">{% if e.from %}{{ e.from }} → {{ e.to }}{% endif %}{% if e.backup %} {{ e.backup }}{% endif %}{% if e.by %} · {{ e.by }}{% endif %}{% if e.reason %} · {{ e.reason }}{% endif %}</td></tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty">No updates yet.</div>{% endif %}</section>
+
+{% elif data.deployment == 'azure' %}
+<section class="card"><h2>Updates on Azure</h2>
+<p>This instance runs GRC-pal {{ data.version }}. Updates run from your program repository's <strong>GRC-pal update</strong> workflow (Actions tab), not from this page, so the portal itself can never change its own software.</p>
+<ul>
+<li>Patch releases install on the 8th of each month. Feature and major releases install only when someone runs the workflow with the version number.</li>
+<li>Every update takes a backup first and tries the new version on a copy of the data. The new version then runs beside the current one with no users, and must pass its checks before it takes over.</li>
+<li>The previous version stays ready: run the workflow with <strong>rollback</strong> to go back.</li>
+</ul>
+<p class="sub">Each update, failed trial and rollback appears in the audit log (update.applied, update.trial_failed, update.rolled_back). Details: docs/deploy-azure.md, "Updates".</p></section>
+{% else %}
+<section class="card"><h2>Manual installation</h2>
+<p>This copy of GRC-pal was not installed with the VM installer, so updates are manual: take a backup, install the new version, start it. Migrations run on start and refuse data they cannot read.</p>
+<p class="sub">For automatic, checked updates with rollback, use the VM installer (docs/deploy-vm.md).</p></section>
+{% endif %}
+{% endblock %}
