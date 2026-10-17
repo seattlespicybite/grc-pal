@@ -60,9 +60,13 @@ file contents.
 
 - Keep evidence free of secrets and unnecessary personal data; redact screenshots.
 - Review GRC-pal users quarterly (`/users.csv`) and disable leavers.
-- Lock the evidence retention policy after the first stable week.
-- Restrict who holds Owner or Storage roles on the resource group; those people could delete
-  the instance (but not locked evidence).
+- Lock the evidence and backup retention policies after the first stable week.
+- On Azure, require phishing-resistant MFA and a compliant device for the GRC-pal app with
+  Conditional Access, and assignment to a group ([deploy-azure.md, Step 3b](deploy-azure.md)).
+- Save the backup recovery kit in a password manager, apart from the backups; restore-test once a year.
+- Deploy with `--alert-email` and act on its alerts (missed backup, lock or role changes).
+- Restrict who holds Owner or Storage roles on the resource group; those people could remove the
+  delete lock and delete the instance (but not locked evidence or backups).
 - Rotate the sign-in secret yearly (`deploy.sh` does it) and keep `GRCPAL_SECRET` secret.
 - Keep the image updated; watch the repository's security advisories.
 
@@ -83,3 +87,20 @@ Conditional Access. Also:
 Malware scanning of uploads (use Microsoft Defender for Storage malware scanning if licensed),
 customer-managed keys, and private networking. See the roadmap in
 [compare-and-roadmap.md](compare-and-roadmap.md).
+
+**Why the Azure template has no private network or Key Vault (yet).**
+
+- *Private endpoints for storage.* Storage already refuses keys and anonymous access; every request
+  needs an Entra token for an identity with a storage role. A private endpoint would also block a
+  stolen token used from the internet, which is real defense in depth. But it breaks three things the
+  product relies on: collectors running in GitHub Actions (`--github-repo`) write to storage from the
+  internet, admins run `grcpal users`, `audit verify` and restores from their own machine, and moving an
+  existing Container Apps environment into a network means recreating it with a new URL. It adds
+  roughly $15-25 a month in endpoints and DNS (check current pricing). Add it when collectors run inside Azure and admin work moves to
+  a jump host or Azure Cloud Shell in the same network.
+- *Key Vault for secrets.* The three app secrets live as Container Apps secrets: encrypted at rest,
+  never shown in the portal or logs, readable only by people with write access to the app (the same
+  people who could change the image anyway). Key Vault would add per-read access logs and rotation
+  workflows, at the cost of another resource, more role assignments and a harder key-reuse step in
+  `deploy.sh`. Worth it when several people administer Azure or your auditor asks for secret-access
+  logs.

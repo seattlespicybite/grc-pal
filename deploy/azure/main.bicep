@@ -1,6 +1,7 @@
 // GRC-pal on Azure: one instance (one organization) per resource group.
 //
-//   Storage account   evidence (write-once container), inbox, portal tables. Entra auth only.
+//   Storage account   evidence and backups (write-once containers), inbox, portal tables. Entra auth only.
+//                     Delete lock on by default; a lifecycle rule removes backups after their retention.
 //   Container App     the portal, consumption plan, scales to zero, Entra sign-in in front.
 //   Log Analytics     structured app logs, 30-day retention, daily cap.
 //   Identities        portal (managed), collectors (GitHub OIDC, optional). No stored keys.
@@ -75,6 +76,23 @@ param backupKey string
 @description('Days each backup file is write-protected in the backups container (protects against deletion and ransomware).')
 @minValue(1)
 param backupRetentionDays int = 35
+
+@description('How often the backup job checks for due work (cron, UTC). It makes at most one scheduled backup per day (or week) per the Backups page; the checks also start "Back up now" requests.')
+param backupCheckCron string = '*/15 * * * *'
+
+@description('Put a delete lock on the storage account (protects evidence and backups from deletion of the whole account). Remove the lock first to retire an instance.')
+param lockStorage bool = true
+
+@description('Hours a sign-in lasts before the user goes back to Entra ID, where Conditional Access (MFA, compliant device) is checked again.')
+@minValue(1)
+@maxValue(24)
+param sessionHours int = 8
+
+@description('Email (or distribution list) for alerts: no successful backup, and changes to locks, role assignments, write-once policies or sign-in settings. Empty = no alerts.')
+param alertEmail string = ''
+
+@description('Alert when no successful scheduled backup was logged for this long (ISO 8601). Use P8D for a weekly schedule.')
+param backupAlertWindow string = 'P2D'
 
 @description('Optional allow-list of source IP ranges (CIDR). Empty = reachable from anywhere, still behind sign-in.')
 param allowedIpRanges array = []
@@ -156,6 +174,39 @@ resource backupsImmutability 'Microsoft.Storage/storageAccounts/blobServices/con
   properties: {
     immutabilityPeriodSinceCreationInDays: backupRetentionDays
     allowProtectedAppendWrites: false
+  }
+}
+
+// Old backups are removed by storage, not by the app (the app cannot delete write-once files). Without this
+// rule every daily backup would be kept, and paid for, forever.
+resource lifecycle 'Microsoft.Storage/storageAccounts/managementPolicies@2023-05-01' = {
+  parent: storage
+  name: 'default'
+  properties: {
+    policy: {
+      rules: [
+        {
+          name: 'expire-backups'
+          enabled: true
+          type: 'Lifecycle'
+          definition: {
+            filters: { blobTypes: ['blockBlob'], prefixMatch: ['backups/'] }
+            actions: { baseBlob: { delete: { daysAfterCreationGreaterThan: backupRetentionDays + 1 } } }
+          }
+        }
+      ]
+    }
+  }
+  dependsOn: [backups]
+}
+
+// Blocks deleting the account (and the resource group) until the lock is removed. Data access is unchanged.
+resource storageLock 'Microsoft.Authorization/locks@2020-05-01' = if (lockStorage) {
+  scope: storage
+  name: 'grcpal-no-delete'
+  properties: {
+    level: 'CanNotDelete'
+    notes: 'GRC-pal evidence and backups. Remove this lock only to retire the instance.'
   }
 }
 
@@ -348,14 +399,15 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
 
 
 // Scheduled jobs on the same image and identity: daily collection and checks (with the settings saved on the
-// Configuration page), weekly overdue reminders, monthly recurring tasks, and the hourly backup runner (the
-// schedule and "Back up now" from the Backups page; also used by update.sh for the pre-update backup and checks).
+// Configuration page), weekly overdue reminders, monthly recurring tasks, and the backup runner every 15 minutes
+// (the schedule and "Back up now" from the Backups page; a check with nothing due exits in seconds; also used by
+// update.sh for the pre-update backup and checks).
 // The backup job is larger: a backup is written to the job's local disk before it is uploaded.
 var jobs = [
   { name: 'collect', cron: '17 6 * * *', args: ['collect', '--all', '--checks'], cpu: '0.25', memory: '0.5Gi' }
   { name: 'remind', cron: '0 13 * * 1', args: ['remind', '--overdue'], cpu: '0.25', memory: '0.5Gi' }
   { name: 'tasks', cron: '0 12 1 * *', args: ['tasks'], cpu: '0.25', memory: '0.5Gi' }
-  { name: 'backup', cron: '7 * * * *', args: ['backup', 'run-due'], cpu: '1.0', memory: '2Gi' }
+  { name: 'backup', cron: backupCheckCron, args: ['backup', 'run-due'], cpu: '1.0', memory: '2Gi' }
 ]
 
 resource scheduled 'Microsoft.App/jobs@2024-03-01' = [for j in jobs: {
@@ -446,6 +498,9 @@ resource auth 'Microsoft.App/containerApps/authConfigs@2024-03-01' = {
       excludedPaths: ['/healthz']
     }
     httpSettings: { requireHttps: true }
+    login: {
+      cookieExpiration: { convention: 'FixedTime', timeToExpiration: '${padLeft(string(sessionHours), 2, '0')}:00:00' }
+    }
     identityProviders: {
       azureActiveDirectory: {
         enabled: true
@@ -459,6 +514,73 @@ resource auth 'Microsoft.App/containerApps/authConfigs@2024-03-01' = {
         }
       }
     }
+  }
+}
+
+// ------------------------------------------------------------------ alerts (optional: alertEmail)
+resource alertGroup 'Microsoft.Insights/actionGroups@2023-01-01' = if (!empty(alertEmail)) {
+  name: take('ag-${appName}', 64)
+  location: 'global'
+  properties: {
+    groupShortName: 'grcpal'
+    enabled: true
+    emailReceivers: [{ name: 'grcpal-admins', emailAddress: alertEmail, useCommonAlertSchema: true }]
+  }
+}
+
+// No successful scheduled backup logged by the backup job (grcpal backup run-due prints one JSON line).
+resource backupAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-preview' = if (!empty(alertEmail)) {
+  name: 'grcpal-${instanceName}-no-backup'
+  location: location
+  properties: {
+    displayName: 'GRC-pal ${instanceName}: no successful backup'
+    description: 'No verified scheduled backup in the window. Check Administration > Backups and the backup job runs.'
+    severity: 2
+    enabled: true
+    scopes: [logs.id]
+    evaluationFrequency: 'PT1H'
+    windowSize: backupAlertWindow
+    criteria: {
+      allOf: [
+        {
+          query: 'ContainerAppConsoleLogs_CL | where Log_s has "backup.run_due" and Log_s contains \'"kind": "scheduled"\' and Log_s contains \'"ok": true\''
+          timeAggregation: 'Count'
+          operator: 'Equal'
+          threshold: 0
+          failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
+        }
+      ]
+    }
+    actions: { actionGroups: [alertGroup.id] }
+  }
+}
+
+// Changes an attacker (or a mistake) would make to weaken protections. Deployments and updates also trigger
+// it, which doubles as a change record.
+var watchedOperations = [
+  'Microsoft.Authorization/locks/delete'
+  'Microsoft.Authorization/roleAssignments/write'
+  'Microsoft.Authorization/roleAssignments/delete'
+  'Microsoft.Storage/storageAccounts/blobServices/containers/immutabilityPolicies/write'
+  'Microsoft.Storage/storageAccounts/blobServices/containers/immutabilityPolicies/delete'
+  'Microsoft.App/containerApps/authConfigs/write'
+  'Microsoft.App/containerApps/write'
+]
+
+resource changeAlert 'Microsoft.Insights/activityLogAlerts@2020-10-01' = if (!empty(alertEmail)) {
+  name: 'grcpal-${instanceName}-security-change'
+  location: 'global'
+  properties: {
+    description: 'A lock, role assignment, write-once policy or sign-in setting changed in this resource group.'
+    enabled: true
+    scopes: [resourceGroup().id]
+    condition: {
+      allOf: [
+        { field: 'category', equals: 'Administrative' }
+        { anyOf: [for op in watchedOperations: { field: 'operationName', equals: op }] }
+      ]
+    }
+    actions: { actionGroups: [{ actionGroupId: alertGroup.id }] }
   }
 }
 

@@ -128,11 +128,12 @@ grcpal backup verify acme-2026-10.grcbak
 **Administration → Backups** does the same without a command line:
 
 - **Back up now** to any configured location. On a VM it runs at once (see Background jobs); on Azure
-  it is queued for the backup job and starts within about 10 minutes, because the portal scales to zero.
+  it is queued for the backup job and starts within about 15 minutes, because the portal scales to zero.
 - **Schedule**: every day (default 02:00 UTC), every Sunday or off. Keeps 7 daily, 4 weekly and
   12 monthly backups plus the last 3 made before updates; older ones are removed after each new
-  backup, but never the newest one that passed its check. Azure keeps backups write-once and its
-  storage lifecycle rule removes old ones.
+  backup, but never the newest one that passed its check. On Azure these keep settings do not
+  apply: backups are write-once, so each is kept `backupRetentionDays` (default 35) and then removed by
+  the storage lifecycle rule.
 - Each backup shows where it is (the path on the server), its size and whether it passed its check.
   **Check** re-verifies it; **Download** saves a copy (recorded in the audit log).
 - **Recovery kit**: a banner asks for it until an admin has downloaded it once.
@@ -149,8 +150,11 @@ Locations are set on the server, never typed in the browser:
 | `GRCPAL_BACKUP_CONTAINER` | Azure: blob container for backups (default `backups`) |
 | `GRCPAL_BACKUP_KEY` / `GRCPAL_BACKUP_KEY_FILE` | The backup key (Azure secret) or its file; on a VM it is created on first use |
 
-The schedule runs from `grcpal backup run-due`, called every hour by the VM timer or the Azure backup
-job. It also starts any queued "Back up now".
+The schedule runs from `grcpal backup run-due`, called every hour by the VM timer or every 15 minutes
+by the Azure backup job. Each call only checks: it makes at most one scheduled backup per day (or week)
+and starts any queued "Back up now". If a backup is still running, the next check skips, so a long
+backup is never made twice. It prints one JSON line (`"event": "backup.run_due"`), which the Azure
+backup alert looks for.
 
 ### Restore
 

@@ -396,7 +396,9 @@ def cmd_backup(args) -> int:
             return 0
         if args.action == "run-due":
             done = _admin_portal(args).run_due_backups()
-            print(json.dumps({"ok": all(d.get("verified") for d in done), "backups": done}, indent=2))
+            # one line, so a log alert can find it (deploy/azure/main.bicep, backup alert)
+            print(json.dumps({"event": "backup.run_due", "ok": all(d.get("verified") for d in done), "backups": done},
+                             default=str))
             return 0 if all(d.get("verified") for d in done) else 2
         kit = backup.load_kit(Path(args.kit).read_text()) if getattr(args, "kit", None) else None
         try:

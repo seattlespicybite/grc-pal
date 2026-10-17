@@ -12,6 +12,7 @@ Safety rules
 """
 from __future__ import annotations
 
+import datetime as dt
 import os
 
 from grcpal import backup, backup_store
@@ -171,9 +172,26 @@ class BackupsMixin:
 
     # ================================================================ scheduled runner (CLI / job)
     def run_due_backups(self, now=None) -> list[dict]:
-        """Called hourly by the VM timer or the Azure backup job: a queued "Back up now", then the schedule."""
+        """Called hourly by the VM timer or every 15 minutes by the Azure backup job: a queued "Back up now",
+        then the schedule. Skips while another run is still working, so a long backup is never made twice."""
         if self.backups_blocker():
             return []
+        now_ = now or backup_store._now()
+        running = self.settings_store.state(backup_store.RUNNING_KEY, None)
+        if running:
+            try:
+                started = dt.datetime.fromisoformat(running["at"])
+            except (KeyError, TypeError, ValueError):
+                started = None
+            if started and now_ - started < backup_store.RUNNING_STALE:
+                return []
+        self.settings_store.set_state(backup_store.RUNNING_KEY, {"at": now_.isoformat()})
+        try:
+            return self._run_due_backups(now)
+        finally:
+            self.settings_store.set_state(backup_store.RUNNING_KEY, None)
+
+    def _run_due_backups(self, now) -> list[dict]:
         done = []
         key = None
         req = self.settings_store.state(backup_store.REQUEST_KEY, None)

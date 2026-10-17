@@ -4,6 +4,25 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Security
+- **Azure backup check every 15 minutes** (was hourly; `backupCheckCron`): still one scheduled backup a day,
+  and "Back up now" starts within about 15 minutes. A check that finds a backup still running skips, so a
+  long backup is never made twice.
+- **Old Azure backups are removed** by a storage lifecycle rule after `backupRetentionDays` (35); before,
+  write-once backups were never deleted and storage grew forever. The Backups page keep settings apply to
+  folder locations (VMs) only; docs corrected.
+- **Delete lock** on the storage account (`lockStorage`, on by default).
+- **Sign-in session lasts 8 hours** (`sessionHours`), after which Entra ID and Conditional Access check the
+  user and device again.
+- **Alerts** with `deploy.sh --alert-email`: no successful backup in 2 days, and changes to locks, role
+  assignments, write-once policies or sign-in settings.
+- `grcpal backup run-due` prints one JSON line (`"event": "backup.run_due"`) so logs and alerts can read it.
+
+### Docs
+- Conditional Access runbook (phishing-resistant MFA, compliant device, group assignment, guests):
+  `docs/deploy-azure.md`, Step 3b. Lock both write-once containers in Step 6. Why private endpoints and
+  Key Vault are not in the template yet: `docs/security.md`.
+
 ### Fixed
 - **Calendar: months you tick now show up straight away**, including months earlier in the year (a new
   activity for March, or extra months added to the vendor review in October, appeared only next year).

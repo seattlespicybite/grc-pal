@@ -5,9 +5,10 @@ organization, in its own resource group.
 
 | Created | Purpose | Typical cost |
 | --- | --- | --- |
-| Storage account | Evidence (write-once), portal data (tables), your published catalog | Cents per GB per month |
-| Container App + 2 scheduled jobs | Portal (scales to zero), weekly reminders, monthly tasks | Usually within the Container Apps monthly free grant |
+| Storage account (delete lock) | Evidence and backups (both write-once), portal data (tables), your published catalog | Cents per GB per month |
+| Container App + 4 scheduled jobs | Portal (scales to zero), daily collection, weekly reminders, monthly tasks, backup check every 15 minutes (one backup a day) | Usually within the Container Apps monthly free grant |
 | Log Analytics workspace | App logs, 30 days, capped at 0.5 GB per day | A few dollars at most |
+| Alerts (with `--alert-email`) | Missed backups; changes to locks, roles, write-once policies, sign-in settings | Cents per month |
 | Managed identities | Portal and (optional) GitHub collectors; no stored keys | Free |
 | Entra app registration | Sign-in | Free |
 
@@ -44,6 +45,8 @@ From a clone of the GRC-pal repository:
 ./deploy/azure/deploy.sh \
   --name acme \
   --admins you@acme.com \
+  --require-assignment \
+  --alert-email security@acme.com \
   --github-repo acme/acme-grc \
   --location eastus2
 ```
@@ -52,7 +55,8 @@ Add `--what-if` first if you want to preview the changes. The script:
 
 1. creates the resource group `rg-grcpal-acme`;
 2. creates the Entra app registration **GRC-pal (acme)** and a sign-in secret (valid one year);
-3. deploys `deploy/azure/main.bicep`: storage, identities, logs, the portal and the jobs;
+3. deploys `deploy/azure/main.bicep`: storage, identities, logs, the portal, the jobs and (with
+   `--alert-email`) the alerts;
 4. sets the sign-in redirect URL;
 5. sets the GitHub repository variables your workflows need (or prints them).
 
@@ -64,12 +68,58 @@ It prints the portal URL at the end.
 
 ## Step 3. Sign in
 
-Open the portal URL and sign in with the email you passed to `--admins`. You are an admin.
+With `--require-assignment`, first do items 1 and 2 of Step 3b (group and assignment, with yourself in
+the group), or Entra ID will refuse your own sign-in. Then open the portal URL and sign in with the email
+you passed to `--admins`. You are an admin.
 
 - Add people under **Users and roles**, or simply assign work: assignees get contributor access
   automatically. Auditors are added with the **Auditor** role (as Entra B2B guests).
-- Only accounts from your Entra directory can sign in (`GRCPAL_ALLOWED_TENANT_IDS`). For an
-  extra gate, re-run the script with `--require-assignment` and assign users to the enterprise app.
+- Only accounts from your Entra directory can sign in (`GRCPAL_ALLOWED_TENANT_IDS`). With
+  `--require-assignment`, only people or groups assigned to the enterprise app can even get a token.
+  Add Conditional Access next.
+
+## Step 3b. Allow only your staff, on managed devices (Conditional Access)
+
+Sign-in happens in Entra ID before any request reaches GRC-pal, so Conditional Access (CA) decides
+who gets in. This needs Entra ID P1 (included in Microsoft 365 E3/E5 and Business Premium) and Intune
+for device compliance.
+
+1. **One group.** Create a security group, e.g. `GRC-pal users`, and add the people who use the
+   portal, yourself included.
+2. **Assign it.** Entra admin center → Enterprise applications → **GRC-pal (acme)** → Users and
+   groups → Add assignment → the group. With `--require-assignment`, anyone not assigned is refused
+   by Entra ID itself (AADSTS50105) and never reaches the portal.
+3. **Create the policy.** Entra admin center → Protection → Conditional Access → New policy:
+
+   | Setting | Value |
+   | --- | --- |
+   | Name | `GRC-pal: phishing-resistant MFA + compliant device` |
+   | Users | Include: `GRC-pal users`. Exclude: *Guest or external users*, and your two emergency (break-glass) accounts |
+   | Target resources | Select resources → **GRC-pal (acme)** |
+   | Grant | Grant access, **Require authentication strength: Phishing-resistant MFA** and **Require device to be marked as compliant**, with **Require all the selected controls** |
+   | Session | Sign-in frequency: 8 hours (match `sessionHours`) |
+   | Enable policy | **Report-only** first |
+
+   Guests (auditors) use their own laptops, which cannot pass "compliant device", so they are
+   excluded above and get a second policy: same target app, Users = *Guest or external users*, grant
+   **Require multifactor authentication** (phishing-resistant if their home directory supports it),
+   sign-in frequency 8 hours. Keep them on the Auditor role (read-only, with an end date).
+4. **Test in report-only for a few days.** Entra → Sign-in logs → filter Application = GRC-pal (acme)
+   → Conditional Access tab; "Report-only: Failure" shows who would be blocked and why.
+5. **Turn it on.** Switch the policy to **On**.
+
+Browsers: device compliance only reaches Entra ID from a supported browser. Edge signed in with the
+work profile works everywhere. Chrome on Windows needs the Intune policy `CloudAPAuthEnabled`; Chrome on
+macOS needs the Microsoft Single Sign On extension. Private/incognito windows always fail the device check.
+
+How long a check lasts: GRC-pal's sign-in cookie expires after `sessionHours` (default 8). Then the
+browser goes back to Entra ID and the CA policy is evaluated again, so a device that fell out of
+compliance or a disabled account loses access within that time. To cut someone off at once: disable
+the account in Entra ID and remove the user under **Users and roles**.
+
+Evidence for your own audit (CC6.1, CC6.2): the CA policy JSON (Graph Explorer:
+`GET /identity/conditionalAccess/policies`), the assignment list of the enterprise app, and a monthly
+sign-in log export filtered to GRC-pal.
 
 ## Step 4. Connect your systems in the portal
 
@@ -119,24 +169,40 @@ the tenant-wide Graph `Mail.Send` permission in Entra ID; that would allow sendi
 Check it: assign yourself a test request; the email should arrive within a minute. Failures are
 written to the audit log (`mail.failed`) and to the app logs.
 
-## Step 6. Lock evidence retention (after a clean week)
+## Step 6. Lock evidence and backup retention (after a clean week)
 
-The `evidence` container has a time-based retention policy that is not locked yet, so you can fix
-mistakes in the first days. Once runs are stable, lock it. **This cannot be undone**: nobody,
-including you, can delete or change evidence until it ages out.
+The `evidence` and `backups` containers have time-based retention policies that are not locked yet, so
+you can fix mistakes in the first days. Once runs are stable, lock both. **This cannot be undone**:
+nobody, including you or someone with your Owner role, can delete or change evidence or backups until
+they age out.
 
 ```bash
-az storage container immutability-policy show -g rg-grcpal-acme --account-name <storage> -c evidence
-az storage container immutability-policy lock -g rg-grcpal-acme --account-name <storage> -c evidence --if-match <etag>
+for c in evidence backups; do
+  ETAG=$(az storage container immutability-policy show -g rg-grcpal-acme --account-name <storage> -c $c --query etag -o tsv)
+  az storage container immutability-policy lock -g rg-grcpal-acme --account-name <storage> -c $c --if-match "$ETAG"
+done
 ```
+
+The storage account also carries a delete lock (`grcpal-no-delete`), so the account and the resource
+group cannot be deleted by accident or by a stolen admin session without first removing the lock,
+which raises an alert when `--alert-email` is set.
 
 ## Backups
 
 `deploy.sh` sets up everything: a `backups` container whose files are write-protected for 35 days
-(`backupRetentionDays`), a backup key stored as a Container Apps secret, and an hourly backup job that runs
-the schedule and any **Back up now** from **Administration → Backups**. The default is a nightly backup,
-kept 7 days, 4 weeks and 12 months. A backup cannot be changed or deleted before its protection ends, even by
-an admin, which also protects against ransomware.
+(`backupRetentionDays`), a backup key stored as a Container Apps secret, and a backup job that checks every
+15 minutes (`backupCheckCron`). It makes the scheduled backup once a day at the hour set on
+**Administration → Backups** (UTC), and starts any **Back up now** within about 15 minutes. A check that finds
+a backup still running skips it, so a long backup is never made twice. A backup cannot be changed or deleted
+before its protection ends, even by an admin, which also protects against ransomware.
+
+On Azure every backup is kept for `backupRetentionDays` (default 35) and then removed by a storage lifecycle
+rule; the 7-day/4-week/12-month settings on the Backups page apply to folder locations (VMs) only, because
+the app cannot delete write-once files. For longer history, raise `backupRetentionDays` (storage cost grows
+with each daily copy) or rely on the auditor exports and write-once evidence for the audit period.
+
+With `--alert-email`, you get an email when no verified scheduled backup was logged for 2 days
+(`backupAlertWindow`; set `P8D` for a weekly schedule).
 
 Download the **recovery kit** from the Backups page after the first sign-in and keep it in your password
 manager. It holds the backup key and the app key; with a backup file it rebuilds the instance anywhere.
@@ -216,14 +282,19 @@ still running, retire it only after you have checked the new one.
 
 ## Removing an instance
 
-`az group delete -n rg-grcpal-acme` removes everything except locked evidence, which Azure keeps
-until retention ends, and the app registration (`az ad app delete --id <appId>`).
+Take a final backup and an auditor export first. Remove the delete lock
+(`az lock delete -g rg-grcpal-acme -n grcpal-no-delete --resource <storage> --resource-type Microsoft.Storage/storageAccounts`),
+then `az group delete -n rg-grcpal-acme` removes everything except locked evidence and backups, which
+Azure keeps until retention ends. Delete the app registration separately (`az ad app delete --id <appId>`).
 
 ## Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
 | "You have not been given access" after sign-in | Add the person under Users and roles, or list them in roles.yaml, or assign them work |
+| AADSTS50105 after sign-in | The person is not assigned to the enterprise app: add them to the `GRC-pal users` group |
+| "You can't get there from here" / device not compliant | Use Edge with the work profile (or Chrome with the settings in Step 3b), not a private window; check the device in Intune |
+| Backup alert email | Administration → Backups; Log Analytics: `ContainerAppConsoleLogs_CL \| where Log_s has "backup.run_due"` |
 | Sign-in loops or AADSTS50011 | The redirect URL is missing: re-run deploy.sh, or `az ad app update --id <appId> --web-redirect-uris <redirectUri>` |
 | Portal shows the starter catalog | Run *Publish program configuration*, then restart the revision |
 | Error page with a reference | Search the reference in Log Analytics: `ContainerAppConsoleLogs_CL | where Log_s has "<reference>"` |
