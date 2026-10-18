@@ -1,0 +1,140 @@
+# Source for the Document library catalog. `python tools/build_doc_templates.py` turns this file and
+# policies.yaml into grcpal/starter/doctemplates/catalog.yaml plus one .docx template per document.
+# Roles use the ids in catalog/roles.yaml. Keep the text neutral: no real organization names.
+folders:
+  - {id: tier1, name: "Tier 1: Information Security Policy", note: "One umbrella policy that every other document inherits from."}
+  - {id: tier2, name: "Tier 2: Topic policies", note: "Short policies, each owned by the team that runs the topic. Commitments only; numbers live in standards."}
+  - {id: tier3, name: "Tier 3: Standards", note: "Measurable parameters a policy points to. They change without re-approving the policy."}
+  - {id: tier4, name: "Tier 4: Procedures and plans", note: "The steps actually performed and the record each step leaves. Auditors walk through and sample these."}
+  - {id: soc2, name: "SOC 2 additions", note: "Documents SOC 2 tests that ISO 27001 does not require in this form."}
+
+docs:
+  # ---------------------------------------------------------------- Tier 1
+  - {id: isp, number: ISP, folder: tier1, kind: policy, title: Information Security Policy, owner: security-lead,
+     approver: executive-sponsor, soc2: "CC1.1-CC1.5, CC2.2, CC5.3", iso: "Clauses 5.1-5.3, 6.2, A.5.1",
+     controls: "GOV-01, GOV-04, GOV-06"}
+  # ---------------------------------------------------------------- Tier 2
+  - {id: p-01, number: P-01, folder: tier2, kind: policy, title: Risk Management Policy, owner: security-lead,
+     approver: executive-sponsor, soc2: "CC3.1-CC3.4, CC4.1-CC4.2, CC5.1, CC9.1", iso: "6.1, 8.2, 8.3, 9.1, A.5.7",
+     controls: "RSK-01, RSK-02", folds: "Fraud risk, threat intelligence, internal control monitoring"}
+  - {id: p-02, number: P-02, folder: tier2, kind: policy, title: Code of Conduct and Acceptable Use Policy, owner: hr-lead,
+     approver: executive-sponsor, soc2: "CC1.1, CC1.5, CC2.2", iso: "A.5.10, A.6.2, A.6.4, A.8.1",
+     controls: "GOV-04", folds: "Disciplinary process, whistleblower channel, remote work"}
+  - {id: p-03, number: P-03, folder: tier2, kind: policy, title: Human Resources Security Policy, owner: hr-lead,
+     approver: executive-sponsor, soc2: "CC1.3, CC1.4, CC1.5, CC2.2, CC6.2", iso: "7.2, 7.3, A.6.1-A.6.6",
+     controls: "HR-01 to HR-04, GOV-05", folds: "Background checks, onboarding and offboarding, training, NDAs"}
+  - {id: p-04, number: P-04, folder: tier2, kind: policy, title: Asset Management and Data Classification Policy, owner: it-lead,
+     approver: executive-sponsor, soc2: "CC2.1, CC6.1, CC6.5, C1.1, C1.2", iso: "A.5.9-A.5.14, A.5.33, A.7.10, A.7.14, A.8.10",
+     controls: "AST-01 to AST-03, DAT-01 to DAT-03", folds: "Asset inventory, data handling, retention and disposal"}
+  - {id: p-05, number: P-05, folder: tier2, kind: policy, title: Access Control Policy, owner: security-lead,
+     approver: executive-sponsor, soc2: "CC6.1-CC6.3, CC6.6", iso: "A.5.15-A.5.18, A.8.2-A.8.5",
+     controls: "IAM-01 to IAM-09", folds: "Authentication, privileged access, access reviews"}
+  - {id: p-06, number: P-06, folder: tier2, kind: policy, title: Cryptography and Key Management Policy, owner: engineering-lead,
+     approver: executive-sponsor, soc2: "CC6.1, CC6.7", iso: "A.8.24",
+     controls: "CRY-01 to CRY-03", folds: "Encryption at rest and in transit, secrets"}
+  - {id: p-07, number: P-07, folder: tier2, kind: policy, title: Operations Security Policy, owner: it-lead,
+     approver: executive-sponsor, soc2: "CC6.6, CC6.8, CC7.1, CC7.2, A1.1", iso: "A.8.6-A.8.9, A.8.15-A.8.16, A.8.20-A.8.23",
+     controls: "VUL-01 to VUL-03, LOG-01, LOG-02, END-01, END-02, NET-01, NET-02",
+     folds: "Vulnerability and patch management, logging and monitoring, malware protection, network security, capacity"}
+  - {id: p-08, number: P-08, folder: tier2, kind: policy, title: Secure Development and Change Management Policy, owner: engineering-lead,
+     approver: executive-sponsor, soc2: "CC5.2, CC8.1", iso: "A.8.25-A.8.32",
+     controls: "CHG-01 to CHG-05", folds: "SDLC, code review, testing, emergency changes, segregation of environments"}
+  - {id: p-09, number: P-09, folder: tier2, kind: policy, title: Vendor and Third-Party Management Policy, owner: security-lead,
+     approver: executive-sponsor, soc2: "CC9.2, CC2.3", iso: "A.5.19-A.5.23",
+     controls: "VEN-01 to VEN-05", folds: "Cloud services, subservice organizations, complementary subservice organization controls"}
+  - {id: p-10, number: P-10, folder: tier2, kind: policy, title: Incident Response Policy, owner: security-lead,
+     approver: executive-sponsor, soc2: "CC7.3-CC7.5, CC2.2, CC2.3", iso: "A.5.24-A.5.28, A.6.8",
+     controls: "IR-01 to IR-04", folds: "Breach notification, evidence handling"}
+  - {id: p-11, number: P-11, folder: tier2, kind: policy, title: Business Continuity and Disaster Recovery Policy, owner: engineering-lead,
+     approver: executive-sponsor, soc2: "CC9.1, A1.2, A1.3", iso: "A.5.29, A.5.30, A.8.13, A.8.14",
+     controls: "BCP-01 to BCP-05", folds: "Backup, resilience, recovery testing"}
+  - {id: p-12, number: P-12, folder: tier2, kind: policy, title: Physical and Environmental Security Policy, owner: it-lead,
+     approver: executive-sponsor, soc2: "CC6.4, A1.2", iso: "A.7.1-A.7.14",
+     controls: "VEN-04", folds: "Office, equipment, clear desk; data centers inherited from the cloud provider"}
+  - {id: p-13, number: P-13, folder: tier2, kind: policy, title: AI Acceptable Use and Governance Policy, owner: security-lead,
+     approver: executive-sponsor, soc2: "CC1.1, CC2.2, CC3.2, CC9.2", iso: "A.5.10, A.5.19, A.5.23",
+     controls: "GOV-04", folds: "Approved AI tools, data rules, AI vendor review"}
+
+  # ---------------------------------------------------------------- Tier 3: standards
+  - {id: p-05-s1, number: P-05-S1, folder: tier3, kind: standard, title: Authentication and Password Standard, parent: p-05,
+     params: ["MFA scope", "Minimum password or passphrase length", "Session timeouts", "Service account rules"]}
+  - {id: p-05-s2, number: P-05-S2, folder: tier3, kind: standard, title: Privileged Access Standard, parent: p-05,
+     params: ["Just-in-time administrator access", "Break-glass accounts", "Administrator workstation rules"]}
+  - {id: p-04-s1, number: P-04-S1, folder: tier3, kind: standard, title: Data Classification and Handling Standard, parent: p-04,
+     params: ["Classification levels", "Labeling rules", "Where each level may be stored and shared"]}
+  - {id: p-04-s2, number: P-04-S2, folder: tier3, kind: standard, title: Data Retention Schedule, parent: p-04,
+     params: ["Retention period per data type", "Disposal method per data type"]}
+  - {id: p-06-s1, number: P-06-S1, folder: tier3, kind: standard, title: Encryption Standard, parent: p-06,
+     params: ["Approved algorithms", "Minimum TLS version", "Key rotation intervals"]}
+  - {id: p-07-s1, number: P-07-S1, folder: tier3, kind: standard, title: Endpoint Security Standard, parent: p-07,
+     params: ["Device management compliance baseline", "Disk encryption", "Endpoint detection and response", "Operating system update window"]}
+  - {id: p-07-s2, number: P-07-S2, folder: tier3, kind: standard, title: Secure Configuration Baselines, parent: p-07,
+     params: ["Baseline source per platform (for example a public benchmark)", "Approved deviations process"]}
+  - {id: p-07-s3, number: P-07-S3, folder: tier3, kind: standard, title: Vulnerability and Patch Management Standard, parent: p-07,
+     params: ["Scan frequency per asset class", "Remediation deadline by severity"]}
+  - {id: p-07-s4, number: P-07-S4, folder: tier3, kind: standard, title: Logging and Monitoring Standard, parent: p-07,
+     params: ["Log sources", "Log retention", "Alerting thresholds", "Review frequency"]}
+  - {id: p-08-s1, number: P-08-S1, folder: tier3, kind: standard, title: Secure Coding and Code Review Standard, parent: p-08,
+     params: ["Branch protection", "Required reviewers", "Dependency scanning", "Secret scanning"]}
+  - {id: p-11-s1, number: P-11-S1, folder: tier3, kind: standard, title: Backup Standard, parent: p-11,
+     params: ["Backup scope", "Backup frequency", "Backup retention", "Recovery point objective (RPO)", "Recovery time objective (RTO)"]}
+  - {id: p-09-s1, number: P-09-S1, folder: tier3, kind: standard, title: Vendor Risk Tiering Standard, parent: p-09,
+     params: ["Tier criteria", "Required due diligence per tier", "Review frequency per tier"]}
+  - {id: p-03-s1, number: P-03-S1, folder: tier3, kind: standard, title: Security Awareness Training Standard, parent: p-03,
+     params: ["Training content", "Frequency", "Completion deadline", "Phishing simulations"]}
+
+  # ---------------------------------------------------------------- Tier 4: procedures, plans and runbooks
+  - {id: isp-pr1, number: ISP-PR1, folder: tier4, kind: procedure, title: Policy Management Procedure, parent: isp,
+     record: "Approval record, review log, exception register"}
+  - {id: p-01-pr1, number: P-01-PR1, folder: tier4, kind: procedure, title: Risk Assessment Procedure, parent: p-01,
+     record: "Risk register, review log entry"}
+  - {id: p-01-pr2, number: P-01-PR2, folder: tier4, kind: procedure, title: Internal Control Monitoring Procedure, parent: p-01,
+     record: "Monthly control health review, deficiency tickets"}
+  - {id: p-03-pr1, number: P-03-PR1, folder: tier4, kind: procedure, title: Onboarding and Offboarding Procedure, parent: p-03,
+     record: "Checklist per hire and termination, access tickets"}
+  - {id: p-03-pr2, number: P-03-PR2, folder: tier4, kind: procedure, title: Background Check Procedure, parent: p-03,
+     record: "Check completion record per hire"}
+  - {id: p-03-pr3, number: P-03-PR3, folder: tier4, kind: procedure, title: Security Awareness Training Program, parent: p-03,
+     record: "Completion records, phishing results"}
+  - {id: p-04-pr1, number: P-04-PR1, folder: tier4, kind: procedure, title: Asset Inventory Procedure, parent: p-04,
+     record: "System and device inventory exports"}
+  - {id: p-04-pr2, number: P-04-PR2, folder: tier4, kind: procedure, title: Media and Data Disposal Procedure, parent: p-04,
+     record: "Disposal or wipe certificates"}
+  - {id: p-05-pr1, number: P-05-PR1, folder: tier4, kind: procedure, title: User Access Provisioning Procedure, parent: p-05,
+     record: "Access request and approval tickets"}
+  - {id: p-05-pr2, number: P-05-PR2, folder: tier4, kind: procedure, title: User Access Review Procedure, parent: p-05,
+     record: "Quarterly review package with sign-off"}
+  - {id: p-07-pr1, number: P-07-PR1, folder: tier4, kind: procedure, title: Vulnerability Management Procedure, parent: p-07,
+     record: "Scan results, remediation tickets, exceptions"}
+  - {id: p-07-pr2, number: P-07-PR2, folder: tier4, kind: procedure, title: Log Review and Alert Triage Procedure, parent: p-07,
+     record: "Alert tickets, review evidence"}
+  - {id: p-07-pr3, number: P-07-PR3, folder: tier4, kind: procedure, title: Capacity Management Procedure, parent: p-07,
+     record: "Capacity review notes, alert history"}
+  - {id: p-08-pr1, number: P-08-PR1, folder: tier4, kind: procedure, title: Change Management Procedure (including emergency changes), parent: p-08,
+     record: "Pull requests with reviews, deployment logs"}
+  - {id: p-09-pr1, number: P-09-PR1, folder: tier4, kind: procedure, title: Vendor Onboarding and Review Procedure, parent: p-09,
+     record: "Vendor risk assessments, collected assurance reports, subservice organization control review"}
+  - {id: p-10-pr1, number: P-10-PR1, folder: tier4, kind: procedure, title: Incident Response Plan and Playbooks, parent: p-10,
+     record: "Incident tickets, post-incident reviews"}
+  - {id: p-10-pr2, number: P-10-PR2, folder: tier4, kind: procedure, title: Tabletop Exercise Procedure, parent: p-10,
+     record: "Annual tabletop report"}
+  - {id: p-10-pr3, number: P-10-PR3, folder: tier4, kind: procedure, title: Customer Security Communication Procedure, parent: p-10,
+     record: "Customer notices, status page history, trust page updates"}
+  - {id: p-11-pr1, number: P-11-PR1, folder: tier4, kind: procedure, title: Business Continuity and Disaster Recovery Plan, parent: p-11,
+     record: "Plan with approval"}
+  - {id: p-11-pr2, number: P-11-PR2, folder: tier4, kind: procedure, title: Backup and Restore Test Procedure, parent: p-11,
+     record: "Backup job reports, restore test report"}
+
+  # ---------------------------------------------------------------- SOC 2 additions
+  - {id: soc2-01, number: SOC2-01, folder: soc2, kind: soc2, title: System Description, soc2: "DC 200",
+     why: "The basis of the SOC 2 report (description criteria DC 200). Written by management, not by the auditor."}
+  - {id: soc2-02, number: SOC2-02, folder: soc2, kind: soc2, title: Service Commitments and System Requirements Register, soc2: "CC2.3, CC3.1",
+     why: "Controls are judged against what the company promised customers in contracts and SLAs."}
+  - {id: soc2-03, number: SOC2-03, folder: soc2, kind: soc2, title: Subservice Organization and User Entity Controls Register, soc2: "CC9.2, DC 200",
+     why: "Lists complementary subservice organization controls (CSOC) and complementary user entity controls (CUEC). Required with the carve-out method for cloud providers and other subservice organizations."}
+  - {id: soc2-04, number: SOC2-04, folder: soc2, kind: soc2, title: Security Oversight Charter, soc2: "CC1.2",
+     why: "Evidence of independent oversight of the control environment by leadership."}
+  - {id: soc2-05, number: SOC2-05, folder: soc2, kind: soc2, title: Fraud Risk Assessment, soc2: "CC3.3",
+     why: "SOC 2 asks for it explicitly. Usually recorded inside the risk register."}
+  - {id: soc2-06, number: SOC2-06, folder: soc2, kind: soc2, title: Annual Restore Test and BC/DR Test Report, soc2: "A1.3",
+     why: "Availability criteria require tested recovery, not only a plan."}

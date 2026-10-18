@@ -1,0 +1,71 @@
+{% extends "base.html" %}{% from "_macros.html" import when %}{% block title %}{{ d.title }}{% endblock %}
+{% macro size(n) -%}{{ ('%.0f KB' % (n / 1024)) if n >= 1024 else ((n or 0) ~ ' B') }}{%- endmacro %}
+{% macro status(x) -%}<span class="pill dl-{{ x.status }}">{{ statuses[x.status] }}</span>{%- endmacro %}
+{% block content %}
+<div class="mb"><a href="/library">‹ Document library</a>{% if folder %} / <a href="/library?f={{ folder.id }}">{{ folder.name }}</a>{% endif %}</div>
+<div class="page-head"><div><h1>{{ d.title }}</h1>
+<div class="sub"><span class="mono">{{ d.number or 'No number' }}</span> · {{ kinds.get(d.kind, 'Document') }}{% if d.owner_name %} · owner {{ d.owner_name }}{% endif %}{% if d.builtin_title and d.builtin_title != d.title %} · built-in title: {{ d.builtin_title }}{% endif %}</div></div>
+<div class="head-actions">{% if d.current %}<span class="pill dl-approved">Official v{{ d.current[0].label }}</span>{% else %}<span class="pill dl-draft">No approved version yet</span>{% endif %}</div></div>
+
+<div class="grid g-main"><div>
+
+<section class="card"><h2>Official versions</h2>
+<p class="sub">Your company's own document. Files are kept write-once with a SHA-256; a new upload never replaces an old one. {% if user.sees_everything %}Use the product / variant label when the same document exists for different products.{% endif %}</p>
+{% if v.official %}<div class="table-wrap"><table class="lib-table"><thead><tr><th>File</th><th>Version</th><th>Product / variant</th><th>Status</th><th>Size</th><th>Uploaded</th><th>Approved</th></tr></thead><tbody>
+{% for x in v.official %}<tr><td><a href="/library/{{ d.id }}/files/{{ x.RowKey }}">{{ x.filename }}</a>{% if x.comment %}<div class="sub">{{ x.comment }}</div>{% endif %}<div class="sub mono">sha256 {{ x.sha256[:16] }}…</div></td>
+<td>v{{ x.label }}<div class="sub">{{ x.change }}</div></td><td>{{ x.variant or '—' }}</td><td>{{ status(x) }}{% if x.superseded_by %}<div class="sub">by v{{ x.superseded_by }}</div>{% endif %}{% if x.status_note %}<div class="sub">{{ x.status_note }}</div>{% endif %}</td>
+<td>{{ size(x.size) }}</td><td>{{ when(x.uploaded_at) }}<div class="sub">{{ x.uploaded_by }}</div></td>
+<td>{% if x.approved_at %}{{ when(x.approved_at) }}<div class="sub">{{ x.approved_by }}{% if x.self_approved %} (self-approved){% endif %}</div>{% else %}—{% endif %}</td></tr>
+{% if user.is_admin %}<tr class="lib-actions-row"><td colspan="7"><form method="post" action="/library/{{ d.id }}/versions/{{ x.RowKey }}/status" class="lib-status"><input type="hidden" name="csrf" value="{{ csrf }}">
+<input name="note" maxlength="1000" placeholder="Reason (needed to return, archive or restore)" aria-label="Reason for v{{ x.label }}">
+{% if x.status == 'draft' %}<button class="btn ghost small" name="status" value="in_review" type="submit">Send to review</button><button class="btn small" name="status" value="approved" type="submit">Approve</button><button class="btn ghost small" name="status" value="archived" type="submit">Archive</button>
+{% elif x.status == 'in_review' %}<button class="btn ghost small" name="status" value="draft" type="submit">Return to draft</button><button class="btn small" name="status" value="approved" type="submit">Approve</button><button class="btn ghost small" name="status" value="archived" type="submit">Archive</button>
+{% elif x.status == 'archived' %}<button class="btn ghost small" name="status" value="draft" type="submit">Restore to draft</button>
+{% else %}<button class="btn ghost small" name="status" value="archived" type="submit">Archive</button>{% endif %}</form></td></tr>{% endif %}
+{% endfor %}</tbody></table></div>
+{% else %}<div class="empty">{% if user.sees_everything %}Nothing uploaded yet. Download the template below, adapt it, and upload it here as your official version.{% else %}No approved version.{% endif %}</div>{% endif %}
+
+{% if user.is_admin %}<form method="post" action="/library/{{ d.id }}/official" enctype="multipart/form-data" class="mt-l"><input type="hidden" name="csrf" value="{{ csrf }}"><h3>Upload an official version</h3>
+<div class="form-row"><div><label for="of-file">File ({{ extensions }}; up to {{ max_mb }} MB)</label><input id="of-file" type="file" name="file" required></div>
+<div><label for="of-var">Product / variant (optional)</label><input id="of-var" name="variant" maxlength="60" placeholder="for example Product A"></div>
+<div><label for="of-ch">What changed</label><select id="of-ch" name="change">{% for k, label in changes.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></div></div>
+<label for="of-com">Note (optional)</label><input id="of-com" name="comment" maxlength="2000" placeholder="Summary of the change">
+<div class="hint">The first version for a product is 1.0. A major change counts up (2.0) and should be re-approved and re-acknowledged; a minor change counts 1.1, 1.2.</div>
+<div class="actions"><button class="btn" type="submit">Upload as draft</button></div></form>{% endif %}
+</section>
+
+{% if user.sees_everything %}
+<section class="card"><h2>Template</h2>
+<p class="sub">{% if v.active_template %}Custom template in use: <a href="/library/{{ d.id }}/files/template">{{ v.active_template.filename }}</a> uploaded {{ v.active_template.uploaded_at[:10] }} by {{ v.active_template.uploaded_by }}.{% elif d.has_template and d.builtin_title %}The built-in template shipped with GRC-pal.{% else %}No template for this document.{% endif %}</p>
+{% if d.has_template %}<div class="actions"><a class="btn" href="/library/{{ d.id }}/files/template">Download template</a></div>{% endif %}
+{% if user.is_admin %}<form method="post" action="/library/{{ d.id }}/template" enctype="multipart/form-data" class="mt-l"><input type="hidden" name="csrf" value="{{ csrf }}"><h3>Replace the template</h3>
+<p class="sub">Upload your own template. It becomes the one everyone downloads; the previous one stays in the history.</p>
+<div class="form-row"><div><label for="tp-file">File ({{ extensions }})</label><input id="tp-file" type="file" name="file" required></div>
+<div class="grow2"><label for="tp-com">Note (optional)</label><input id="tp-com" name="comment" maxlength="2000"></div></div>
+<div class="actions"><button class="btn" type="submit">Replace template</button></div></form>
+{% if v.active_template and d.builtin_title %}<form method="post" action="/library/{{ d.id }}/template" data-confirm="Go back to the built-in template?"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="restore"><div class="actions"><button class="btn ghost small" type="submit">Restore the built-in template</button></div></form>{% endif %}{% endif %}
+{% if v.templates|length > 1 or (v.templates and v.active_template) %}<details class="mt"><summary>Template history ({{ v.templates|length }})</summary><ul class="list">{% for t in v.templates %}<li>{% if t.builtin %}Restored the built-in template{% else %}<a href="/library/{{ d.id }}/files/{{ t.RowKey }}">{{ t.filename }}</a> <span class="mono">sha256 {{ t.sha256[:12] }}…</span>{% endif %} <span class="sub">{{ t.uploaded_by }} · {{ t.uploaded_at[:10] }}{% if t.comment and not t.builtin %} · {{ t.comment }}{% endif %}</span></li>{% endfor %}</ul></details>{% endif %}
+</section>{% endif %}
+</div>
+
+<aside>
+<section class="card"><h2>Details</h2><dl class="kv">
+<dt>Number</dt><dd class="mono">{{ d.number or '—' }}</dd><dt>Owner</dt><dd>{{ d.owner_name or '—' }}</dd><dt>Approver</dt><dd>{{ d.approver_name or '—' }}</dd>
+<dt>Classification</dt><dd>{{ d.classification or '—' }}</dd><dt>Next review</dt><dd>{{ d.next_review or '—' }}{% if d.review_state == 'overdue' %} <span class="pill dl-rev-overdue">Overdue</span>{% endif %}</dd>
+{% if d.soc2 %}<dt>SOC 2</dt><dd>{{ d.soc2 }}</dd>{% endif %}{% if d.iso %}<dt>ISO 27001</dt><dd>{{ d.iso }}</dd>{% endif %}
+{% if d.controls %}<dt>Controls</dt><dd>{{ d.controls }}</dd>{% endif %}
+{% if d.parent_doc %}<dt>Parent</dt><dd><a href="/library/{{ d.parent_doc.id }}">{{ d.parent_doc.number }} {{ d.parent_doc.title }}</a></dd>{% endif %}
+{% if d.summary %}<dt>Covers</dt><dd>{{ d.summary }}</dd>{% endif %}</dl>
+{% if d.children and user.sees_everything %}<h3 class="mt">Related documents</h3><ul class="list">{% for c in d.children %}<li><a href="/library/{{ c.id }}">{{ c.number }} {{ c.title }}</a></li>{% endfor %}</ul>{% endif %}</section>
+
+{% if user.is_admin %}<section class="card"><h2>Edit details</h2>
+<form method="post" action="/library/{{ d.id }}/edit"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label for="ed-title">Title</label><input id="ed-title" name="title" value="{{ d.title }}" required minlength="3" maxlength="160">
+<label for="ed-own">Owner (a role or person)</label><input id="ed-own" name="owner" value="{{ d.owner_name }}" maxlength="80">
+<label for="ed-app">Approver</label><input id="ed-app" name="approver" value="{{ d.approver_name }}" maxlength="80">
+<label for="ed-cls">Classification</label><select id="ed-cls" name="classification"><option value="">Not set</option>{% for c in classifications %}<option{% if d.classification == c %} selected{% endif %}>{{ c }}</option>{% endfor %}</select>
+<label for="ed-rev">Next review date</label><input id="ed-rev" type="date" name="next_review" value="{{ d.next_review }}">
+<div class="hint">The document number stays the same when you rename it. Changes are written to the audit log.</div>
+<div class="actions"><button class="btn" type="submit">Save</button></div></form></section>{% endif %}
+</aside></div>
+{% endblock %}

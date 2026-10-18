@@ -371,3 +371,20 @@ td:hover > .cal-add, .cal-add:focus { opacity: 1; border-color: var(--idle); tex
 .v-qnum { font-weight: 700; font-variant-numeric: tabular-nums; }
 .v-qtools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .v-qtools select { max-width: 220px; }
+
+/* Document library (Explorer view) */
+.lib { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: start; }
+.lib-tree { display: flex; flex-direction: column; gap: 2px; padding: 8px; position: sticky; top: 12px; }
+.lib-tree a { display: flex; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 8px; color: var(--text); font-size: 14px; }
+.lib-tree a:hover { background: var(--surface-2); text-decoration: none; }
+.lib-tree a.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.lib-n { font-size: 12px; opacity: .75; }
+.lib-table td { vertical-align: top; }
+.lib-index td { white-space: nowrap; } .lib-index td:nth-child(2) { white-space: normal; min-width: 200px; }
+.lib-actions-row td { background: var(--surface-2); padding-top: 6px; padding-bottom: 6px; }
+.lib-status { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.lib-status input { flex: 1 1 240px; }
+.pill.dl-approved { color: var(--ok); } .pill.dl-draft, .pill.dl-in_review { color: var(--warn); }
+.pill.dl-superseded, .pill.dl-archived, .pill.dl-template { color: var(--idle); }
+.pill.dl-rev-ok { color: var(--ok); } .pill.dl-rev-soon { color: var(--warn); } .pill.dl-rev-overdue { color: var(--bad); }
+@media (max-width: 960px) { .lib { grid-template-columns: minmax(0, 1fr); } .lib-tree { position: static; } }

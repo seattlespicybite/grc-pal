@@ -226,6 +226,7 @@ changed by an update. Details: [deploy-vm.md](docs/deploy-vm.md#updates),
 | [Deploy on a VM](docs/deploy-vm.md) | Debian 13 + Docker in your network: install, backups, signed updates, rebuild |
 | [Deploy to Azure](docs/deploy-azure.md) | Azure Container Apps with Entra ID sign-in, Conditional Access, backups, updates |
 | [Operations](docs/operations.md) | Daily and yearly routines, cycles, reminders, logs, backups, restore tests, disaster recovery, upgrades |
+| [Document library](docs/document-library.md) | Policy, standard and procedure templates, official versions, replacing templates, approvals |
 | [Roles and permissions](docs/roles.md) | Exactly who can see and do what, including the control library owner |
 | [Frameworks, controls and checks](docs/frameworks-and-controls.md) | Frameworks in use, the SOC 2 view, implementation notes, the knowledge base, editing controls, custom controls, URL checks |
 | [Configuration](docs/configuration.md) | Configuration page and every environment variable |
