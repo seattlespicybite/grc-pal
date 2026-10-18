@@ -149,4 +149,12 @@
     }
     setTimeout(tick, 2000);
   });
+  // Access reviews: one click keeps every account that has no flag; flagged accounts are always decided one by one.
+  document.querySelectorAll('[data-ar-keep-unflagged]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var form = btn.closest('form');
+      if (!form) return;
+      form.querySelectorAll('select[data-flagged="0"]').forEach(function (sel) { if (!sel.value) sel.value = 'keep'; });
+    });
+  });
 })();

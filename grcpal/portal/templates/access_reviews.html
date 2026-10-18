@@ -1,0 +1,33 @@
+{% extends "base.html" %}{% block title %}Access reviews{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Access reviews</h1>
+<div class="sub">{% if user.is_contributor %}Reviews that include people you manage. For each account, decide whether the access is still needed (SOC 2 CC6.2 and CC6.3).
+{% else %}Managers review the accounts of their own people across every application, on one screen. Upload the account lists, the managers decide, and the result is stored as evidence (SOC 2 CC6.2 and CC6.3).{% endif %}</div></div></div>
+
+{% if user.is_admin %}
+<div class="card mb"><h2>Start a review</h2>
+<form method="post" action="/access-reviews/new" enctype="multipart/form-data" class="grid">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<label>Name<input type="text" name="name" maxlength="120" required placeholder="Q4 2026 user access review"></label>
+<label>Managers finish by<input type="date" name="due" required min="{{ today }}"></label>
+<label>Accounts file (CSV, up to {{ max_accounts }} accounts)<input type="file" name="accounts" accept=".csv,text/csv" required></label>
+<label>People file (optional CSV: email, manager_email)<input type="file" name="people" accept=".csv,text/csv"></label>
+<div><button class="btn" type="submit">Start review</button> <a class="btn ghost" href="/access-reviews/template.csv">Download CSV template</a></div>
+</form>
+<div class="hint mt">Export the user list from each application (GitHub, Slack, a database, any admin console) and put them in one file with the columns
+<span class="mono">{{ columns|join(', ') }}</span>. Only <span class="mono">app</span> and <span class="mono">account_id</span> are required; the other columns improve the review.
+The managers come from <span class="mono">manager_email</span> or from the people file. If any row is wrong, nothing is imported and the message says which rows to fix.
+The files are stored write-once with a SHA-256 as proof of what was reviewed.</div></div>
+{% endif %}
+
+<div class="card"><div class="table-wrap"><table>
+<thead><tr><th>Review</th><th>Status</th><th>Accounts</th><th>Applications</th><th>Due</th></tr></thead>
+<tbody>{% for c in rows %}<tr>
+<td><a href="/access-reviews/{{ c.RowKey }}"><b>{{ c.name }}</b></a><div class="sub">Started {{ c.created_at[:10] }}</div></td>
+<td><span class="pill {{ 'ok' if c.status == 'closed' else 'open' }}">{{ statuses[c.status] }}</span></td>
+<td>{{ c.records }}</td>
+<td><div class="tags">{% for a, n in c.summary.items() %}<span>{{ a }} · {{ n }}</span>{% endfor %}</div></td>
+<td class="nowrap mono">{{ c.due }}</td>
+</tr>{% else %}<tr><td colspan="5"><div class="empty">{% if user.is_admin %}No reviews yet. Start one above.{% else %}Nothing to review right now.{% endif %}</div></td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}
