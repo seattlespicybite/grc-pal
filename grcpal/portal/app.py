@@ -811,6 +811,19 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         invalidate()
         return back("/cycles", msg=f"Cycle {c['name']} started")
 
+    @app.post("/cycles/current")
+    def edit_cycle(request: Request, name: str = Form(""), start: str = Form(""), end: str = Form(""),
+                   csrf: str = Form(""), user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        try:
+            c = p().edit_cycle(user, name, start, end)
+        except Forbidden as exc:
+            raise _HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back("/cycles", err=str(exc))
+        invalidate()
+        return back("/cycles", msg=f"Saved: {c['name']}, {c['start']} to {c['end']}")
+
     @app.get("/cycles/{cycle_id}/export")
     def export_cycle(cycle_id: str, user: User = Depends(current_user)):
         try:

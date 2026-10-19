@@ -190,8 +190,8 @@ notes, its evidence guide and the evidence uploaded that month.
 | Failed | The run itself broke (for example an expired secret). Fix it and run again: the month shows the latest run, and the failure stays in the run history |
 | Not run | No run that month, inside the observation period |
 
-Past-due warnings start on the first audit cycle's start date: set it on **Cycles and export** to the
-first day of your observation period.
+Past-due warnings start on the first audit cycle's start date: set it on **Cycles and export > Change the
+current cycle** to the first day of your observation period.
 
 ## Knowledge base
 

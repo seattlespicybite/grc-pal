@@ -1175,3 +1175,36 @@ def test_back_button_is_on_every_page_and_csp_safe(env):
     assert '<button type="button" class="btn ghost small back-btn" data-back hidden>' in html
     js = client.get("/static/app.js").text
     assert "history.back()" in js and "document.referrer" in js
+
+
+def test_admin_sets_the_current_cycle_dates_and_it_is_audited(env):
+    portal, client = env
+    first = portal.active_cycle()
+    portal.edit_cycle(ADMIN, "2026 Type 2 window", "2026-01-01", "2026-12-31")
+    c = portal.active_cycle()
+    assert (c["RowKey"], c["name"], c["start"], c["end"]) == (first["RowKey"], "2026 Type 2 window", "2026-01-01", "2026-12-31")
+    assert portal.calendar_program_start() == "2026-01-01"  # past-due warnings follow the new start
+    entry = [r for r in portal.log.records() if r["action"] == "cycle.edit"][-1]
+    assert entry["detail"]["before"]["start"] == first["start"] and entry["detail"]["after"]["end"] == "2026-12-31"
+    for bad in (("", "2026-01-01", "2026-12-31"), ("X", "2026-12-31", "2026-01-01"), ("X", "2026-01-01", "2029-01-01"),
+                ("X", "soon", "2026-12-31")):
+        with pytest.raises(Invalid):
+            portal.edit_cycle(ADMIN, *bad)
+    for who in (CONTRIB, AUDITOR):
+        with pytest.raises(Forbidden):
+            portal.edit_cycle(who, "Mine", "2026-01-01", "2026-12-31")
+    # a new cycle cannot be moved to start before the one it follows
+    portal.start_cycle(ADMIN, "FY2027", "2027-01-01", "2027-12-31")
+    with pytest.raises(Invalid):
+        portal.edit_cycle(ADMIN, "FY2027", "2025-06-01", "2026-05-31")
+    as_(client, ADMIN)
+    page = client.get("/cycles").text
+    assert "Change the current cycle" in page and 'action="/cycles/current"' in page
+    assert 'href="/cycles#current"' in client.get("/").text
+    r = client.post("/cycles/current", data={"csrf": csrf(client, "/cycles"), "name": "FY2027 window",
+                                             "start": "2027-02-01", "end": "2028-01-31"}, follow_redirects=False)
+    assert r.status_code == 303 and portal.active_cycle()["start"] == "2027-02-01"
+    as_(client, AUDITOR)
+    r = client.post("/cycles/current", data={"csrf": csrf(client, "/cycles"), "name": "Hack", "start": "2027-02-01",
+                                             "end": "2028-01-31"}, follow_redirects=False)
+    assert r.status_code == 403

@@ -313,6 +313,32 @@ class Portal(FeaturesMixin, CalendarMixin, VendorsMixin, DocLibMixin, AccessRevi
         self.audit(SYSTEM, "cycle.start", row["RowKey"], {"name": row["name"], "carried": 0})
         return row
 
+    def edit_cycle(self, actor: User, name: str, start: str, end: str) -> dict:
+        """Change the name and dates of the active cycle (the audit period). The first cycle is created
+        automatically on the first day the portal runs, so this is how an admin sets the real observation
+        window. Closed cycles never change."""
+        self._admin(actor)
+        cur = self.active_cycle()
+        name = " ".join((name or "").split())[:80]
+        if not name:
+            raise Invalid("Give the cycle a name, for example FY2027 or 2027 Type 2 window")
+        try:
+            s, e = dt.date.fromisoformat((start or "").strip()), dt.date.fromisoformat((end or "").strip())
+        except ValueError as exc:
+            raise Invalid("Dates must be YYYY-MM-DD") from exc
+        if e <= s or (e - s).days > 731:
+            raise Invalid("The end date must be after the start date and within two years of it")
+        prev = self.previous_cycle(cur)
+        if prev and s.isoformat() <= prev["start"]:
+            raise Invalid(f"The start must be after the previous cycle started ({prev['start']})")
+        after = {"name": name, "start": s.isoformat(), "end": e.isoformat()}
+        before = {k: cur.get(k) for k in after}
+        if before == after:
+            raise Invalid("Nothing changed")
+        self.store.update("cycles", "c", cur["RowKey"], after)
+        self.audit(actor, "cycle.edit", cur["RowKey"], {"before": before, "after": after})
+        return {**cur, **after}
+
     def start_cycle(self, actor: User, name: str, start: str, end: str, carry_forward: bool = True) -> dict:
         """Close the active cycle and open a new one. Carry-forward copies every assignment that was
         not cancelled, with the same owner, contributors and instructions, linked to last cycle's work."""

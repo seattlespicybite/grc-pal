@@ -28,7 +28,12 @@ What the security admin does each day, month and year, and how to keep the insta
 
 ## Cycles
 
-A cycle is one audit period. Start a new one under **Cycles and export**:
+A cycle is one audit period. The first one is created automatically the first day GRC-pal runs (one year
+from that day). Set it to your real period under **Cycles and export > Change the current cycle**: name,
+start and end date (the dashboard links there too). For SOC 2 Type 2, use your observation window. The
+change is in the audit log; closed cycles cannot be changed.
+
+Start a new one under **Cycles and export**:
 
 1. Download the export of the cycle you are closing and hand it to the auditor, or keep it.
 2. Start the new cycle with **carry-forward** on. Every request that was not cancelled is copied

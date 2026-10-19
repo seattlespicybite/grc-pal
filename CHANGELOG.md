@@ -17,6 +17,9 @@ No data model change.
   Deleted documents go to a new **Trash** page where they can be restored; their files are never destroyed.
 - Document library: old templates can be **removed** from a document (to the Trash), so you can keep just one.
 - Document library: the **description** of a document can now be edited, next to the title.
+- Cycles: admins can **change the current cycle's name, start and end date** (Cycles and export > Change
+  the current cycle; the dashboard links there). Before, the first cycle started on the day GRC-pal was
+  first opened and could not be adjusted. Every change is in the audit log.
 - Vendors: **Not applicable** is now a choice for contract security terms and the data processing agreement.
 
 ### Changed
