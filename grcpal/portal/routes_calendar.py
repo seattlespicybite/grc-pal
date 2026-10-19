@@ -64,9 +64,11 @@ def register(app, h) -> None:
 
     # ---------------------------------------------------------------- one month of a manual activity
     @app.get("/calendar/o/{key}", response_class=HTMLResponse)
-    def calendar_occurrence(request: Request, key: str, user: User = Depends(current_user)):
+    def calendar_occurrence(request: Request, key: str, popup: int = 0, user: User = Depends(current_user)):
         admin(user)
         portal = p()
+        if popup:
+            return occurrence_popup(request, user, key)
         try:
             occ = portal.calendar_occurrence(key)
         except Invalid as exc:
@@ -98,6 +100,28 @@ def register(app, h) -> None:
                       act=occ["activity_info"], controls=controls, labels=STATUSES,
                       month_name=_cal.month_name[occ["month"]], window_end=window_end[:7])
 
+    def occurrence_popup(request: Request, user: User, key: str):
+        """The calendar's popup: the Record form, or the Add form for a month that is not scheduled.
+        Saving comes back to the same row of the calendar, so the person never leaves the calendar."""
+        portal = p()
+        m = KEY_RE.match(key or "")
+        if not m or not 1 <= int(m.group(3)) <= 12:
+            raise h.HTTPError(404, "No such calendar entry")
+        year, month = int(m.group(2)), int(m.group(3))
+        try:
+            act = portal.calendar_activity(m.group(1))
+        except Invalid as exc:
+            raise h.HTTPError(404, str(exc)) from exc
+        try:
+            occ = portal.calendar_occurrence(key)
+        except Invalid as exc:
+            if act["kind"] != "manual" or act["status"] != "active":
+                raise h.HTTPError(404, str(exc)) from exc
+            occ = None
+        return render(request, user, "calendar_popup.html", occ=occ, act=act, key=key, year=year, labels=STATUSES,
+                      month_name=_cal.month_name[month], full_url=f"/calendar/o/{key}",
+                      return_to=f"/calendar?year={year}#row-{act['id']}")
+
     @app.post("/calendar/o/{key}/add")
     async def calendar_occurrence_add(request: Request, key: str, user: User = Depends(current_user)):
         form = await request.form()
@@ -109,7 +133,7 @@ def register(app, h) -> None:
         except Invalid as exc:
             return back("/calendar", err=str(exc))
         h.invalidate()
-        return back(f"/calendar/o/{key}", msg="Added for this month")
+        return back(h.safe_dest(str(form.get("return_to", "")), f"/calendar/o/{key}"), msg="Added for this month")
 
     @app.post("/calendar/order")
     async def calendar_order(request: Request, user: User = Depends(current_user)):
@@ -150,7 +174,8 @@ def register(app, h) -> None:
         except Invalid as exc:
             return back(dest, err=str(exc))
         h.invalidate()
-        return back(f"/calendar?year={occ['period'][:4]}", msg=f"Saved: {STATUSES[occ['decision']]}")
+        dest = h.safe_dest(str(form.get("return_to", "")), f"/calendar?year={occ['period'][:4]}")
+        return back(dest, msg=f"Saved: {STATUSES[occ['decision']]}")
 
     # ---------------------------------------------------------------- activities
     def activity_page(request, user, act: dict, form: dict | None = None, error: str | None = None):
@@ -185,6 +210,7 @@ def register(app, h) -> None:
         form = {k: str(raw.get(k, "")) for k in ("title", "kind", "due_day", "owner", "instructions", "source")}
         form["months"] = [str(m) for m in raw.getlist("months")]
         form["controls"] = [str(c) for c in raw.getlist("controls")]
+        form["clear_past"] = raw.get("clear_past") == "1"
         portal = p()
         try:
             row = portal.save_activity(user, aid, form)

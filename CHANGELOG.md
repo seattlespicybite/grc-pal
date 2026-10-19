@@ -9,6 +9,10 @@ No data model change.
 ### Added
 - **Back button** at the top of every page. It works like the browser's Back button, so the previous page
   opens at the same scroll position. It appears only when the previous page was a page of this portal.
+- Calendar: clicking a month or the **+** of an empty month opens a **small window on the calendar** to
+  record it or add it; saving returns to the same row. The full page is still one click away.
+- Calendar: when you untick a month, you can also **remove it from earlier months and years** where nothing
+  was recorded. Recorded months always stay (they are evidence), and the change is in the audit log.
 - Vendors: **Not applicable** is now a choice for contract security terms and the data processing agreement.
 
 ### Changed

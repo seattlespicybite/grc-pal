@@ -25,7 +25,7 @@
 <table class="cal-year">
 <colgroup><col class="cal-act">{% for m in months %}<col>{% endfor %}<col class="cal-move-col"></colgroup>
 <thead><tr><th>Activity</th>{% for m in months %}<th class="c{{ ' now' if loop.index == this_month }}">{{ m }}</th>{% endfor %}<th><span class="sr">Order</span></th></tr></thead>
-<tbody data-sortable="manual">
+<tbody data-sortable="manual" data-cal-popup>
 <tr class="cal-group"><td colspan="14">Manual ({{ manual|length }})</td></tr>
 {% for a in manual %}<tr id="row-{{ a.id }}" data-id="{{ a.id }}"><td><span class="cal-grip" aria-hidden="true">⋮⋮</span><a class="cal-name" href="/calendar/a/{{ a.id }}">{{ a.title }}</a>{% if a.status == 'retired' %} <span class="sub">(retired)</span>{% endif %}
 <div class="sub">{{ a.schedule }}{% if a.controls %} · {{ a.controls|join(', ') }}{% endif %}</div></td>
@@ -51,4 +51,5 @@
 <input type="hidden" name="return_to" value="{{ here }}"><input type="hidden" name="ids" value=""></form>{% endfor %}
 <p class="hint">* the due date was moved. Past-due months stay Planned until you record them: GRC-pal never marks an activity Missed on its own. Automated months show the latest run; a failure fixed by a later run shows Passed, and the failure stays in the run history.</p>
 </section>
+<dialog class="cal-dialog" data-cal-dialog aria-label="Calendar month"><div data-cal-dialog-body></div></dialog>
 {% endblock %}
