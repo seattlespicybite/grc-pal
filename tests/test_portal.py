@@ -176,6 +176,38 @@ def test_admin_pages_render(env, path):
     assert 'style="' not in r.text and "<script>" not in r.text and "onclick" not in r.text
 
 
+def _groups(html):
+    """Menu groups on a page: {group id: (open?, [links])}."""
+    out = {}
+    for m in re.finditer(r'<details class="nav-group" data-nav-group="(\w+)"( open)?>(.*?)</details>', html, re.S):
+        out[m.group(1)] = (bool(m.group(2)), re.findall(r'<a href="([^"]+)"', m.group(3)))
+    return out
+
+
+def test_menu_groups_open_on_current_page_and_follow_roles(env):
+    portal, client = env
+    as_(client, ADMIN)
+    g = _groups(client.get("/").text)
+    assert set(g) == {"program", "docs", "config"} and not any(o for o, _ in g.values())  # dashboard: all closed
+    assert {"/settings", "/setup", "/updates", "/logs", "/audit", "/users", "/dev/outbox", "/frameworks", "/backups"} <= set(g["config"][1])
+    for path, group in (("/controls", "program"), ("/policies", "docs"), ("/audit", "config"), ("/settings", "config")):
+        g = _groups(client.get(path).text)
+        assert [k for k, (o, _) in g.items() if o] == [group], path
+    page = client.get("/audit").text
+    assert 'href="/audit" class="active" aria-current="page"' in page
+    assert "cmd-palette" not in page and "data-open-cmd" not in page  # Quick jump removed in 0.4.0
+    # auditors: no admin pages in Configuration, only logs and the audit log
+    as_(client, AUDITOR)
+    assert _groups(client.get("/audit").text)["config"][1] == ["/logs", "/audit"]
+    # control owners: no Configuration group and no admin-only links anywhere in the menu
+    as_(client, CONTRIB)
+    page = client.get("/work").text
+    g = _groups(page)
+    assert set(g) == {"program", "docs"}
+    links = {h for _, ls in g.values() for h in ls}
+    assert not links & {"/evidence", "/overrides", "/cycles", "/ai", "/calendar", "/criteria", "/settings", "/audit"}
+
+
 def test_contributor_sees_only_assigned_or_owned_controls(env):
     portal, client = env
     as_(client, CONTRIB)
@@ -813,7 +845,7 @@ def test_control_page_remembers_where_you_came_from(env):
     assert f'href="/controls/{siblings[i - 1]}?from=CC6.1"' in page and f'href="/controls/{siblings[i + 1]}?from=CC6.1"' in page
     assert f"Control {i + 1} of {len(siblings)} in CC6.1" in page and "you came from here" in page
     # the left menu stays on the SOC 2 criteria, not Controls
-    assert re.search(r'<a href="/criteria" class="active">', page) and not re.search(r'<a href="/controls" class="active">', page)
+    assert re.search(r'<a href="/criteria" class="active"[ >]', page) and not re.search(r'<a href="/controls" class="active"[ >]', page)
     # only a known criterion id is accepted; anything else is ignored, never turned into a link
     for bad in ("https://evil.example", "//evil.example", "../../criteria/CC6.1", "CC6.1<script>"):
         r = client.get("/controls/IAM-02", params={"from": bad}).text

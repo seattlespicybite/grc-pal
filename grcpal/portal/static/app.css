@@ -388,3 +388,60 @@ td:hover > .cal-add, .cal-add:focus { opacity: 1; border-color: var(--idle); tex
 .pill.dl-superseded, .pill.dl-archived, .pill.dl-template { color: var(--idle); }
 .pill.dl-rev-ok { color: var(--ok); } .pill.dl-rev-soon { color: var(--warn); } .pill.dl-rev-overdue { color: var(--bad); }
 @media (max-width: 960px) { .lib { grid-template-columns: minmax(0, 1fr); } .lib-tree { position: static; } }
+
+
+/* --- Modern SaaS Design System & UX Polish --- */
+:root {
+  --bg: #f8fafc; --surface: #ffffff; --surface-2: #f1f5f9; --border: #e2e8f0;
+  --text: #0f172a; --muted: #64748b; --brand: #091e26; --accent: #0d9488; --accent-ink: #ffffff;
+  --ok: #059669; --warn: #d97706; --bad: #dc2626; --info: #2563eb; --idle: #64748b;
+  --radius: 12px;
+  --shadow: 0 1px 3px rgba(15, 23, 42, .05), 0 1px 2px rgba(15, 23, 42, .03);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, .07);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1116; --surface: #111b22; --surface-2: #17242d; --border: #22333f;
+    --text: #f1f5f9; --muted: #94a3b8; --brand: #071318; --accent: #14b8a6; --accent-ink: #042f2e;
+    --ok: #34d399; --warn: #fbbf24; --bad: #f87171; --info: #60a5fa; --idle: #94a3b8;
+  }
+}
+.ico { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.85; stroke-linecap: round; stroke-linejoin: round; fill: none; flex-shrink: 0; }
+.nav-item { display: inline-flex; align-items: center; gap: 10px; }
+.nav a { transition: background-color .15s ease, color .15s ease; }
+.card, .stat { transition: box-shadow .18s ease, border-color .18s ease, transform .15s ease; }
+a.stat:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600;
+  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.hero-strip { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.readiness-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px 18px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 16px;
+}
+.ring-svg { width: 68px; height: 68px; transform: rotate(-90deg); flex-shrink: 0; }
+.ring-bg { fill: none; stroke: var(--surface-2); stroke-width: 3.6; }
+.ring-fg { fill: none; stroke: var(--ok); stroke-width: 3.6; stroke-linecap: round; }
+.readiness-pct { font-size: 26px; font-weight: 700; line-height: 1.1; color: var(--text); }
+.readiness-label { font-size: 13px; font-weight: 600; color: var(--text); margin-top: 2px; }
+.mini-stat { background: var(--surface-2); border-radius: 10px; padding: 12px 14px; border: 1px solid var(--border); }
+/* Grouped menu: native <details> groups, no script needed; the group with the current page opens on the server */
+.nav-group > summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: #c9d7dc;
+  padding: 9px 10px; border-radius: 8px; cursor: pointer; list-style: none; font-size: 14px; user-select: none; }
+.nav-group > summary::-webkit-details-marker { display: none; }
+.nav-group > summary:hover { background: rgba(255,255,255,.07); color: #fff; }
+.nav-group > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.nav-group[open] > summary { color: #fff; }
+.nav-end { display: inline-flex; align-items: center; gap: 8px; }
+.nav-chev .ico { width: 14px; height: 14px; transition: transform .15s ease; opacity: .7; }
+.nav-group[open] .nav-chev .ico { transform: rotate(90deg); }
+.nav-group[open] > summary .count { display: none; }
+.nav-sub { margin: 2px 0 6px 18px; padding-left: 8px; border-left: 1px solid rgba(255,255,255,.12); }
+.nav-sub a { padding: 7px 10px; font-size: 13.5px; }
+.nav-sub .ico { width: 15px; height: 15px; opacity: .85; }
+@media (prefers-reduced-motion: reduce) { .nav-chev .ico, .nav a, .card, .stat { transition: none; } a.stat:hover { transform: none; } }
+@media (max-width: 960px) { .hero-strip { grid-template-columns: 1fr; } }

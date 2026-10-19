@@ -8,7 +8,7 @@
 #   --admins EMAILS        comma-separated emails that become admins at first sign-in (required)
 #   --location REGION      Azure region (default eastus2)
 #   --image IMAGE          container image (default: the version already running, else this checkout's
-#                          version, e.g. ghcr.io/seattlespicybite/grc-pal:0.3.0). Change versions with
+#                          version, e.g. ghcr.io/seattlespicybite/grc-pal:0.4.0). Change versions with
 #                          update.sh, which checks the new version before it gets traffic.
 #   --restore-from FILE    rebuild a NEW instance from a backup file (.grcbak); needs --kit
 #   --kit FILE             recovery kit (backup key and app key) that belongs to that backup

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # GRC-pal installer for a VM on your network: Debian 13 (trixie) minimal + Docker + Caddy (HTTPS).
 #
-#   sudo ./install.sh --hostname grc.internal.example.com --version 0.3.0
-#   sudo ./install.sh --hostname grc.internal.example.com --bundle grcpal-0.3.0.grcupdate      # no internet
-#   sudo ./install.sh --hostname grc.internal.example.com --version 0.3.0 \
+#   sudo ./install.sh --hostname grc.internal.example.com --version 0.4.0
+#   sudo ./install.sh --hostname grc.internal.example.com --bundle grcpal-0.4.0.grcupdate      # no internet
+#   sudo ./install.sh --hostname grc.internal.example.com --version 0.4.0 \
 #        --restore grcpal-acme-20261001T020000Z-scheduled.grcbak --kit recovery-kit.json      # rebuild
 #
 # What it does (safe to run again; it never deletes data):
@@ -48,7 +48,7 @@ done
 [[ -n "$HOSTNAME_ARG" ]] || die "--hostname is required (the name people type, e.g. grc.internal.example.com)"
 [[ "$HOSTNAME_ARG" =~ ^[A-Za-z0-9.-]{1,253}$ ]] || die "--hostname may only contain letters, digits, dots and hyphens"
 [[ -n "$VERSION" || -n "$BUNDLE" ]] || die "give --version X.Y.Z (download) or --bundle FILE.grcupdate (offline)"
-[[ -z "$VERSION" || "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "--version must look like 0.3.0"
+[[ -z "$VERSION" || "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "--version must look like 0.4.0"
 [[ "$TLS" == "internal" || "$TLS" == "files" ]] || die "--tls is internal or files"
 [[ "$TLS" != "files" || ( -f "$CERT" && -f "$KEY" ) ]] || die "--tls files needs --cert FILE and --key FILE"
 [[ -z "$RESTORE" || ( -f "$RESTORE" && -f "$KIT" ) ]] || die "--restore needs the backup file and --kit FILE"

@@ -1,4 +1,4 @@
-{% from "_macros.html" import pill %}<!doctype html>
+{% from "_macros.html" import pill, icon, navlink, navgroup %}<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -20,34 +20,44 @@
       <div class="seg">{% for fid, fw in fw_in_use.items() %}<a href="/view?f={{ fid }}&amp;next={{ path|urlencode }}" class="{{ 'on' if view == fid }}"{% if view == fid %} aria-current="true"{% endif %}>{{ fw.name.split(' (')[0].split(':')[0] }}</a>{% endfor %}
       <a href="/view?f=all&amp;next={{ path|urlencode }}" class="{{ 'on' if view == 'all' }}"{% if view == 'all' %} aria-current="true"{% endif %}>All</a></div></nav>{% endif %}
     <nav class="nav" aria-label="Main">
-      {% if not user.is_contributor %}<a href="/" class="{{ 'active' if path == '/' }}">Dashboard</a>{% endif %}
-      {% if user.can_write %}<a href="/work" class="{{ 'active' if path.startswith('/work') or path.startswith('/assignments') }}">My work {% if my_open %}<span class="count">{{ my_open }}</span>{% endif %}</a>{% endif %}
-      {% if user.is_admin %}<a href="/reviews" class="{{ 'active' if path.startswith('/reviews') }}">Reviews {% if review_count %}<span class="count">{{ review_count }}</span>{% endif %}</a>{% endif %}
-      <div class="nav-sep">Program</div>
       {% set in_framework = nav_active == 'framework' or path.startswith('/criteria') or path.startswith('/frameworks/' ~ view) %}
-      {% if user.sees_everything %}{% if view == 'soc2' %}<a href="/criteria" class="{{ 'active' if in_framework }}">SOC 2 criteria</a>
-      {% elif view_fw %}<a href="/frameworks/{{ view_fw.id }}" class="{{ 'active' if in_framework }}">{{ view_fw.name.split(' (')[0].split(':')[0] }}</a>
-      {% else %}<a href="/frameworks" class="{{ 'active' if path.startswith('/frameworks') or path.startswith('/criteria') or nav_active == 'framework' }}">Frameworks</a>{% endif %}{% endif %}
-      <a href="/controls" class="{{ 'active' if path.startswith('/controls') and not in_framework }}">{{ 'My controls' if user.is_contributor else 'Controls' }}</a>
-      {% if user.is_admin %}<a href="/calendar" class="{{ 'active' if path.startswith('/calendar') }}">Calendar {% if calendar_due %}<span class="count" title="Past due, not recorded">{{ calendar_due }}</span>{% endif %}</a>{% endif %}
-      <a href="/vendors" class="{{ 'active' if path.startswith('/vendors') }}">Vendors</a>
-      {% if user.sees_everything %}<a href="/evidence" class="{{ 'active' if path.startswith('/evidence') }}">Evidence store</a>{% endif %}
-      <a href="/policies" class="{{ 'active' if path.startswith('/policies') }}">Policies</a>
-      <a href="/library" class="{{ 'active' if path.startswith('/library') }}">Document library</a>
-      <a href="/kb" class="{{ 'active' if path.startswith('/kb') }}">Knowledge base</a>
-      {% if user.sees_everything %}<a href="/overrides" class="{{ 'active' if path.startswith('/overrides') }}">Overrides</a>
-      <a href="/ai" class="{{ 'active' if path.startswith('/ai') }}">AI assistant</a>
-      <div class="nav-sep">Administration</div>
-      {% if user.is_admin %}{% if view != 'all' %}<a href="/frameworks" class="{{ 'active' if path == '/frameworks' or path.startswith('/frameworks/new') }}">Frameworks in use</a>{% endif %}
-      <a href="/settings" class="{{ 'active' if path.startswith('/settings') }}">Configuration</a>
-      <a href="/setup" class="{{ 'active' if path.startswith('/setup') }}">Setup guide</a>
-      <a href="/backups" class="{{ 'active' if path.startswith('/backups') }}">Backups</a>
-      <a href="/updates" class="{{ 'active' if path.startswith('/updates') }}">Updates</a>{% endif %}
-      <a href="/cycles" class="{{ 'active' if path.startswith('/cycles') }}">Cycles and export</a>
-      <a href="/logs" class="{{ 'active' if path.startswith('/logs') or path.startswith('/jobs') }}">Logs</a>
-      <a href="/audit" class="{{ 'active' if path.startswith('/audit') }}">Audit log</a>{% endif %}
-      {% if user.is_admin %}<a href="/users" class="{{ 'active' if path.startswith('/users') }}">Users and roles</a>
-      {% if auth_mode == 'dev' %}<a href="/dev/outbox" class="{{ 'active' if path.startswith('/dev') }}">Email outbox (dev)</a>{% endif %}{% endif %}
+      {% set fw_page = path == '/frameworks' or path.startswith('/frameworks/new') %}
+      {% set p = namespace(prog=in_framework or (view == 'all' and path.startswith('/frameworks'))) %}
+      {% for pre in ['/controls', '/calendar', '/vendors', '/overrides', '/ai', '/cycles'] %}{% if path.startswith(pre) %}{% set p.prog = True %}{% endif %}{% endfor %}
+      {% set p.docs = path.startswith('/evidence') or path.startswith('/policies') or path.startswith('/library') or path.startswith('/kb') %}
+      {% set p.conf = (fw_page and view != 'all') %}
+      {% for pre in ['/settings', '/setup', '/backups', '/updates', '/logs', '/jobs', '/audit', '/users', '/dev'] %}{% if path.startswith(pre) %}{% set p.conf = True %}{% endif %}{% endfor %}
+      {% if not user.is_contributor %}{{ navlink('/', 'dashboard', 'Dashboard', path == '/') }}{% endif %}
+      {% if user.can_write %}{{ navlink('/work', 'work', 'My work', path.startswith('/work') or path.startswith('/assignments'), my_open) }}{% endif %}
+      {% if user.is_admin %}{{ navlink('/reviews', 'reviews', 'Reviews', path.startswith('/reviews'), review_count) }}{% endif %}
+      {% call navgroup('program', 'criteria', 'Compliance', p.prog, calendar_due if user.is_admin else None) %}
+        {% if user.sees_everything %}{% if view == 'soc2' %}{{ navlink('/criteria', 'criteria', 'SOC 2 criteria', in_framework) }}
+        {% elif view_fw %}{{ navlink('/frameworks/' ~ view_fw.id, 'criteria', view_fw.name.split(' (')[0].split(':')[0], in_framework) }}
+        {% else %}{{ navlink('/frameworks', 'criteria', 'Frameworks', path.startswith('/frameworks') or path.startswith('/criteria') or nav_active == 'framework') }}{% endif %}{% endif %}
+        {{ navlink('/controls', 'controls', 'My controls' if user.is_contributor else 'Controls', path.startswith('/controls') and not in_framework) }}
+        {% if user.is_admin %}{{ navlink('/calendar', 'calendar', 'Calendar', path.startswith('/calendar'), calendar_due, 'Past due, not recorded') }}{% endif %}
+        {{ navlink('/vendors', 'vendors', 'Vendors', path.startswith('/vendors')) }}
+        {% if user.sees_everything %}{{ navlink('/overrides', 'overrides', 'Overrides', path.startswith('/overrides')) }}
+        {{ navlink('/cycles', 'cycles', 'Cycles and export', path.startswith('/cycles')) }}
+        {{ navlink('/ai', 'ai', 'AI assistant', path.startswith('/ai')) }}{% endif %}
+      {% endcall %}
+      {% call navgroup('docs', 'policies', 'Evidence & docs', p.docs) %}
+        {% if user.sees_everything %}{{ navlink('/evidence', 'evidence', 'Evidence store', path.startswith('/evidence')) }}{% endif %}
+        {{ navlink('/policies', 'policies', 'Policies', path.startswith('/policies')) }}
+        {{ navlink('/library', 'library', 'Document library', path.startswith('/library')) }}
+        {{ navlink('/kb', 'kb', 'Knowledge base', path.startswith('/kb')) }}
+      {% endcall %}
+      {% if user.sees_everything %}{% call navgroup('config', 'settings', 'Configuration', p.conf) %}
+        {% if user.is_admin %}{% if view != 'all' %}{{ navlink('/frameworks', 'criteria', 'Frameworks in use', fw_page) }}{% endif %}
+        {{ navlink('/settings', 'settings', 'Settings', path.startswith('/settings')) }}
+        {{ navlink('/setup', 'setup', 'Setup guide', path.startswith('/setup')) }}
+        {{ navlink('/backups', 'backups', 'Backups', path.startswith('/backups')) }}
+        {{ navlink('/updates', 'updates', 'Updates', path.startswith('/updates')) }}{% endif %}
+        {{ navlink('/logs', 'logs', 'Logs', path.startswith('/logs') or path.startswith('/jobs')) }}
+        {{ navlink('/audit', 'audit', 'Audit log', path.startswith('/audit')) }}
+        {% if user.is_admin %}{{ navlink('/users', 'users', 'Users and roles', path.startswith('/users')) }}
+        {% if auth_mode == 'dev' %}{{ navlink('/dev/outbox', 'mail', 'Email outbox (dev)', path.startswith('/dev')) }}{% endif %}{% endif %}
+      {% endcall %}{% endif %}
     </nav>
     <div class="side-user"><b>{{ user.name }}</b>{{ user.email }}
       <div class="mt-s"><span class="role role-{{ user.role }}">{{ role_labels[user.role] }}</span> <span class="sub-dark">Cycle: {{ cycle.name }}</span></div>

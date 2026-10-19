@@ -31,7 +31,7 @@ coverage per requirement, and the AI mock audit can run against any framework.
 
 Most organizations start with one framework. An admin chooses which frameworks are **in use** on
 the **Frameworks** page (**Turn on** / **Turn off**), or with the `GRCPAL_FRAMEWORKS` setting
-(Configuration > Organization, one ID per line; empty means SOC 2 only, the default for a new
+(Configuration > Settings > Organization, one ID per line; empty means SOC 2 only, the default for a new
 installation). Each change is in the audit log
 (`framework.on`, `framework.off`), and at least one framework stays on.
 

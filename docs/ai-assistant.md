@@ -26,7 +26,7 @@ status, summaries and CSV excerpts of the latest collector runs, check results, 
 
 To add a provider, subclass `Provider` in `grcpal/ai/providers.py` and register it in `from_settings`.
 
-## Controls on the data (configure under Configuration > AI assistant)
+## Controls on the data (configure under Configuration > Settings > AI assistant)
 
 - **Off by default.** Nothing is sent until an admin turns it on and presses a button.
 - **Data use confirmation** is required before any external provider is used.

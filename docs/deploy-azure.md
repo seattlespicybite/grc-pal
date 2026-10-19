@@ -123,7 +123,7 @@ sign-in log export filtered to GRC-pal.
 
 ## Step 4. Connect your systems in the portal
 
-Open **Administration > Configuration** (or the **Setup guide**, which walks through the same steps).
+Open **Configuration > Settings** (or the **Setup guide**, which walks through the same steps).
 For each system: read the guidance, enter the values, press **Test without saving**, fix anything
 red, then **Save and apply**. Credentials are encrypted with the instance's `GRCPAL_ENCRYPTION_KEY`.
 `deploy.sh` printed that key the first time; keep it in a password manager. Press **Run collection
@@ -222,8 +222,8 @@ container app and its jobs (plus using its Container Apps environment).
 
 | Release | Installs |
 | --- | --- |
-| Patch (0.3.0 → 0.3.1) | When someone runs the workflow with the version number. The weekly run (Mondays) installs nothing: it lists newer releases, security fixes first, in the run summary |
-| Feature (0.3 → 0.4) | When someone runs the workflow with the version number (Actions → GRC-pal update → Run workflow) |
+| Patch (0.4.0 → 0.4.1) | When someone runs the workflow with the version number. The weekly run (Mondays) installs nothing: it lists newer releases, security fixes first, in the run summary |
+| Feature (0.4 → 0.5) | When someone runs the workflow with the version number (Actions → GRC-pal update → Run workflow) |
 | Major (0.x → 1.0) | Same, with **major** ticked, after reading the release notes |
 
 What every update does (users stay on the current version until the last step):
@@ -253,15 +253,15 @@ From your own computer (Azure CLI and GitHub CLI signed in):
 
 ```bash
 ./deploy/azure/update.sh --name acme --status            # running, previous and latest versions
-./deploy/azure/update.sh --name acme --version 0.3.1     # install a release (asks first)
+./deploy/azure/update.sh --name acme --version 0.4.1     # install a release (asks first)
 ./deploy/azure/update.sh --name acme --rollback
 ```
 
 `deploy.sh` never changes the version: re-running it (for example to rotate the sign-in secret) keeps the
 version that is running.
 
-**Instances on 0.2.0** (before the updater existed): move to 0.3.0 once with
-`./deploy/azure/deploy.sh --name acme --admins you@acme.com --image ghcr.io/seattlespicybite/grc-pal:0.3.0`
+**Instances on 0.2.0** (before the updater existed): move to 0.4.0 once with
+`./deploy/azure/deploy.sh --name acme --admins you@acme.com --image ghcr.io/seattlespicybite/grc-pal:0.4.0`
 after a backup; from then on the workflow does it.
 
 ## Rebuild from a backup

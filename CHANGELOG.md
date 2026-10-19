@@ -4,8 +4,13 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-19 - Refreshed look, grouped menu
+
+This is the first release with the VM installer, signed update files and the Azure updater. Version 0.3.0
+was never published; installs start at 0.4.0. No data model change (data model 1, as in 0.2.0).
+
 ### Added
-- **Document library** (menu: Document library). An Explorer-style repository for the whole policy hierarchy:
+- **Document library** (menu: Evidence & docs > Document library). An Explorer-style repository for the whole policy hierarchy:
   53 built-in Word templates (the umbrella policy and 13 topic policies as full templates with a "How it is
   tested" column; 13 standards, 20 procedures and 6 SOC 2 documents as skeletons), written without any
   organization name. Admins download a template, adapt it and upload it as the **official version**
@@ -152,6 +157,22 @@ All notable changes are listed here. The project follows [semantic versioning](h
   ones). CSV cells starting with `= + - @` are prefixed with a quote.
 
 ### Changed
+- **New look.** Icons in the menu, softer cards and status labels with a colored dot, light and dark themes
+  that follow the computer's setting, and a readiness ring on the dashboard ("3 of 79 controls operating":
+  operating plus accepted by admin, out of all controls in scope). Still no inline styles or scripts (strict
+  CSP), and no new JavaScript.
+- **Shorter, grouped menu.** Dashboard, My work and Reviews stay at the top; everything else sits in three
+  groups that open with a click: **Compliance** (criteria, controls, calendar, vendors, overrides,
+  cycles and export, AI assistant), **Evidence & docs** (evidence store, policies, document library,
+  knowledge base) and **Configuration** (frameworks in use, settings, setup guide, backups, updates, logs,
+  audit log, users and roles, email outbox in development). The group holding the current page opens by
+  itself; a closed group shows its count (for example past-due calendar items). Who sees which page did
+  not change, and the server still checks every page and action. The Configuration page is now listed as
+  **Settings** in the Configuration group. Built with the browser's own `<details>` element, so it works
+  with the keyboard and without JavaScript.
+- `AGENTS.md` (Jules and other agents) and `GEMINI.md` (Gemini CLI) point to `CLAUDE.md`, which stays the
+  single source of the repository rules, plus rules for working with several AI tools (one branch and pull
+  request per task, no pushes to `main`, no weakened tests).
 - **Every update is manual by default.** VM: automatic patch installs are off unless an admin turns them on.
   Azure: the scheduled workflow run (now weekly, Mondays) only lists newer releases in its summary; an update
   installs only when someone runs the workflow with a version.

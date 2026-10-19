@@ -62,7 +62,7 @@ security incident: preserve the evidence and investigate who had storage access.
 
 ## Logs page
 
-**Administration > Logs** lists the events that matter for troubleshooting and audits: sign-in
+**Configuration > Logs** lists the events that matter for troubleshooting and audits: sign-in
 refusals, first sign-ins, configuration saves and connection tests, collector and check runs, email
 failures, AI requests (never their content), jobs, exports and unexpected errors with their
 reference. Filter by keyword, level, category and period; tick *Include audit trail* to merge in the
@@ -217,7 +217,7 @@ repository's collector workflows) on the version you run.
 | Release | Example | Data model | Going back to the previous version |
 | --- | --- | --- | --- |
 | Patch (0.2.1) | Bug and security fixes | Never changes | Start the previous image |
-| Minor (0.3.0) | Features, design changes | Only adds (new fields, rows, tables) | Start the previous image: it still reads the data |
+| Minor (0.4.0) | Features, design changes | Only adds (new fields, rows, tables) | Start the previous image: it still reads the data |
 | Major (1.0, 2.0) | Larger changes | May clean up what an earlier release announced | Restore the backup taken before the update |
 
 - **Evidence is never changed by an update.** Migrations only get the table store.

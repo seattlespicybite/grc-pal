@@ -1,13 +1,31 @@
-{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}Dashboard{% endblock %}
+{% extends "base.html" %}{% from "_macros.html" import pill, icon %}{% block title %}Dashboard{% endblock %}
 {% block content %}
+{% set total_ctl = data.controls|length %}
+{% set ready_ctl = data.counts.get('ok', 0) + data.counts.get('accepted', 0) %}
+{% set pct = ((100 * ready_ctl / total_ctl)|round|int) if total_ctl else 0 %}
 <div class="page-head"><div><h1>SOC 2 program health</h1>
-<div class="sub">{{ org }} · {{ cycle.name }} ({{ cycle.start }} to {{ cycle.end }}) · {{ data.controls|length }} controls · updated {{ data.generated }}</div></div>
-{% if user.sees_everything %}<a class="btn ghost small" href="/cycles/{{ cycle.RowKey }}/export">Download auditor export</a>{% endif %}</div>
-<div class="grid g5">
-{% for s in ['ok', 'accepted', 'findings', 'attention', 'not_started'] %}
-  <a class="stat" href="/controls?status={{ s }}"><div class="n {{ s }}">{{ data.counts.get(s, 0) }}</div><div class="l">{{ status_labels[s] }}</div></a>
-{% endfor %}
+<div class="sub">{{ org }} · {{ cycle.name }} ({{ cycle.start }} to {{ cycle.end }}) · {{ total_ctl }} controls · updated {{ data.generated }}</div></div>
+{% if user.sees_everything %}<a class="btn ghost small" href="/cycles/{{ cycle.RowKey }}/export">{{ icon('backups') }} Download auditor export</a>{% endif %}</div>
+
+<div class="hero-strip">
+  <div class="readiness-card">
+    <svg class="ring-svg" viewBox="0 0 36 36" role="img" aria-label="{{ pct }}% controls operating">
+      <circle class="ring-bg" cx="18" cy="18" r="15.915"/>
+      <circle class="ring-fg" cx="18" cy="18" r="15.915" stroke-dasharray="{{ pct }}, 100"/>
+    </svg>
+    <div>
+      <div class="readiness-pct">{{ pct }}%</div>
+      <div class="readiness-label">{{ ready_ctl }} of {{ total_ctl }} controls operating</div>
+      <div class="sub">Active cycle: {{ cycle.name }}</div>
+    </div>
+  </div>
+  <div class="grid g5 stat-grid">
+  {% for s in ['ok', 'accepted', 'findings', 'attention', 'not_started'] %}
+    <a class="stat stat-card-{{ s }}" href="/controls?status={{ s }}"><div class="n {{ s }}">{{ data.counts.get(s, 0) }}</div><div class="l">{{ status_labels[s] }}</div></a>
+  {% endfor %}
+  </div>
 </div>
+
 <div class="grid g2 mt-l">
   <section class="card"><h2>By category</h2>
   {% for cat, name in category_names.items() if by_cat.get(cat) %}{% set c = by_cat[cat] %}{% set total = c.values()|sum %}
@@ -23,7 +41,7 @@
 <div class="grid g2">
 <section class="card"><h2>Evidence requests this cycle</h2>
 <div class="grid g4 mini">{% for s, label in [('open', 'Open'), ('submitted', 'Waiting for review'), ('returned', 'Returned'), ('approved', 'Approved')] %}
-<div><div class="n-s">{{ progress[s] }}</div><div class="sub">{{ label }}</div></div>{% endfor %}</div>
+<div class="mini-stat"><div class="n-s">{{ progress[s] }}</div><div class="sub">{{ label }}</div></div>{% endfor %}</div>
 {% if user.is_admin and review_count %}<p class="mt"><a class="btn small" href="/reviews">Review {{ review_count }} submission{{ 's' if review_count != 1 }}</a></p>{% endif %}</section>
 <section class="card"><h2>Policy acknowledgments</h2>
 {% if policies %}<table><tbody>{% for pol, st in policies %}{% set total = st.acked|length + st.missing|length %}
