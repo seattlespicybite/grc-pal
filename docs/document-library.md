@@ -1,6 +1,6 @@
 # Document library
 
-The **Document library** (menu: Document library) holds your whole security document set in one place: the
+The **Document library** (menu: Evidence & docs > Document library) holds your whole security document set in one place: the
 policy hierarchy, the built-in Word templates, and your own official versions with every old version kept.
 It sits next to **Policies**, which still handles reading and accepting policies.
 

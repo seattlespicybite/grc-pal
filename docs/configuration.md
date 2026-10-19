@@ -2,7 +2,7 @@
 
 There are two layers:
 
-1. **The Configuration page** (admins, **Administration > Configuration**) holds everything about what
+1. **The Configuration page** (admins, **Configuration > Settings**) holds everything about what
    GRC-pal connects to: organization name, Microsoft Entra ID and Azure, AWS, Google Cloud, GitHub,
    HR feed and documentation links, email and the AI assistant. Each section explains every field,
    has **Test without saving**, **Save and apply** and **Save and test**, and shows the result of the

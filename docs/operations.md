@@ -62,7 +62,7 @@ security incident: preserve the evidence and investigate who had storage access.
 
 ## Logs page
 
-**Administration > Logs** lists the events that matter for troubleshooting and audits: sign-in
+**Configuration > Logs** lists the events that matter for troubleshooting and audits: sign-in
 refusals, first sign-ins, configuration saves and connection tests, collector and check runs, email
 failures, AI requests (never their content), jobs, exports and unexpected errors with their
 reference. Filter by keyword, level, category and period; tick *Include audit trail* to merge in the

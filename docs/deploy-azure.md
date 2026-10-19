@@ -123,7 +123,7 @@ sign-in log export filtered to GRC-pal.
 
 ## Step 4. Connect your systems in the portal
 
-Open **Administration > Configuration** (or the **Setup guide**, which walks through the same steps).
+Open **Configuration > Settings** (or the **Setup guide**, which walks through the same steps).
 For each system: read the guidance, enter the values, press **Test without saving**, fix anything
 red, then **Save and apply**. Credentials are encrypted with the instance's `GRCPAL_ENCRYPTION_KEY`.
 `deploy.sh` printed that key the first time; keep it in a password manager. Press **Run collection

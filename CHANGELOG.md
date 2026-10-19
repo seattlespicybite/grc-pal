@@ -4,6 +4,28 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-19 - Refreshed look, grouped menu
+
+No data model change (data model 1, as in 0.3.0).
+
+### Changed
+- **New look.** Icons in the menu, softer cards and status labels with a colored dot, light and dark themes
+  that follow the computer's setting, and a readiness ring on the dashboard ("3 of 79 controls operating":
+  operating plus accepted by admin, out of all controls in scope). Still no inline styles or scripts (strict
+  CSP), and no new JavaScript.
+- **Shorter, grouped menu.** Dashboard, My work and Reviews stay at the top; everything else sits in three
+  groups that open with a click: **Compliance** (criteria, controls, calendar, vendors, access reviews,
+  overrides, cycles and export, AI assistant), **Evidence & docs** (evidence store, policies, document
+  library, knowledge base) and **Configuration** (frameworks in use, settings, setup guide, backups,
+  updates, logs, audit log, users and roles, email outbox in development). The group holding the current
+  page opens by itself; a closed group shows its count (past-due calendar items, open access reviews). Who
+  sees which page did not change, and the server still checks every page and action. The Configuration
+  page is now listed as **Settings** in the Configuration group. Built with the browser's own `<details>`
+  element, so it works with the keyboard and without JavaScript.
+- `AGENTS.md` (Jules and other agents) and `GEMINI.md` (Gemini CLI) point to `CLAUDE.md`, which stays the
+  single source of the repository rules, plus rules for working with several AI tools (one branch and pull
+  request per task, no pushes to `main`, no weakened tests).
+
 ## [0.3.0] - 2026-10-17
 
 ### Added

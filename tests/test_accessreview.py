@@ -4,6 +4,7 @@ confirming removals, closing with write-once evidence, formula-safe export, audi
 import csv
 import hashlib
 import io
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -329,7 +330,10 @@ def test_pages_forms_and_roles(portal, client):
     page = client.get(f"/access-reviews/{cid}")
     assert page.status_code == 200 and "alice" in page.text and "carol" not in page.text
     assert "Progress by manager" not in page.text
-    alice = entries(portal, cid)[("GitHub", "alice")]["RowKey"]
+    # the grouped menu shows the review to a manager who has one waiting, with its count on the closed group
+    menu = re.search(r'<details class="nav-group" data-nav-group="program">(.*?)</details>', client.get("/work").text, re.S).group(1)
+    assert 'href="/access-reviews"' in menu and re.search(r'<summary>.*?<span class="count">\d+</span>', menu, re.S)
+    alice =entries(portal, cid)[("GitHub", "alice")]["RowKey"]
     r = client.post(f"/access-reviews/{cid}/decide", data={"csrf": token, f"d_{alice}": "keep", f"c_{alice}": "ok"},
                     follow_redirects=False)
     assert r.status_code == 303 and "Saved+1" in r.headers["location"]
