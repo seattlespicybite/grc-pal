@@ -29,12 +29,11 @@
 <div><label for="assurance">Assurance report</label><select id="assurance" name="assurance">{% for k, label in assurance.items() %}<option value="{{ k }}"{% if (v.assurance or '') == k %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
 <div><label for="period_start">Report period start</label><input id="period_start" name="period_start" type="date" value="{{ v.period_start or '' }}"></div>
 <div><label for="period_end">Report period end (or certificate expiry)</label><input id="period_end" name="period_end" type="date" value="{{ v.period_end or '' }}"></div>
-<div><label for="opinion">Auditor's opinion</label><select id="opinion" name="opinion">{% for k, label in opinions.items() %}<option value="{{ k }}"{% if (v.opinion or '') == k %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div><label for="opinion">Report result</label><select id="opinion" name="opinion">{% for k, label in opinions.items() %}<option value="{{ k }}"{% if (v.opinion or '') == k %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
 </div>
-<div class="form-row">
-<div><label for="start_date">Date we started sharing data</label><input id="start_date" name="start_date" type="date" value="{{ v.start_date or '' }}"></div>
-{% if not new %}<div><label for="next_review_override">Move the next review to</label><input id="next_review_override" name="next_review_override" type="date" value="{{ v.next_review_override or '' }}"><div class="hint">Leave empty to use 12 months after the last review.</div></div>{% endif %}
-</div>
+{% if not new %}<div class="form-row">
+<div><label for="next_review_override">Move the next review to</label><input id="next_review_override" name="next_review_override" type="date" value="{{ v.next_review_override or '' }}"><div class="hint">Leave empty to use 12 months after the last review.</div></div>
+</div>{% endif %}
 {% endif %}
 <label for="notes">{{ 'Notes' if user.is_admin else 'Why do we need this vendor, and what will we share?' }}</label>
 <textarea id="notes" name="notes" maxlength="2000">{{ v.notes or '' }}</textarea>

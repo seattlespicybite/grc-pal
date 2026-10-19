@@ -36,10 +36,9 @@
 <dt>Internal owner</dt><dd>{% if user.is_auditor %}{{ v.owner_title or ('Set' if v.owner_set else 'Not set') }}{% else %}{{ v.owner_name or v.owner_email or 'Not set' }}{% if v.owner_title %}, {{ v.owner_title }}{% endif %}{% endif %}</dd>
 <dt>Status</dt><dd>{{ statuses[v.status] }}{% if v.approved_at %} · approved {{ v.approved_at[:10] }}{% endif %}{% if v.end_date %} · ended {{ v.end_date }}{% endif %}</dd>
 <dt>Subservice organization</dt><dd>{{ subservice.get(v.subservice, 'No') }}{% if v.subservice in ('carved_out', 'inclusive') %} <span class="sub">(listed in the auditor export for our system description)</span>{% endif %}</dd>
-<dt>Contract security terms</dt><dd>{{ contract.get(v.contract_terms, 'Not checked') }}{% if v.contract_note %} · {{ v.contract_note }}{% endif %}</dd>
-<dt>Data processing agreement</dt><dd>{{ contract.get(v.dpa, 'Not checked') }}</dd>
-<dt>Assurance report</dt><dd>{{ assurance.get(v.assurance or '', '') }}{% if v.period_end %} · period {{ v.period_start or '?' }} to {{ v.period_end }}{% endif %}{% if v.opinion %} · {{ opinions.get(v.opinion, '') }}{% endif %}</dd>
-<dt>Sharing data since</dt><dd>{{ v.start_date or '—' }}</dd>
+<dt>Contract security terms</dt><dd>{{ contract.get(v.contract_terms) or '—' }}{% if v.contract_note %} · {{ v.contract_note }}{% endif %}</dd>
+<dt>Data processing agreement</dt><dd>{{ contract.get(v.dpa) or '—' }}</dd>
+<dt>Assurance report</dt><dd>{{ assurance.get(v.assurance or '', '') }}{% if v.period_end %} · period {{ v.period_start or '?' }} to {{ v.period_end }}{% endif %}{% if v.opinion %} · result: {{ opinions.get(v.opinion, '') }}{% endif %}</dd>
 <dt>Last review</dt><dd>{{ v.last_review or 'Never' }}</dd>
 <dt>Next review</dt><dd>{{ v.next_review or '—' }}{% if v.next_review_override %} <span class="sub">(moved by an admin)</span>{% endif %}</dd>
 {% if v.notes %}<dt>Notes</dt><dd class="v-pre">{{ v.notes }}</dd>{% endif %}
@@ -124,7 +123,7 @@
 <label for="x-impact">Impact on us</label><input id="x-impact" name="impact" maxlength="500">
 <label for="x-resp">Our response</label><input id="x-resp" name="response" required maxlength="1000" placeholder="Accepted, compensating control, or follow-up issue">
 <div class="actions"><button class="btn small" type="submit">Record</button></div></form></details>
-<p class="hint mt">Report type, period and opinion: <a href="/vendors/{{ v.RowKey }}/edit">edit the vendor</a>. CUECs: <a href="/vendors/{{ v.RowKey }}?tab=cuecs">CUECs tab</a>.</p></section>{% endif %}
+<p class="hint mt">Report type, period and result: <a href="/vendors/{{ v.RowKey }}/edit">edit the vendor</a>. CUECs: <a href="/vendors/{{ v.RowKey }}?tab=cuecs">CUECs tab</a>.</p></section>{% endif %}
 <section class="card"><h2>{{ 'Approve or reject' if r.kind == 'onboarding' else 'Sign off' }}</h2>
 {% if gaps %}<div class="hint-box"><b>Open items for a {{ tiers.get(v.tier, '')|lower }} vendor:</b><ul class="list mt-s">{% for g in gaps %}<li>{{ g }}</li>{% endfor %}</ul>
 To sign off anyway, write why these are accepted. The note and the list go to the auditor export.</div>{% else %}<p class="sub">Everything this tier needs is in place.</p>{% endif %}

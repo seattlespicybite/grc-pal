@@ -18,6 +18,18 @@
     });
   });
 
+  // Back button: same as the browser's Back, so the previous page opens where you left it (the browser
+  // restores the scroll position). Shown only when the previous page was a page of this portal.
+  var back = document.querySelector('[data-back]');
+  if (back) {
+    var fromHere = false;
+    try { fromHere = !!document.referrer && new URL(document.referrer).origin === window.location.origin; } catch (e) {}
+    if (fromHere && window.history.length > 1) {
+      back.hidden = false;
+      back.addEventListener('click', function () { window.history.back(); });
+    }
+  }
+
   // Confirm destructive actions.
   document.querySelectorAll('form[data-confirm]').forEach(function (f) {
     f.addEventListener('submit', function (ev) {

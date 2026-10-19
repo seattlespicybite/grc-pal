@@ -4,6 +4,19 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+No data model change.
+
+### Added
+- **Back button** at the top of every page. It works like the browser's Back button, so the previous page
+  opens at the same scroll position. It appears only when the previous page was a page of this portal.
+- Vendors: **Not applicable** is now a choice for contract security terms and the data processing agreement.
+
+### Changed
+- Vendors: contract and DPA answers nobody has checked yet show as an empty choice instead of "Not checked".
+- Vendors: "Auditor's opinion" is now **Report result** with plain choices (Clean, With exceptions,
+  Unfavorable, No conclusion, Not applicable). Stored values and the auditor export keep the formal terms.
+- Vendors: the "Date we started sharing data" field is no longer shown. Dates already saved are kept.
+
 ## [0.4.0] - 2026-10-19 - Refreshed look, grouped menu
 
 No data model change (data model 1, as in 0.3.0).

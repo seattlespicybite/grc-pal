@@ -1165,3 +1165,12 @@ def test_cycle_export_includes_every_version_of_implementation_notes(env):
         assert [(r["control"], r["version"], r["text"]) for r in rows] == [("IAM-02", "1", "First version"),
                                                                               ("IAM-02", "2", "Second version")]
         assert "implementation_notes.csv" in z.read("MANIFEST.csv").decode()
+
+
+def test_back_button_is_on_every_page_and_csp_safe(env):
+    portal, client = env
+    as_(client, ADMIN)
+    html = client.get("/controls").text
+    assert '<button type="button" class="btn ghost small back-btn" data-back hidden>' in html
+    js = client.get("/static/app.js").text
+    assert "history.back()" in js and "document.referrer" in js

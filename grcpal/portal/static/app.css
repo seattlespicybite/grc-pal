@@ -447,3 +447,7 @@ a.stat:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 @media (max-width: 960px) { .hero-strip { grid-template-columns: 1fr; } }
 .ar-stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .table-wrap td input[type=text] { width: 100%; min-width: 160px; }
+
+/* Back button (shown by app.js when there is a previous portal page) */
+.back-btn { margin-bottom: 12px; }
+@media print { .back-btn { display: none; } }
