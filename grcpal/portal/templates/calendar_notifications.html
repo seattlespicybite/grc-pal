@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% block title %}Email alerts{% endblock %}
+{% block content %}
+<div class="mb"><a href="/calendar">‹ Security calendar</a></div>
+<div class="page-head"><div><h1>Email alerts for automation</h1>
+<div class="sub">Your own settings: what GRC-pal emails you about collectors and checks. Emails are sent after the daily collection, usually early in the morning.</div></div></div>
+<form method="post" action="/calendar/notifications" class="card"><input type="hidden" name="csrf" value="{{ csrf }}">
+<h2>When something fails</h2>
+<label class="check"><input type="checkbox" name="alerts" value="1"{% if prefs.alerts %} checked{% endif %}> Email me when a collector or check fails</label>
+<div class="hint">One email per failed run. If it keeps failing, you get another email on each new failed run, so a broken integration cannot go unnoticed.</div>
+<h2 class="mt-l">Digests</h2>
+<p class="sub">A summary of every automated activity: what worked, what failed and what did not run at all.</p>
+{% for k, label in digests.items() %}<label class="check"><input type="checkbox" name="digests" value="{{ k }}"{% if k in prefs.digests %} checked{% endif %}> {{ {'daily': 'Morning digest', 'weekly': 'Weekly digest', 'monthly': 'Monthly digest'}[k] }} <span class="sub">({{ label }})</span></label>{% endfor %}
+<div class="hint mt">Emails contain names, counts, dates and the first line of an error, never evidence files or secrets. If emails never arrive, check Settings &gt; Email.</div>
+<div class="actions"><button class="btn" type="submit">Save</button></div></form>
+{% endblock %}

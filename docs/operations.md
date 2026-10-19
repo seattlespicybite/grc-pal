@@ -6,7 +6,7 @@ What the security admin does each day, month and year, and how to keep the insta
 
 | When | What happens automatically | What you do |
 | --- | --- | --- |
-| Daily | Collectors run, evidence is stored, deficiency issues open or update, the portal records and the verified audit log are exported to write-once storage | Glance at the dashboard; fix or assign red controls |
+| Daily | Collectors run, evidence is stored, deficiency issues open or update, the portal records and the verified audit log are exported to write-once storage. Admins are emailed about failed collectors or checks, and get the digests they chose | Glance at the dashboard or the morning digest; fix or assign red controls |
 | On upload | Admins and the request's people are emailed | Review under **Reviews** (approve, or return with a note) |
 | On comment | Everyone on the request is emailed | Reply in the thread |
 | Weekly (Monday) | Overdue requests get a reminder (job `remind`) | Escalate anything overdue twice |
@@ -14,6 +14,20 @@ What the security admin does each day, month and year, and how to keep the insta
 | Monthly | | Show the dashboard to the executive sponsor (management review evidence) |
 | Quarterly | | Access review of GRC-pal itself: download **Users and roles > CSV**, confirm each person, disable leavers |
 | Yearly | | Start the next cycle; re-justify overrides; publish policy updates and ask for acknowledgments |
+
+## Automation alerts and digests
+
+Right after the daily collection, GRC-pal emails admins:
+
+- **Failure alerts** (on by default): one email for each new failed run of a collector or check, with the first
+  line of the error. A source that keeps failing alerts again on each new failed run, so it cannot go quiet.
+- **Digests** (off by default): a morning, weekly (Monday) and monthly (1st) summary of every automated
+  activity: what worked, what failed, and what did not run at all in the period.
+
+Each admin chooses on **Calendar > Email alerts**. Emails need Settings > Email to be set up. Limitation: if
+the whole collection job never starts (for example, the server is off), no alert is sent; a daily or weekly
+digest that stops arriving is the sign to look. The digest's "Did not run" list also catches single
+collectors that stopped running.
 
 ## Requests, reminders and comments
 

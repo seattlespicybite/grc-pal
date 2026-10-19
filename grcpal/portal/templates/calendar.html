@@ -15,7 +15,7 @@
 <a class="btn ghost small" href="/calendar?year={{ year + 1 }}{{ q_auto }}">{{ year + 1 }} ›</a>
 <a class="btn ghost small" href="/calendar?year={{ year }}&amp;auto={{ '0' if show_auto else '1' }}">{{ 'Hide' if show_auto else 'Show' }} automated</a>
 <a class="btn ghost small" href="/calendar.csv?year={{ year }}">Export CSV</a>
-<a class="btn small" href="/calendar/a/new">+ New activity</a></div></div>
+<a class="btn ghost small" href="/calendar/notifications">Email alerts</a> <a class="btn small" href="/calendar/a/new">+ New activity</a></div></div>
 
 <section class="card table-wrap">
 <div class="row-between mb">
@@ -38,7 +38,7 @@
 <tr><td><a class="cal-name" href="/vendors">Annual vendor reviews</a><div class="sub">Next review date per vendor · VEN-02</div></td>
 {% for items in vendor_months %}<td class="c{{ ' now' if loop.index == this_month }}">{% if items %}<a class="cal-cell cal-{{ 'past_due' if items|selectattr('due', 'lt', today)|list else 'planned' }}" href="{{ '/vendors/' ~ items[0].id if items|length == 1 else '/vendors' }}" title="{% for i in items %}{{ i.name }} ({{ i.due }}){% if not loop.last %}, {% endif %}{% endfor %}">{{ items[0].name if items|length == 1 else items|length ~ ' vendors' }}</a>{% endif %}</td>{% endfor %}
 <td></td></tr></tbody>{% endif %}
-{% if show_auto and automated %}<tbody data-sortable="automated">
+{% if show_auto and automated %}<tbody data-sortable="automated" id="automated">
 <tr class="cal-group"><td colspan="14">Automated, set by GRC-pal from real runs ({{ automated|length }})</td></tr>
 {% for a in automated %}<tr id="row-{{ a.id }}" data-id="{{ a.id }}"><td><span class="cal-grip" aria-hidden="true">⋮⋮</span><a class="cal-name" href="/calendar/a/{{ a.id }}">{{ a.title }}</a>
 <div class="sub">{{ a.schedule }}{% if a.controls %} · {{ a.controls|join(', ') }}{% endif %}</div></td>

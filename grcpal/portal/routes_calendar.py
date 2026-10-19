@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse
 
 from grcpal.portal.auth import User
 from grcpal.portal.security import csv_cell
+from grcpal.portal.automation import DIGESTS
 from grcpal.portal.calendar import AUTO_STATUSES, DUE_DAYS, KEY_RE, STATUSES
 from grcpal.portal.service import Forbidden, Invalid
 
@@ -176,6 +177,23 @@ def register(app, h) -> None:
         h.invalidate()
         dest = h.safe_dest(str(form.get("return_to", "")), f"/calendar?year={occ['period'][:4]}")
         return back(dest, msg=f"Saved: {STATUSES[occ['decision']]}")
+
+    # ---------------------------------------------------------------- email alerts and digests
+    @app.get("/calendar/notifications", response_class=HTMLResponse)
+    def calendar_notifications(request: Request, user: User = Depends(current_user)):
+        admin(user)
+        return render(request, user, "calendar_notifications.html", nav_active="calendar",
+                      prefs=p().notify_prefs(user), digests=DIGESTS)
+
+    @app.post("/calendar/notifications")
+    async def calendar_notifications_save(request: Request, user: User = Depends(current_user)):
+        raw = await request.form()
+        h.check_csrf(request, user.email, raw.get("csrf"))
+        try:
+            p().set_notify_prefs(user, raw.get("alerts") == "1", [str(d) for d in raw.getlist("digests")])
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        return back("/calendar/notifications", msg="Email settings saved")
 
     # ---------------------------------------------------------------- activities
     def activity_page(request, user, act: dict, form: dict | None = None, error: str | None = None):
