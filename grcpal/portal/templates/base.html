@@ -31,6 +31,7 @@
       <a href="/controls" class="{{ 'active' if path.startswith('/controls') and not in_framework }}">{{ 'My controls' if user.is_contributor else 'Controls' }}</a>
       {% if user.is_admin %}<a href="/calendar" class="{{ 'active' if path.startswith('/calendar') }}">Calendar {% if calendar_due %}<span class="count" title="Past due, not recorded">{{ calendar_due }}</span>{% endif %}</a>{% endif %}
       <a href="/vendors" class="{{ 'active' if path.startswith('/vendors') }}">Vendors</a>
+      {% if user.sees_everything or ar_open %}<a href="/access-reviews" class="{{ 'active' if path.startswith('/access-reviews') }}">Access reviews {% if ar_open %}<span class="count" title="Open reviews waiting for you">{{ ar_open }}</span>{% endif %}</a>{% endif %}
       {% if user.sees_everything %}<a href="/evidence" class="{{ 'active' if path.startswith('/evidence') }}">Evidence store</a>{% endif %}
       <a href="/policies" class="{{ 'active' if path.startswith('/policies') }}">Policies</a>
       <a href="/library" class="{{ 'active' if path.startswith('/library') }}">Document library</a>

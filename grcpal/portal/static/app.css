@@ -388,3 +388,6 @@ td:hover > .cal-add, .cal-add:focus { opacity: 1; border-color: var(--idle); tex
 .pill.dl-superseded, .pill.dl-archived, .pill.dl-template { color: var(--idle); }
 .pill.dl-rev-ok { color: var(--ok); } .pill.dl-rev-soon { color: var(--warn); } .pill.dl-rev-overdue { color: var(--bad); }
 @media (max-width: 960px) { .lib { grid-template-columns: minmax(0, 1fr); } .lib-tree { position: static; } }
+
+.ar-stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.table-wrap td input[type=text] { width: 100%; min-width: 160px; }

@@ -231,6 +231,7 @@ changed by an update. Details: [deploy-vm.md](docs/deploy-vm.md#updates),
 | [Frameworks, controls and checks](docs/frameworks-and-controls.md) | Frameworks in use, the SOC 2 view, implementation notes, the knowledge base, editing controls, custom controls, URL checks |
 | [Configuration](docs/configuration.md) | Configuration page and every environment variable |
 | [Clouds](docs/clouds.md) | Connecting Azure, AWS and Google Cloud with least privilege |
+| [Access reviews](docs/access-reviews.md) | Quarterly user access reviews: managers review their people across all applications |
 | [AI assistant](docs/ai-assistant.md) | Evidence review and mock audits, data handling and risks |
 | [Security](docs/security.md) | Threat model, built-in protections, accepted risks |
 | [Auditor guide](docs/auditor-guide.md) | How an auditor tests controls from GRC-pal evidence |

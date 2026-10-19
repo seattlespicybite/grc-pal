@@ -4,7 +4,10 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-17
+
 ### Added
+- **Access review campaigns** (menu: Access reviews; control IAM-05, SOC 2 CC6.2 and CC6.3). Managers review the accounts of their own people across every application on one screen. An admin uploads a CSV of accounts exported from any system, including accounts that are not in Entra ID, plus an optional people file (email, manager_email). The import is refused as a whole if any row is wrong. Each account goes to its manager; accounts with no manager, service accounts and accounts whose manager is the account holder wait for an admin to assign a reviewer, and nobody can review their own account. Managers choose keep, remove or change per account, see risky accounts first (admin-type role, no MFA, no sign-in for 90+ days, disabled but listed, service account), and sign off, which locks their decisions until an admin reopens it. Admins confirm each removal with how it was done, then close the review; closing stores the decisions file write-once with a SHA-256, next to the stored copy of the uploaded list. Admins and auditors can download the decisions as a formula-safe CSV. Every step is in the audit log without names or addresses. New tables `arcampaigns` and `arentries` (no migration needed). See [docs/access-reviews.md](docs/access-reviews.md).
 - **Document library** (menu: Document library). An Explorer-style repository for the whole policy hierarchy:
   53 built-in Word templates (the umbrella policy and 13 topic policies as full templates with a "How it is
   tested" column; 13 standards, 20 procedures and 6 SOC 2 documents as skeletons), written without any

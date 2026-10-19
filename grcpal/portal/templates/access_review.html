@@ -1,0 +1,116 @@
+{% extends "base.html" %}{% block title %}{{ v.campaign.name }}{% endblock %}
+{% block content %}
+{% set c = v.campaign %}
+{% set is_open = c.status == 'open' %}
+<div class="page-head"><div><h1>{{ c.name }}</h1>
+<div class="sub"><span class="pill {{ 'ok' if not is_open else 'open' }}">{{ statuses[c.status] }}</span>
+ {{ c.records }} accounts in {{ c.summary|length }} application{{ 's' if c.summary|length != 1 }} · finish by <span class="mono">{{ c.due }}</span></div></div>
+<div class="head-actions">
+{% if v.sees_all %}<a class="btn ghost" href="/access-reviews/{{ c.RowKey }}/export.csv">Download decisions (CSV)</a>{% endif %}
+<a class="btn ghost" href="/access-reviews">All reviews</a></div></div>
+
+{% if v.sees_all %}
+{% set pg = v.progress %}
+<div class="grid ar-stats mb">
+<div class="stat"><div class="n">{{ pg.decided }} / {{ pg.total }}</div><div class="l">Decided</div></div>
+<div class="stat"><div class="n">{{ pg.keep }}</div><div class="l">Keep</div></div>
+<div class="stat"><div class="n">{{ pg.revoke }}</div><div class="l">Remove</div></div>
+<div class="stat"><div class="n">{{ pg.modify }}</div><div class="l">Change</div></div>
+<div class="stat"><div class="n{{ ' bad-text' if pg.unassigned }}">{{ pg.unassigned }}</div><div class="l">Without a reviewer</div></div>
+<div class="stat"><div class="n{{ ' bad-text' if pg.to_confirm }}">{{ pg.to_confirm }}</div><div class="l">To confirm as done</div></div>
+</div>
+{% endif %}
+
+{% if v.mine %}
+<div class="card mb"><h2>{{ 'Your accounts' if is_open else 'Your decisions' }}</h2>
+<div class="sub mb">{{ v.progress_mine.decided }} of {{ v.progress_mine.total }} decided. Accounts with a flag need a closer look: choose for each one.
+{% if v.locked and v.signed_off %}You signed off on {{ v.signed_off.at[:10] }}; your decisions are locked.{% endif %}</div>
+<form method="post" action="/access-reviews/{{ c.RowKey }}/decide">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="table-wrap"><table>
+<thead><tr><th>Application</th><th>Account</th><th>Role</th><th>Last sign-in</th><th>MFA</th><th>Decision</th><th>Comment</th></tr></thead>
+<tbody>{% for e in v.mine %}<tr>
+<td><b>{{ e.app }}</b></td>
+<td>{{ e.name or e.email or e.account_id }}<div class="sub mono">{{ e.account_id }}</div>
+{% if e.flags %}<div class="tags">{% for f in e.flags %}<span>{{ flag_labels[f] }}</span>{% endfor %}</div>{% endif %}</td>
+<td>{{ e.role or '—' }}</td>
+<td class="nowrap mono">{{ e.last_login or '—' }}</td>
+<td>{{ e.mfa or '—' }}</td>
+<td>{% if v.locked %}{{ decisions.get(e.decision, '—') }}{% else %}<select name="d_{{ e.RowKey }}" data-flagged="{{ 1 if e.flags else 0 }}" aria-label="Decision for {{ e.account_id }}">
+<option value="">Choose…</option>{% for k, label in decisions.items() %}<option value="{{ k }}"{% if e.decision == k %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>{% endif %}</td>
+<td>{% if v.locked %}{{ e.comment }}{% else %}<input type="text" name="c_{{ e.RowKey }}" maxlength="500" value="{{ e.comment }}" placeholder="Required for “Change access”" aria-label="Comment for {{ e.account_id }}">{% endif %}</td>
+</tr>{% endfor %}</tbody></table></div>
+{% if not v.locked %}<div class="mt"><button class="btn" type="submit">Save decisions</button>
+<button class="btn ghost" type="button" data-ar-keep-unflagged>Keep all accounts without a flag</button></div>{% endif %}
+</form>
+{% if not v.locked %}
+<form method="post" action="/access-reviews/{{ c.RowKey }}/signoff" class="mt-l"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="hint mb">When every account has a decision, sign off. This confirms you reviewed these accounts and locks your decisions.</div>
+<button class="btn" type="submit"{% if v.progress_mine.decided != v.progress_mine.total %} disabled{% endif %}>Sign off my review</button></form>
+{% endif %}</div>
+{% endif %}
+
+{% if v.sees_all %}
+<div class="card mb"><h2>Progress by manager</h2><div class="table-wrap"><table>
+<thead><tr><th>Manager</th><th>Accounts</th><th>Decided</th><th>Sign-off</th><th></th></tr></thead>
+<tbody>{% for r in v.reviewers %}<tr>
+<td>{{ r.email }}{% if not r.has_account %}<div class="sub"><span class="pill attention">No portal account</span> add them as a Control owner</div>{% endif %}</td>
+<td>{{ r.progress.total }}</td><td>{{ r.progress.decided }}</td>
+<td>{% if r.signed_off %}<span class="pill ok">Signed off {{ r.signed_off.at[:10] }}</span>{% else %}<span class="pill pending">Waiting</span>{% endif %}</td>
+<td>{% if user.is_admin and r.signed_off and is_open %}<form method="post" action="/access-reviews/{{ c.RowKey }}/reopen"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="reviewer" value="{{ r.email }}"><button class="btn ghost small" type="submit">Reopen</button></form>{% endif %}</td>
+</tr>{% else %}<tr><td colspan="5"><div class="empty">No account has a reviewer yet.</div></td></tr>{% endfor %}</tbody></table></div></div>
+
+{% if v.unassigned %}
+<div class="card mb"><h2>Needs a reviewer</h2>
+<div class="sub mb">No manager on record, a service account, or the manager is the account holder. Nobody can review their own account.</div>
+<div class="table-wrap"><table>
+<thead><tr><th>Application</th><th>Account</th><th>Role</th><th>Assign to</th></tr></thead>
+<tbody>{% for e in v.unassigned %}<tr>
+<td><b>{{ e.app }}</b></td><td>{{ e.name or e.email or e.account_id }}<div class="sub mono">{{ e.account_id }}</div></td><td>{{ e.role or '—' }}</td>
+<td>{% if user.is_admin and is_open %}<form method="post" action="/access-reviews/{{ c.RowKey }}/assign" class="filters m0"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="entry" value="{{ e.RowKey }}">
+<select name="reviewer" aria-label="Reviewer for {{ e.account_id }}"><option value="">Choose…</option>{% for ch in choices %}<option value="{{ ch.email }}">{{ ch.name }} ({{ ch.email }})</option>{% endfor %}</select>
+<button class="btn small" type="submit">Assign</button></form>{% endif %}</td>
+</tr>{% endfor %}</tbody></table></div></div>
+{% endif %}
+
+{% if v.to_confirm %}
+<div class="card mb"><h2>Removals and changes to confirm</h2>
+<div class="sub mb">A decision is only evidence when the change was actually made. Do it in the application, then say how.</div>
+<div class="table-wrap"><table>
+<thead><tr><th>Application</th><th>Account</th><th>Decision</th><th>What the manager wrote</th><th>Done</th></tr></thead>
+<tbody>{% for e in v.to_confirm %}<tr>
+<td><b>{{ e.app }}</b></td><td>{{ e.name or e.email or e.account_id }}<div class="sub mono">{{ e.account_id }}</div></td><td>{{ decisions[e.decision] }}</td><td>{{ e.comment or '—' }}</td>
+<td>{% if user.is_admin and is_open %}<form method="post" action="/access-reviews/{{ c.RowKey }}/confirm" class="filters m0"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="entry" value="{{ e.RowKey }}">
+<input type="text" name="note" maxlength="500" placeholder="How and when it was done" aria-label="How {{ e.account_id }} was changed" required><button class="btn small" type="submit">Confirm</button></form>{% endif %}</td>
+</tr>{% endfor %}</tbody></table></div></div>
+{% endif %}
+
+<div class="card mb"><h2>All accounts</h2><div class="table-wrap"><table>
+<thead><tr><th>Application</th><th>Account</th><th>Manager (reviewer)</th><th>Flags</th><th>Decision</th><th>Done</th></tr></thead>
+<tbody>{% for e in v.entries %}<tr>
+<td><b>{{ e.app }}</b></td><td>{{ e.name or e.email or e.account_id }}<div class="sub mono">{{ e.account_id }}</div></td>
+<td>{{ e.reviewer or '—' }}</td>
+<td><div class="tags">{% for f in e.flags %}<span>{{ flag_labels[f] }}</span>{% endfor %}</div></td>
+<td>{{ decisions.get(e.decision, 'Undecided') }}{% if e.comment %}<div class="sub">{{ e.comment }}</div>{% endif %}</td>
+<td>{% if e.remediation == 'done' %}<span class="pill ok">Done</span><div class="sub">{{ e.remediation_note }}</div>{% elif e.remediation == 'open' %}<span class="pill pending">To do</span>{% else %}—{% endif %}</td>
+</tr>{% endfor %}</tbody></table></div></div>
+
+{% if is_open and user.is_admin %}
+<div class="card mb"><h2>Close this review</h2>
+<div class="hint mb">To close: every account needs a reviewer and a decision, and every manager must sign off. Removals and changes should be confirmed first;
+if some are still open, write why the review closes anyway. Closing stores the decisions as write-once evidence for control IAM-05.</div>
+<form method="post" action="/access-reviews/{{ c.RowKey }}/close"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label>Note (required only if changes are still unconfirmed)<textarea name="note" maxlength="500"></textarea></label>
+<div class="mt"><button class="btn" type="submit">Close review</button></div></form></div>
+{% elif not is_open %}
+<div class="card"><h2>Evidence</h2>
+<div class="sub">Closed {{ c.closed_at[:10] }}. {% if c.close_note %}Note: {{ c.close_note }}{% endif %}</div>
+<table><tbody>
+<tr><td>Accounts file received</td><td class="mono">{{ c.snapshot_run }}</td></tr>
+<tr><td>SHA-256 of the accounts file</td><td class="mono">{{ c.snapshot_sha256 }}</td></tr>
+<tr><td>Decisions stored</td><td class="mono">{{ c.result_run }}</td></tr>
+<tr><td>SHA-256 of the decisions file</td><td class="mono">{{ c.result_sha256 }}</td></tr>
+</tbody></table></div>
+{% endif %}
+{% endif %}
+{% endblock %}
