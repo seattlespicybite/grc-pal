@@ -1,0 +1,20 @@
+{% extends "base.html" %}{% from "_macros.html" import when %}{% block title %}Trash · Document library{% endblock %}
+{% block content %}
+<div class="mb"><a href="/library">‹ Document library</a></div>
+<div class="page-head"><div><h1>Trash</h1>
+<div class="sub">Documents and templates you deleted. They are hidden from the library, but their files are kept in the write-once evidence store, so nothing is lost. Restore anything deleted by mistake.</div></div></div>
+
+<section class="card table-wrap"><h2>Documents</h2>
+{% if trash.docs %}<table><thead><tr><th>No.</th><th>Title</th><th>Deleted</th><th>Reason</th>{% if user.is_admin %}<th></th>{% endif %}</tr></thead><tbody>
+{% for d in trash.docs %}<tr><td class="mono">{{ d.number or '—' }}</td><td><b>{{ d.title }}</b>{% if d.official_count %}<div class="sub">{{ d.official_count }} official version{{ 's' if d.official_count != 1 }} kept</div>{% endif %}</td>
+<td>{{ when(d.deleted_at) }}<div class="sub">{{ d.deleted_by }}</div></td><td>{{ d.deleted_reason or '—' }}</td>
+{% if user.is_admin %}<td><form method="post" action="/library/trash/restore"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="doc" value="{{ d.id }}"><button class="btn small" type="submit">Restore</button></form></td>{% endif %}</tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty">No deleted documents.</div>{% endif %}</section>
+
+<section class="card table-wrap mt"><h2>Templates</h2>
+{% if trash.templates %}<table><thead><tr><th>Document</th><th>Template file</th><th>Removed</th>{% if user.is_admin %}<th></th>{% endif %}</tr></thead><tbody>
+{% for t in trash.templates %}<tr><td>{{ t.doc_number }} {{ t.doc_title }}</td><td>{{ t.filename }}<div class="sub">uploaded {{ t.uploaded_at[:10] }} by {{ t.uploaded_by }}</div></td>
+<td>{{ when(t.removed_at) }}<div class="sub">{{ t.removed_by }}</div></td>
+{% if user.is_admin %}<td><form method="post" action="/library/trash/restore"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="doc" value="{{ t.PartitionKey }}"><input type="hidden" name="version" value="{{ t.RowKey }}"><button class="btn small" type="submit">Restore</button></form></td>{% endif %}</tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty">No removed templates.</div>{% endif %}</section>
+{% endblock %}

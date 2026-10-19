@@ -39,19 +39,31 @@ guidance, and drop any statement that is not true today: every "must" is somethi
    the earlier approved version of the same product **Superseded**. Nothing is deleted: archive a version with a
    reason to hide it from staff.
 4. **Replace the template** at any time by uploading your own. Everyone then downloads your template; the old one
-   stays in the template history and **Restore the built-in template** brings the shipped one back.
-5. **Edit details** changes the title, owner, approver, classification and next review date. The document number
-   never changes, so renaming "Access Control Policy" keeps it as P-05.
+   stays in the list of **Uploaded templates** and **Restore the built-in template** brings the shipped one back.
+   The newest upload is the one in use. To keep only one, press **Remove** next to the others: they go to the Trash.
+   If you remove every upload, the built-in template is used again.
+5. **Edit details** changes the title, description, owner, approver, classification and next review date. The
+   document number never changes, so renaming "Access Control Policy" keeps it as P-05.
+
+## Deleting documents and the Trash
+1. On the library page press **Edit list**. A box appears in front of each document.
+2. Tick the documents you do not need, add a reason if you like, and press **Delete ticked documents**. The
+   portal asks "Are you sure?" first.
+3. Deleted documents disappear from the library for everyone and go to the **Trash** (button at the top of the
+   library). Press **Restore** there to bring one back exactly as it was, with every version.
+
+Nothing in the Trash is destroyed: the files stay in the write-once evidence store, which is what lets an auditor
+trust that no approved version was quietly removed. The Trash never empties itself.
 
 ## Who can do what
 | Role | Sees | Can do |
 | --- | --- | --- |
-| Admin | Everything | Upload, approve, archive, replace templates, edit details, add documents |
-| Auditor | Everything, read-only | Download every version and template; check hashes against the audit log |
+| Admin | Everything | Upload, approve, archive, replace and remove templates, edit details, add, delete and restore documents |
+| Auditor | Everything, read-only, including the Trash | Download every version and template; check hashes against the audit log |
 | Control owner | Only documents with an approved official version, approved versions only | Download the published copy |
 
 ## How an auditor tests it
-- Every upload, approval, status change, template replacement, rename and (for non-admins) download is in the
+- Every upload, approval, status change, template replacement or removal, rename, delete, restore and (for non-admins) download is in the
   hash-chained audit log (`doclib.*`) with the version, product, approver and SHA-256.
 - Files are stored write-once in the evidence store (`doclib_upload/`). The SHA-256 on the page must equal the hash
   in the audit entry and in the evidence manifest.

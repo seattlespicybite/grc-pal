@@ -41,12 +41,44 @@ def register(app, h) -> None:
                     max_mb=MAX_UPLOAD_BYTES // (1024 * 1024))
 
     @app.get("/library", response_class=HTMLResponse)
-    def library_page(request: Request, f: str = "", q: str = "", view: str = "docs", user: User = Depends(current_user)):
+    def library_page(request: Request, f: str = "", q: str = "", view: str = "docs", edit: int = 0,
+                     user: User = Depends(current_user)):
         portal = p()
         lib = portal.library(user, f, q)
         files = portal.library_files(user, f, q) if view == "files" else []
         return render(request, user, "doclib.html", nav_active="library", lib=lib, files=files, folder=f, q=q,
-                      lview="files" if view == "files" else "docs", **options())
+                      lview="files" if view == "files" else "docs", editing=bool(edit and user.is_admin),
+                      trash_count=sum(len(x) for x in portal.library_trash(user).values()) if user.sees_everything else 0,
+                      **options())
+
+    @app.get("/library/trash", response_class=HTMLResponse)
+    def library_trash_page(request: Request, user: User = Depends(current_user)):
+        try:
+            trash = p().library_trash(user)
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        return render(request, user, "doclib_trash.html", nav_active="library", trash=trash)
+
+    @app.post("/library/trash")
+    async def library_trash_post(request: Request, user: User = Depends(current_user)):
+        raw = await posted(request, user)
+        ids = [str(i) for i in raw.getlist("ids")]
+        try:
+            done = p().trash_docs(user, ids, str(raw.get("reason", "")))
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back("/library?edit=1", err=str(exc))
+        n = len(done)
+        return back("/library", msg=f"Moved {n} document{'s' if n != 1 else ''} to the Trash. You can restore them from the Trash.")
+
+    @app.post("/library/trash/restore")
+    async def library_trash_restore(request: Request, user: User = Depends(current_user)):
+        raw = await posted(request, user)
+        did, vid = str(raw.get("doc", "")), str(raw.get("version", ""))
+        if vid:
+            return run("/library/trash", "Template restored", p().restore_template, user, did, vid)
+        return run("/library/trash", "Document restored to the library", p().restore_doc, user, did)
 
     @app.post("/library/add")
     async def library_add(request: Request, user: User = Depends(current_user)):
@@ -74,7 +106,8 @@ def register(app, h) -> None:
     @app.post("/library/{did}/edit")
     async def library_edit(request: Request, did: str, user: User = Depends(current_user)):
         raw = await posted(request, user)
-        fields = {k: str(raw.get(k, "")) for k in ("title", "owner", "approver", "classification", "next_review") if k in raw}
+        fields = {k: str(raw.get(k, "")) for k in ("title", "summary", "owner", "approver", "classification", "next_review")
+                  if k in raw}
         return run(f"/library/{did}", "Document details saved", p().edit_doc, user, did, fields)
 
     @app.post("/library/{did}/official")
@@ -92,6 +125,9 @@ def register(app, h) -> None:
         raw = await posted(request, user)
         if raw.get("action") == "restore":
             return run(f"/library/{did}", "Built-in template restored", p().restore_builtin_template, user, did)
+        if raw.get("action") == "remove":
+            return run(f"/library/{did}#template", "Template moved to the Trash", p().remove_template, user, did,
+                       str(raw.get("version", "")))
         up = await read_upload(raw)
         if up is None:
             return back(f"/library/{did}", err="Choose a file to upload")

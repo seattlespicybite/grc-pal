@@ -13,6 +13,10 @@ No data model change.
   record it or add it; saving returns to the same row. The full page is still one click away.
 - Calendar: when you untick a month, you can also **remove it from earlier months and years** where nothing
   was recorded. Recorded months always stay (they are evidence), and the change is in the audit log.
+- Document library: **Edit list** lets admins tick documents and delete them (with an "Are you sure?" step).
+  Deleted documents go to a new **Trash** page where they can be restored; their files are never destroyed.
+- Document library: old templates can be **removed** from a document (to the Trash), so you can keep just one.
+- Document library: the **description** of a document can now be edited, next to the title.
 - Vendors: **Not applicable** is now a choice for contract security terms and the data processing agreement.
 
 ### Changed
