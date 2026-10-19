@@ -20,16 +20,16 @@ and Conditional Access). Local accounts have no MFA yet, so keep this VM reachab
 ## Install
 
 Copy the installer kit from the release page (`grcpal-vm-installer-<version>.tar.gz`) to the VM, then
-(the installer kit and signed update files are published from release 0.4.0 on):
+(the installer kit and signed update files are published from release 0.3.0 on):
 
 ```bash
-tar -xzf grcpal-vm-installer-0.4.0.tar.gz && cd vm
+tar -xzf grcpal-vm-installer-0.3.0.tar.gz && cd vm
 # with internet access:
-sudo ./install.sh --hostname grc.internal.example.com --version 0.4.0
-# without internet access: also copy grcpal-0.4.0.grcupdate from the release page
-sudo ./install.sh --hostname grc.internal.example.com --bundle grcpal-0.4.0.grcupdate
+sudo ./install.sh --hostname grc.internal.example.com --version 0.3.0
+# without internet access: also copy grcpal-0.3.0.grcupdate from the release page
+sudo ./install.sh --hostname grc.internal.example.com --bundle grcpal-0.3.0.grcupdate
 # your own certificate instead of Caddy's:
-sudo ./install.sh --hostname grc.internal.example.com --version 0.4.0 --tls files --cert grc.crt --key grc.key
+sudo ./install.sh --hostname grc.internal.example.com --version 0.3.0 --tls files --cert grc.crt --key grc.key
 ```
 
 The installer is safe to run again and never deletes data. It:
@@ -102,8 +102,8 @@ Nothing installs on its own: every update waits for an admin.
 
 | Release | Example | Installs |
 | --- | --- | --- |
-| Patch | 0.4.0 → 0.4.1 (fixes) | After an admin clicks **Approve** (you can turn on automatic patches if you prefer) |
-| Feature | 0.4 → 0.5 | After an admin clicks **Approve** on the Updates page |
+| Patch | 0.3.0 → 0.3.1 (fixes) | After an admin clicks **Approve** (you can turn on automatic patches if you prefer) |
+| Feature | 0.3 → 0.4 | After an admin clicks **Approve** on the Updates page |
 | Major | 0.x → 1.0 | After **Approve**; read the release notes first and take a VM snapshot |
 
 **Getting the update file.** With internet access, turn on *Download updates* on the Updates page; the
@@ -167,7 +167,7 @@ publish the image but no update file (the workflow says so).
 You need a backup file (from your off-VM copy) and the recovery kit.
 
 ```bash
-sudo ./install.sh --hostname grc.internal.example.com --version 0.4.0 \
+sudo ./install.sh --hostname grc.internal.example.com --version 0.3.0 \
      --restore grcpal-acme-20261001T020000Z-scheduled.grcbak --kit recovery-kit.json
 ```
 

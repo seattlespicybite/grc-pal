@@ -445,3 +445,5 @@ a.stat:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .nav-sub .ico { width: 15px; height: 15px; opacity: .85; }
 @media (prefers-reduced-motion: reduce) { .nav-chev .ico, .nav a, .card, .stat { transition: none; } a.stat:hover { transform: none; } }
 @media (max-width: 960px) { .hero-strip { grid-template-columns: 1fr; } }
+.ar-stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.table-wrap td input[type=text] { width: 100%; min-width: 160px; }

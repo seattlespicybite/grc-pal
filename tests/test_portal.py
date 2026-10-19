@@ -159,7 +159,7 @@ def test_dev_login_first_user_becomes_admin(tmp_path, monkeypatch):
 ADMIN_PAGES = ["/backups", "/updates", "/", "/controls", "/controls/IAM-04", "/criteria", "/criteria?open=CC6", "/criteria/CC6.1", "/criteria/P5.1",
                "/controls/IAM-02?from=CC6.1", "/controls/IAM-02?from=../../evil", "/controls/IAM-02/definition", "/work",
                "/reviews", "/evidence", "/overrides", "/audit", "/audit?verify=1&action=user.", "/users", "/cycles",
-               "/policies", "/policies/information-security-policy", "/dev/outbox",
+               "/policies", "/policies/information-security-policy", "/dev/outbox", "/access-reviews",
                "/controls?status=not_started&category=privacy&sort=owner", "/kb", "/kb/CC6.1", "/kb/CC1.2", "/kb/P5.1"]
 
 
@@ -190,6 +190,7 @@ def test_menu_groups_open_on_current_page_and_follow_roles(env):
     g = _groups(client.get("/").text)
     assert set(g) == {"program", "docs", "config"} and not any(o for o, _ in g.values())  # dashboard: all closed
     assert {"/settings", "/setup", "/updates", "/logs", "/audit", "/users", "/dev/outbox", "/frameworks", "/backups"} <= set(g["config"][1])
+    assert "/access-reviews" in g["program"][1]
     for path, group in (("/controls", "program"), ("/policies", "docs"), ("/audit", "config"), ("/settings", "config")):
         g = _groups(client.get(path).text)
         assert [k for k, (o, _) in g.items() if o] == [group], path
@@ -205,7 +206,8 @@ def test_menu_groups_open_on_current_page_and_follow_roles(env):
     g = _groups(page)
     assert set(g) == {"program", "docs"}
     links = {h for _, ls in g.values() for h in ls}
-    assert not links & {"/evidence", "/overrides", "/cycles", "/ai", "/calendar", "/criteria", "/settings", "/audit"}
+    assert not links & {"/evidence", "/overrides", "/cycles", "/ai", "/calendar", "/criteria", "/settings", "/audit",
+                        "/access-reviews"}  # access reviews appear only when one waits for them
 
 
 def test_contributor_sees_only_assigned_or_owned_controls(env):

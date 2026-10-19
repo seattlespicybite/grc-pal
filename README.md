@@ -133,7 +133,7 @@ itself if a check fails.
 ### VM, in short
 
 ```bash
-sudo ./install.sh --hostname grc.internal.example.com --version 0.4.0   # from the release's installer kit
+sudo ./install.sh --hostname grc.internal.example.com --version 0.3.0   # from the release's installer kit
 sudo grcpal create-admin you@example.com --name "Your Name"
 ```
 
@@ -179,15 +179,15 @@ development only.
 
 ## Quick guide: deploy, back up, update
 
-> **Release status:** the VM installer and the updaters install published releases (0.4.0 and later).
-> Until 0.4.0 is on the [releases page](https://github.com/seattlespicybite/grc-pal/releases), use the
+> **Release status:** the VM installer and the updaters install published releases (0.3.0 and later).
+> Until 0.3.0 is on the [releases page](https://github.com/seattlespicybite/grc-pal/releases), use the
 > demo above to evaluate; production installs start with that release.
 
 **1. Deploy** (once)
 
 | | VM in your network | Azure |
 | --- | --- | --- |
-| Install | `sudo ./install.sh --hostname grc.example.com --version 0.4.0` | `./deploy/azure/deploy.sh --name acme --admins you@acme.com --github-repo acme/acme-grc` |
+| Install | `sudo ./install.sh --hostname grc.example.com --version 0.3.0` | `./deploy/azure/deploy.sh --name acme --admins you@acme.com --github-repo acme/acme-grc` |
 | First admin | `sudo grcpal create-admin you@example.com` | the `--admins` emails |
 | Lock down | VPN or internal network only (local accounts have no MFA yet) | Conditional Access: MFA and compliant devices ([Step 3b](docs/deploy-azure.md#step-3b-allow-only-your-staff-on-managed-devices-conditional-access)) |
 
@@ -231,6 +231,7 @@ changed by an update. Details: [deploy-vm.md](docs/deploy-vm.md#updates),
 | [Frameworks, controls and checks](docs/frameworks-and-controls.md) | Frameworks in use, the SOC 2 view, implementation notes, the knowledge base, editing controls, custom controls, URL checks |
 | [Configuration](docs/configuration.md) | Configuration page and every environment variable |
 | [Clouds](docs/clouds.md) | Connecting Azure, AWS and Google Cloud with least privilege |
+| [Access reviews](docs/access-reviews.md) | Quarterly user access reviews: managers review their people across all applications |
 | [AI assistant](docs/ai-assistant.md) | Evidence review and mock audits, data handling and risks |
 | [Security](docs/security.md) | Threat model, built-in protections, accepted risks |
 | [Auditor guide](docs/auditor-guide.md) | How an auditor tests controls from GRC-pal evidence |

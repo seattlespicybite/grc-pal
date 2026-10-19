@@ -29,6 +29,7 @@ from grcpal.portal.backups import BackupsMixin
 from grcpal.portal.updates import UpdatesMixin
 from grcpal.portal.calendar import CalendarMixin
 from grcpal.portal.features import FeaturesMixin
+from grcpal.portal.accessreview import AccessReviewMixin
 from grcpal.portal.doclib import DocLibMixin
 from grcpal.portal.vendors import VendorsMixin
 from grcpal.portal.auth import ROLES, SYSTEM, AuthError, Identity, User, bootstrap_admins, group_role
@@ -62,7 +63,8 @@ def _rk() -> str:
     return f"{utcnow():%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:10]}"
 
 
-class Portal(FeaturesMixin, CalendarMixin, VendorsMixin, DocLibMixin, AccountsMixin, BackupsMixin, UpdatesMixin):
+class Portal(FeaturesMixin, CalendarMixin, VendorsMixin, DocLibMixin, AccessReviewMixin, AccountsMixin, BackupsMixin,
+             UpdatesMixin):
     def __init__(self, catalog, store, evidence: EvidenceStore, mailer: Mailer | None = None,
                  today: dt.date | None = None, public_url: str | None = None, jobs_sync: bool | None = None) -> None:
         self.base_catalog, self.store, self.evidence = catalog, store, evidence

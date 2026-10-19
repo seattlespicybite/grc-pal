@@ -6,11 +6,31 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [0.4.0] - 2026-10-19 - Refreshed look, grouped menu
 
-This is the first release with the VM installer, signed update files and the Azure updater. Version 0.3.0
-was never published; installs start at 0.4.0. No data model change (data model 1, as in 0.2.0).
+No data model change (data model 1, as in 0.3.0).
+
+### Changed
+- **New look.** Icons in the menu, softer cards and status labels with a colored dot, light and dark themes
+  that follow the computer's setting, and a readiness ring on the dashboard ("3 of 79 controls operating":
+  operating plus accepted by admin, out of all controls in scope). Still no inline styles or scripts (strict
+  CSP), and no new JavaScript.
+- **Shorter, grouped menu.** Dashboard, My work and Reviews stay at the top; everything else sits in three
+  groups that open with a click: **Compliance** (criteria, controls, calendar, vendors, access reviews,
+  overrides, cycles and export, AI assistant), **Evidence & docs** (evidence store, policies, document
+  library, knowledge base) and **Configuration** (frameworks in use, settings, setup guide, backups,
+  updates, logs, audit log, users and roles, email outbox in development). The group holding the current
+  page opens by itself; a closed group shows its count (past-due calendar items, open access reviews). Who
+  sees which page did not change, and the server still checks every page and action. The Configuration
+  page is now listed as **Settings** in the Configuration group. Built with the browser's own `<details>`
+  element, so it works with the keyboard and without JavaScript.
+- `AGENTS.md` (Jules and other agents) and `GEMINI.md` (Gemini CLI) point to `CLAUDE.md`, which stays the
+  single source of the repository rules, plus rules for working with several AI tools (one branch and pull
+  request per task, no pushes to `main`, no weakened tests).
+
+## [0.3.0] - 2026-10-17
 
 ### Added
-- **Document library** (menu: Evidence & docs > Document library). An Explorer-style repository for the whole policy hierarchy:
+- **Access review campaigns** (menu: Access reviews; control IAM-05, SOC 2 CC6.2 and CC6.3). Managers review the accounts of their own people across every application on one screen. An admin uploads a CSV of accounts exported from any system, including accounts that are not in Entra ID, plus an optional people file (email, manager_email). The import is refused as a whole if any row is wrong. Each account goes to its manager; accounts with no manager, service accounts and accounts whose manager is the account holder wait for an admin to assign a reviewer, and nobody can review their own account. Managers choose keep, remove or change per account, see risky accounts first (admin-type role, no MFA, no sign-in for 90+ days, disabled but listed, service account), and sign off, which locks their decisions until an admin reopens it. Admins confirm each removal with how it was done, then close the review; closing stores the decisions file write-once with a SHA-256, next to the stored copy of the uploaded list. Admins and auditors can download the decisions as a formula-safe CSV. Every step is in the audit log without names or addresses. New tables `arcampaigns` and `arentries` (no migration needed). See [docs/access-reviews.md](docs/access-reviews.md).
+- **Document library** (menu: Document library). An Explorer-style repository for the whole policy hierarchy:
   53 built-in Word templates (the umbrella policy and 13 topic policies as full templates with a "How it is
   tested" column; 13 standards, 20 procedures and 6 SOC 2 documents as skeletons), written without any
   organization name. Admins download a template, adapt it and upload it as the **official version**
@@ -157,22 +177,6 @@ was never published; installs start at 0.4.0. No data model change (data model 1
   ones). CSV cells starting with `= + - @` are prefixed with a quote.
 
 ### Changed
-- **New look.** Icons in the menu, softer cards and status labels with a colored dot, light and dark themes
-  that follow the computer's setting, and a readiness ring on the dashboard ("3 of 79 controls operating":
-  operating plus accepted by admin, out of all controls in scope). Still no inline styles or scripts (strict
-  CSP), and no new JavaScript.
-- **Shorter, grouped menu.** Dashboard, My work and Reviews stay at the top; everything else sits in three
-  groups that open with a click: **Compliance** (criteria, controls, calendar, vendors, overrides,
-  cycles and export, AI assistant), **Evidence & docs** (evidence store, policies, document library,
-  knowledge base) and **Configuration** (frameworks in use, settings, setup guide, backups, updates, logs,
-  audit log, users and roles, email outbox in development). The group holding the current page opens by
-  itself; a closed group shows its count (for example past-due calendar items). Who sees which page did
-  not change, and the server still checks every page and action. The Configuration page is now listed as
-  **Settings** in the Configuration group. Built with the browser's own `<details>` element, so it works
-  with the keyboard and without JavaScript.
-- `AGENTS.md` (Jules and other agents) and `GEMINI.md` (Gemini CLI) point to `CLAUDE.md`, which stays the
-  single source of the repository rules, plus rules for working with several AI tools (one branch and pull
-  request per task, no pushes to `main`, no weakened tests).
 - **Every update is manual by default.** VM: automatic patch installs are off unless an admin turns them on.
   Azure: the scheduled workflow run (now weekly, Mondays) only lists newer releases in its summary; an update
   installs only when someone runs the workflow with a version.

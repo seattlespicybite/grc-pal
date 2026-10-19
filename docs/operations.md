@@ -217,7 +217,7 @@ repository's collector workflows) on the version you run.
 | Release | Example | Data model | Going back to the previous version |
 | --- | --- | --- | --- |
 | Patch (0.2.1) | Bug and security fixes | Never changes | Start the previous image |
-| Minor (0.4.0) | Features, design changes | Only adds (new fields, rows, tables) | Start the previous image: it still reads the data |
+| Minor (0.3.0) | Features, design changes | Only adds (new fields, rows, tables) | Start the previous image: it still reads the data |
 | Major (1.0, 2.0) | Larger changes | May clean up what an earlier release announced | Restore the backup taken before the update |
 
 - **Evidence is never changed by an update.** Migrations only get the table store.

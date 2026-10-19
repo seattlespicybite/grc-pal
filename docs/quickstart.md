@@ -62,7 +62,7 @@ Production on your own network runs on **Debian 13 minimal with Docker**, instal
 sets up HTTPS, the firewall, scheduled jobs, nightly backups and signed updates with automatic rollback:
 
 ```bash
-sudo ./install.sh --hostname grc.internal.example.com --version 0.4.0
+sudo ./install.sh --hostname grc.internal.example.com --version 0.3.0
 sudo grcpal create-admin you@example.com --name "Your Name"
 ```
 

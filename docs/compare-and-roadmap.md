@@ -19,7 +19,7 @@ often; check the vendors' current sites before comparing.
 | Audit periods | ✓ Cycles with carry-forward and last-cycle evidence | |
 | Auditor access | ✓ Read-only role and one-click export with manifest | No dedicated auditor portal or request-list workflow yet |
 | Policy management and acknowledgments | ✓ Policies as code (PR approval), versioned acknowledgments, reminders | No policy template library beyond samples |
-| Access reviews | Partial: quarterly task with user populations from collectors | Campaign UI (reviewer per system, keep/remove decisions) is roadmap |
+| Access reviews | ✓ Campaigns from a CSV of accounts from any application: manager per account, keep/remove/change, sign-off, confirmed removals, write-once result ([access-reviews.md](access-reviews.md)) | Accounts come from CSV for now; filling a campaign from the collectors, email to managers and quarterly scheduling are next |
 | Risk register | Partial: `registers/risks.yaml`, validated, linked to controls | Risk scoring UI and heat map are roadmap |
 | Vendor risk management | ✓ Vendors page: tiers, contacts, annual review with sign-off, CUEC mapping, onboarding and offboarding checklists, reminders, editable questionnaire with Excel download | No vendor portal, external risk scores or AI report extraction (by design for v1) |
 | Personnel / HR onboarding and offboarding | Partial: leaver reconciliation from HR export, Entra users | HRIS API connectors are roadmap |
@@ -40,8 +40,8 @@ Ordered by value to a team preparing for its first SOC 2 Type 2. Each item is de
 produces evidence an auditor can test.
 
 **Next (0.2)**
-1. **Access review campaigns**: per-system reviewer, populations from collectors, keep or remove
-   decisions, completion tracking, export. (CC6.2, CC6.3)
+1. **Access review campaigns, next steps**: campaigns are in (CSV import, manager review, sign-off, evidence). Next:
+   fill a campaign from the Entra ID and GitHub collectors, email managers, schedule it every quarter. (CC6.2, CC6.3)
 2. **Slack and Microsoft Teams notifications** alongside email, with per-user preferences and a
    weekly digest.
 3. **Restore command**: rebuild a clean instance from a `grcpal backup` file (backup and verify are done).
