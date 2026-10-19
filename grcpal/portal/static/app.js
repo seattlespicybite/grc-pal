@@ -18,6 +18,44 @@
     });
   });
 
+  // Back button: same as the browser's Back, so the previous page opens where you left it (the browser
+  // restores the scroll position). Shown only when the previous page was a page of this portal.
+  var back = document.querySelector('[data-back]');
+  if (back) {
+    var fromHere = false;
+    try { fromHere = !!document.referrer && new URL(document.referrer).origin === window.location.origin; } catch (e) {}
+    if (fromHere && window.history.length > 1) {
+      back.hidden = false;
+      back.addEventListener('click', function () { window.history.back(); });
+    }
+  }
+
+  // Calendar: open a month (or the + of an unscheduled month) in a popup instead of a new page. Saving posts
+  // the form as usual and the calendar reloads at the same row. Without JavaScript the links open the page.
+  var calDialog = document.querySelector('[data-cal-dialog]');
+  if (calDialog && typeof calDialog.showModal === 'function') {
+    var calBody = calDialog.querySelector('[data-cal-dialog-body]');
+    calDialog.addEventListener('click', function (ev) {
+      if (ev.target === calDialog || ev.target.closest('[data-pop-close]')) calDialog.close();
+    });
+    document.querySelectorAll('[data-cal-popup] a.cal-cell, [data-cal-popup] a.cal-add').forEach(function (a) {
+      a.addEventListener('click', function (ev) {
+        if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button !== 0) return;  // new tab still works
+        ev.preventDefault();
+        var url = a.getAttribute('href') + '?popup=1';
+        fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+          .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+          .then(function (html) {
+            calBody.innerHTML = html;  // our own server-rendered, escaped template
+            calDialog.showModal();
+            var first = calBody.querySelector('input:checked, input, button');
+            if (first) first.focus();
+          })
+          .catch(function () { window.location.href = a.getAttribute('href'); });
+      });
+    });
+  }
+
   // Confirm destructive actions.
   document.querySelectorAll('form[data-confirm]').forEach(function (f) {
     f.addEventListener('submit', function (ev) {

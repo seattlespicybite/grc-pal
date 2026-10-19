@@ -70,6 +70,7 @@
     {% if error %}<div class="flash err" role="alert">{{ error }}</div>{% endif %}
     {% if page_msg %}<div class="flash ok" role="status">{{ page_msg }}</div>{% endif %}
     {% if page_err %}<div class="flash err" role="alert">{{ page_err }}</div>{% endif %}
+    <button type="button" class="btn ghost small back-btn" data-back hidden>&larr; Back</button>
     {% block content %}{% endblock %}
   </main>
 </div>

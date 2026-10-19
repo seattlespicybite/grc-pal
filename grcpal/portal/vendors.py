@@ -38,9 +38,12 @@ SUBSERVICE = {"no": "No", "carved_out": "Yes, carved out", "inclusive": "Yes, in
 ASSURANCE = {"": "Not recorded", "soc2_type2": "SOC 2 Type 2", "soc2_type1": "SOC 2 Type 1",
              "iso27001": "ISO 27001 certificate", "questionnaire": "Our questionnaire only", "other": "Other report",
              "none": "None"}
-OPINIONS = {"": "Not recorded", "unqualified": "Unqualified (clean)", "qualified": "Qualified",
-            "adverse": "Adverse", "disclaimer": "Disclaimer", "na": "Not applicable"}
-CONTRACT = {"unknown": "Not checked", "yes": "Yes", "partial": "Partly", "no": "No"}
+# Report result: what the vendor's own auditor concluded. Stored keys keep the formal terms
+# (unqualified, qualified, adverse, disclaimer) so exports and older data stay readable.
+OPINIONS = {"": "Not reviewed", "unqualified": "Clean", "qualified": "With exceptions",
+            "adverse": "Unfavorable", "disclaimer": "No conclusion", "na": "Not applicable"}
+# "unknown" shows as an empty choice: nobody has checked the contract yet.
+CONTRACT = {"unknown": "", "yes": "Yes", "partial": "Partly", "no": "No", "na": "Not applicable"}
 FILE_KINDS = {"report": "SOC 2 report or certificate", "bridge": "Bridge letter", "questionnaire": "Returned questionnaire",
               "contract": "Contract or DPA", "offboarding": "Offboarding evidence", "other": "Other"}
 FILE_CONTROLS = {"report": ["VEN-02"], "bridge": ["VEN-02"], "questionnaire": ["VEN-02"], "contract": ["VEN-03"],
@@ -233,9 +236,9 @@ class VendorsMixin:
             if key == "assurance" and val not in ASSURANCE:
                 raise Invalid("Choose the type of assurance report")
             if key == "opinion" and val not in OPINIONS:
-                raise Invalid("Choose the auditor's opinion")
+                raise Invalid("Choose the report result")
             if key in ("contract_terms", "dpa") and val not in CONTRACT:
-                raise Invalid("Choose Yes, Partly, No or Not checked for the contract")
+                raise Invalid("Choose Yes, Partly, No, Not applicable or leave the contract answer empty")
             if key in ("period_start", "period_end", "start_date", "next_review_override") and val:
                 if not DATE_RE.match(val):
                     raise Invalid("Dates must look like 2026-12-31")

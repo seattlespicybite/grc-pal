@@ -340,3 +340,88 @@ def test_tables_are_in_backups(portal):
 
     assert {"docs", "docversions"} <= set(store.TABLES) and not {"docs", "docversions"} & set(store.NOT_BACKED_UP)
     assert zipfile.is_zipfile(io.BytesIO(DOCX))
+
+
+# ------------------------------------------------------------------ batch 3: trash, restore, descriptions
+def test_deleted_documents_go_to_trash_and_can_be_restored(portal):
+    official(portal)  # p-05 has a file in the evidence store
+    custom = portal.add_doc(ADMIN, "other", "X-1", "Old badge procedure")
+    portal.trash_docs(ADMIN, ["p-05", custom["id"]], "Not used")
+    shown = {d["id"] for d in portal.library(ADMIN)["docs"]}
+    assert "p-05" not in shown and custom["id"] not in shown
+    with pytest.raises(Invalid):
+        portal.library_doc(ADMIN, "p-05")  # hidden everywhere, even by direct link
+    trash = portal.library_trash(ADMIN)
+    assert {d["id"] for d in trash["docs"]} == {"p-05", custom["id"]}
+    assert portal.library_trash(AUDITOR)["docs"]  # auditors can see what was deleted
+    portal.restore_doc(ADMIN, "p-05")
+    d = portal.library_doc(ADMIN, "p-05")
+    assert d["official_count"] == 1  # the file was never destroyed
+    assert {"doclib.delete", "doclib.restore"} <= set(actions(portal))
+    entry = next(r for r in portal.log.records() if r["action"] == "doclib.delete")
+    assert entry["detail"]["reason"] == "Not used"
+
+
+def test_only_admins_delete_or_restore_and_staff_never_see_the_trash(portal):
+    for who in (CONTRIB, AUDITOR):
+        with pytest.raises(Forbidden):
+            portal.trash_docs(who, ["p-05"])
+    portal.trash_docs(ADMIN, ["p-05"])
+    with pytest.raises(Forbidden):
+        portal.restore_doc(AUDITOR, "p-05")
+    with pytest.raises(Forbidden):
+        portal.library_trash(CONTRIB)
+    with pytest.raises(Invalid):
+        portal.trash_docs(ADMIN, ["p-05"])  # already in the Trash
+    with pytest.raises(Invalid):
+        portal.trash_docs(ADMIN, [])
+
+
+def test_trash_is_tenant_scoped(tmp_path):
+    shared = SqliteStore(tmp_path / "shared.db")
+    a = make_portal(tmp_path / "a", tenant="acme", base_store=shared)
+    b = make_portal(tmp_path / "b", tenant="globex", base_store=shared)
+    a.trash_docs(ADMIN, ["p-05"])
+    assert not b.library_trash(ADMIN)["docs"] and b.library_doc(ADMIN, "p-05")
+
+
+def test_old_templates_can_be_removed_and_restored(portal):
+    first = portal.upload_template(ADMIN, "p-05", "first.docx", DOCX, "")
+    second = portal.upload_template(ADMIN, "p-05", "second.docx", DOCX, "")
+    assert portal.doc_versions(ADMIN, "p-05")["active_template"]["RowKey"] == second["RowKey"]
+    portal.remove_template(ADMIN, "p-05", second["RowKey"])
+    v = portal.doc_versions(ADMIN, "p-05")
+    assert v["active_template"]["RowKey"] == first["RowKey"]  # falls back to the next newest
+    assert [t["filename"] for t in v["templates"]] == ["first.docx"]
+    assert [t["filename"] for t in portal.library_trash(ADMIN)["templates"]] == ["second.docx"]
+    portal.remove_template(ADMIN, "p-05", first["RowKey"])
+    assert portal.doc_versions(ADMIN, "p-05")["active_template"] is None  # back to the built-in template
+    portal.restore_template(ADMIN, "p-05", second["RowKey"])
+    assert portal.doc_versions(ADMIN, "p-05")["active_template"]["RowKey"] == second["RowKey"]
+    with pytest.raises(Forbidden):
+        portal.remove_template(AUDITOR, "p-05", second["RowKey"])
+
+
+def test_title_and_description_are_editable(portal):
+    portal.edit_doc(ADMIN, "p-05", {"title": "Access control policy (2026)", "summary": "Who gets access and how."})
+    d = portal.library_doc(ADMIN, "p-05")
+    assert d["title"] == "Access control policy (2026)" and d["summary"] == "Who gets access and how."
+    with pytest.raises(Invalid):
+        portal.edit_doc(ADMIN, "p-05", {"summary": "x" * 1001})
+
+
+def test_edit_mode_and_trash_pages(portal, client):
+    as_(client, ADMIN)
+    assert "Edit list" in client.get("/library").text
+    page = client.get("/library?edit=1").text
+    assert 'name="ids" value="p-05"' in page and "data-confirm=" in page
+    r = client.post("/library/trash", data={"csrf": csrf(client, "/library"), "ids": ["p-05", "p-06"]},
+                    follow_redirects=False)
+    assert r.status_code == 303
+    trash = client.get("/library/trash").text
+    assert "Restore" in trash and client.get("/library/p-05").status_code == 404
+    as_(client, CONTRIB)
+    assert 'name="ids"' not in client.get("/library?edit=1").text  # edit mode is admins only
+    assert client.get("/library/trash").status_code == 403
+    r = client.post("/library/trash", data={"csrf": csrf(client, "/library"), "ids": ["p-07"]}, follow_redirects=False)
+    assert r.status_code == 403

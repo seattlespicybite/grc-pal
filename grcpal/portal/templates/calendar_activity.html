@@ -22,7 +22,9 @@
 <div>
 {% if act.kind != 'automated' %}<div{% if act.id == 'new' %} data-show-when="kind=manual"{% endif %}>
 <fieldset class="cal-choices"><legend>Months it is due</legend><div class="cal-months">
-{% for m in months %}<label class="cal-month"><input type="checkbox" name="months" value="{{ loop.index }}"{% if loop.index in form.months %} checked{% endif %}> {{ m }}</label>{% endfor %}</div></fieldset>
+{% for m in months %}<label class="cal-month"><input type="checkbox" name="months" value="{{ loop.index }}"{% if loop.index in form.months %} checked{% endif %}> {{ m }}</label>{% endfor %}</div>
+{% if act.id != 'new' %}<label class="check mt-s"><input type="checkbox" name="clear_past" value="1"> Also remove unticked months from earlier months and years where nothing was recorded</label>
+<div class="hint">Months with a recorded status always stay on the calendar, because they are evidence. The change is kept in the audit log.</div>{% endif %}</fieldset>
 <fieldset class="cal-choices mt"><legend>Due day</legend>
 {% for k, v in due_days.items() %}<label class="check"><input type="radio" name="due_day" value="{{ k }}"{% if (form.due_day or '15')|string == k %} checked{% endif %}> {{ v }}</label>{% endfor %}</fieldset></div>{% endif %}
 <fieldset class="cal-choices mt"><legend>Linked controls (tick all that apply)</legend>

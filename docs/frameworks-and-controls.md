@@ -155,14 +155,20 @@ reviews). From then on they live in GRC-pal: edit, retire or delete them, and ad
 the months it is due (tick any months), the due day (1st, 15th or last day) and the linked controls
 (tick as many as apply; type in the filter box to find them; out-of-scope controls are marked). Months you
 tick show up straight away, including earlier in the year. Unticking a month removes it only from months
-still ahead: a month already past stays, so a missed activity cannot disappear. To add an activity for one
+still ahead: a month already past stays, so a missed activity cannot disappear. If those past months were
+never really planned (for example, an old schedule you no longer use), tick **Also remove unticked months
+from earlier months and years where nothing was recorded** when you save. Months with a recorded status
+always stay, because they are evidence, and the change is kept in the audit log. To add an activity for one
 month only, click **+** in that month's empty cell. Rows are grouped into Manual and Automated; drag them (or
 use ↑ ↓) to arrange them. Activities you create are always shown, even when linked only to out-of-scope
 controls.
 **Retire** hides an activity from now on and keeps everything recorded. **Delete** is only possible while
 nothing has been recorded for it.
 
-**Recording a month** (click the cell):
+**Recording a month** (click the cell): a small window opens on top of the calendar. Pick the status and
+save; the calendar reloads at the same row. **Open the full page** in that window shows the linked
+controls, evidence uploaded that month and the full history. Clicking **+** opens the same window to add a
+one-off month.
 
 | Status | Meaning |
 | --- | --- |
@@ -184,8 +190,8 @@ notes, its evidence guide and the evidence uploaded that month.
 | Failed | The run itself broke (for example an expired secret). Fix it and run again: the month shows the latest run, and the failure stays in the run history |
 | Not run | No run that month, inside the observation period |
 
-Past-due warnings start on the first audit cycle's start date: set it on **Cycles and export** to the
-first day of your observation period.
+Past-due warnings start on the first audit cycle's start date: set it on **Cycles and export > Change the
+current cycle** to the first day of your observation period.
 
 ## Knowledge base
 

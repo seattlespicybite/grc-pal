@@ -4,6 +4,34 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+No data model change.
+
+### Added
+- **Back button** at the top of every page. It works like the browser's Back button, so the previous page
+  opens at the same scroll position. It appears only when the previous page was a page of this portal.
+- Calendar: clicking a month or the **+** of an empty month opens a **small window on the calendar** to
+  record it or add it; saving returns to the same row. The full page is still one click away.
+- Calendar: when you untick a month, you can also **remove it from earlier months and years** where nothing
+  was recorded. Recorded months always stay (they are evidence), and the change is in the audit log.
+- Document library: **Edit list** lets admins tick documents and delete them (with an "Are you sure?" step).
+  Deleted documents go to a new **Trash** page where they can be restored; their files are never destroyed.
+- Document library: old templates can be **removed** from a document (to the Trash), so you can keep just one.
+- Document library: the **description** of a document can now be edited, next to the title.
+- Cycles: admins can **change the current cycle's name, start and end date** (Cycles and export > Change
+  the current cycle; the dashboard links there). Before, the first cycle started on the day GRC-pal was
+  first opened and could not be adjusted. Every change is in the audit log.
+- **Automation alerts.** Admins are emailed when a collector or check fails (one email per new failed run, so a
+  broken integration cannot go quiet). Optional **morning, weekly and monthly digests** summarize what worked,
+  what failed and what did not run. Each admin chooses on Calendar > Email alerts. Sent after the daily
+  collection; no new scheduled job.
+- Vendors: **Not applicable** is now a choice for contract security terms and the data processing agreement.
+
+### Changed
+- Vendors: contract and DPA answers nobody has checked yet show as an empty choice instead of "Not checked".
+- Vendors: "Auditor's opinion" is now **Report result** with plain choices (Clean, With exceptions,
+  Unfavorable, No conclusion, Not applicable). Stored values and the auditor export keep the formal terms.
+- Vendors: the "Date we started sharing data" field is no longer shown. Dates already saved are kept.
+
 ## [0.4.0] - 2026-10-19 - Refreshed look, grouped menu
 
 No data model change (data model 1, as in 0.3.0).

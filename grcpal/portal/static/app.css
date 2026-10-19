@@ -447,3 +447,14 @@ a.stat:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 @media (max-width: 960px) { .hero-strip { grid-template-columns: 1fr; } }
 .ar-stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .table-wrap td input[type=text] { width: 100%; min-width: 160px; }
+
+/* Back button (shown by app.js when there is a previous portal page) */
+.back-btn { margin-bottom: 12px; }
+@media print { .back-btn { display: none; } }
+
+/* Calendar popup */
+.cal-dialog { border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px); overflow: auto; background: var(--surface); color: var(--text); }
+.cal-dialog::backdrop { background: rgba(0, 0, 0, .35); }
+.cal-pop-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.cal-pop-head h2 { margin: 0 0 6px; }

@@ -35,7 +35,7 @@
 </section>
 
 {% if user.sees_everything %}
-<section class="card"><h2>Template</h2>
+<section class="card" id="template"><h2>Template</h2>
 <p class="sub">{% if v.active_template %}Custom template in use: <a href="/library/{{ d.id }}/files/template">{{ v.active_template.filename }}</a> uploaded {{ v.active_template.uploaded_at[:10] }} by {{ v.active_template.uploaded_by }}.{% elif d.has_template and d.builtin_title %}The built-in template shipped with GRC-pal.{% else %}No template for this document.{% endif %}</p>
 {% if d.has_template %}<div class="actions"><a class="btn" href="/library/{{ d.id }}/files/template">Download template</a></div>{% endif %}
 {% if user.is_admin %}<form method="post" action="/library/{{ d.id }}/template" enctype="multipart/form-data" class="mt-l"><input type="hidden" name="csrf" value="{{ csrf }}"><h3>Replace the template</h3>
@@ -44,7 +44,10 @@
 <div class="grow2"><label for="tp-com">Note (optional)</label><input id="tp-com" name="comment" maxlength="2000"></div></div>
 <div class="actions"><button class="btn" type="submit">Replace template</button></div></form>
 {% if v.active_template and d.builtin_title %}<form method="post" action="/library/{{ d.id }}/template" data-confirm="Go back to the built-in template?"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="restore"><div class="actions"><button class="btn ghost small" type="submit">Restore the built-in template</button></div></form>{% endif %}{% endif %}
-{% if v.templates|length > 1 or (v.templates and v.active_template) %}<details class="mt"><summary>Template history ({{ v.templates|length }})</summary><ul class="list">{% for t in v.templates %}<li>{% if t.builtin %}Restored the built-in template{% else %}<a href="/library/{{ d.id }}/files/{{ t.RowKey }}">{{ t.filename }}</a> <span class="mono">sha256 {{ t.sha256[:12] }}…</span>{% endif %} <span class="sub">{{ t.uploaded_by }} · {{ t.uploaded_at[:10] }}{% if t.comment and not t.builtin %} · {{ t.comment }}{% endif %}</span></li>{% endfor %}</ul></details>{% endif %}
+{% if v.templates %}<details class="mt"{% if v.templates|length > 1 %} open{% endif %}><summary>Uploaded templates ({{ v.templates|length }})</summary>
+<p class="sub">The newest one is in use. Remove the ones you no longer need; they go to the Trash and can be restored.</p>
+<ul class="list">{% for t in v.templates %}<li class="dl-tpl">{% if t.builtin %}Restored the built-in template{% else %}<a href="/library/{{ d.id }}/files/{{ t.RowKey }}">{{ t.filename }}</a> <span class="mono">sha256 {{ t.sha256[:12] }}…</span>{% endif %} <span class="sub">{{ t.uploaded_by }} · {{ t.uploaded_at[:10] }}{% if t.comment and not t.builtin %} · {{ t.comment }}{% endif %}</span>{% if loop.first %} <span class="pill dl-approved">In use</span>{% endif %}
+{% if user.is_admin %}<form method="post" action="/library/{{ d.id }}/template" class="inline" data-confirm="Move this template to the Trash? You can restore it from the Trash."><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="version" value="{{ t.RowKey }}"><button class="btn ghost small" type="submit" aria-label="Remove template {{ t.filename }}">🗑 Remove</button></form>{% endif %}</li>{% endfor %}</ul></details>{% endif %}
 </section>{% endif %}
 </div>
 
@@ -61,6 +64,7 @@
 {% if user.is_admin %}<section class="card"><h2>Edit details</h2>
 <form method="post" action="/library/{{ d.id }}/edit"><input type="hidden" name="csrf" value="{{ csrf }}">
 <label for="ed-title">Title</label><input id="ed-title" name="title" value="{{ d.title }}" required minlength="3" maxlength="160">
+<label for="ed-sum">Description (what the document covers)</label><textarea id="ed-sum" name="summary" maxlength="1000">{{ d.summary }}</textarea>
 <label for="ed-own">Owner (a role or person)</label><input id="ed-own" name="owner" value="{{ d.owner_name }}" maxlength="80">
 <label for="ed-app">Approver</label><input id="ed-app" name="approver" value="{{ d.approver_name }}" maxlength="80">
 <label for="ed-cls">Classification</label><select id="ed-cls" name="classification"><option value="">Not set</option>{% for c in classifications %}<option{% if d.classification == c %} selected{% endif %}>{{ c }}</option>{% endfor %}</select>

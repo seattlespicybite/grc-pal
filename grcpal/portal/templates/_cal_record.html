@@ -1,0 +1,10 @@
+{# The Record form for one calendar month; used by the full page and the calendar popup. #}
+<form method="post" action="/calendar/o/{{ occ.key }}"><input type="hidden" name="csrf" value="{{ csrf }}">{% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+<fieldset class="cal-choices"><legend>Status</legend>
+{% for k, v in labels.items() %}<label class="check"><input type="radio" name="status" value="{{ k }}" required{% if occ.status == k %} checked{% endif %}> {{ v }}</label>{% endfor %}</fieldset>
+<div class="form-row"><div><label for="done{{ id_suffix }}">Performed on</label><input id="done{{ id_suffix }}" name="completed_on" type="date" max="{{ today }}" value="{{ occ.completed_on }}"></div>
+<div><label for="move{{ id_suffix }}">Due date (change it to move this month's activity)</label><input id="move{{ id_suffix }}" name="move_to" type="date" value="{{ occ.due }}"></div></div>
+<label for="note{{ id_suffix }}">Note (required for Missed)</label>
+<textarea id="note{{ id_suffix }}" name="note" maxlength="2000" placeholder="What was done, or why it was missed and what happens next">{{ occ.note }}</textarea>
+<div class="actions"><button class="btn" type="submit">Save</button></div>
+<p class="hint">Every save is kept below and in the audit log. The original due date ({{ occ.planned_due }}) stays on record.</p></form>

@@ -278,11 +278,17 @@ class CalendarMixin:
             if snap["kind"] != current["kind"]:
                 raise self._invalid("The type of an existing activity cannot change; create a new one")
             changes = {k: {"from": current.get(k), "to": v} for k, v in snap.items()
-                       if k != "instructions" and current.get(k) != v}
+                       if k not in ("instructions", "retro") and current.get(k) != v}
             if current.get("instructions", "") != snap["instructions"]:
                 changes["instructions_changed"] = True
             if not changes:
                 raise self._invalid("Nothing changed")
+            removed = sorted(set(current.get("months") or []) - set(snap.get("months") or []))
+            if form.get("clear_past") and removed:
+                # Unticked months also disappear from earlier months and years, but only where nothing was
+                # recorded. Recorded months always stay: they are evidence.
+                snap["retro"] = True
+                changes["removed_from_past"] = removed
             action, version = "calendar.activity.edit", int(current.get("version") or 0) + 1
         row = self._write_activity(aid, snap, version, self.today.isoformat(), actor.email, _now())
         self.audit(actor, action, aid, {"controls": snap["controls"], "version": version, "changes": changes})
@@ -334,6 +340,13 @@ class CalendarMixin:
         valid = [v for v in versions if v["effective"] <= end]
         return valid[-1] if valid else None
 
+    @staticmethod
+    def _removed_later(versions: list[dict], year: int, month: int) -> bool:
+        """True when a later schedule change unticked this month with "also remove from past months"."""
+        end = month_end(year, month)
+        return any(v.get("retro") and end < v["effective"] and month not in (v.get("months") or [])
+                   for v in versions)
+
     def calendar_records(self) -> dict[str, list[dict]]:
         out: dict[str, list[dict]] = {}
         for r in self.store.list("calendardecisions", "d"):
@@ -352,6 +365,8 @@ class CalendarMixin:
         in_force = bool(snap and snap.get("status") == "active" and month in (snap.get("months") or []))
         added = bool(latest and latest.get("status") == "active" and month in (latest.get("months") or [])
                      and year >= int(str(latest.get("effective", "2000"))[:4]))
+        if in_force and not records and self._removed_later(versions, year, month):
+            in_force = False
         if not in_force and not added and not records:
             return None
         source = snap if in_force else (latest if added else (snap or latest or act))

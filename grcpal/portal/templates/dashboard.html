@@ -4,7 +4,7 @@
 {% set ready_ctl = data.counts.get('ok', 0) + data.counts.get('accepted', 0) %}
 {% set pct = ((100 * ready_ctl / total_ctl)|round|int) if total_ctl else 0 %}
 <div class="page-head"><div><h1>SOC 2 program health</h1>
-<div class="sub">{{ org }} · {{ cycle.name }} ({{ cycle.start }} to {{ cycle.end }}) · {{ total_ctl }} controls · updated {{ data.generated }}</div></div>
+<div class="sub">{{ org }} · {{ cycle.name }} ({{ cycle.start }} to {{ cycle.end }}{% if user.is_admin %}, <a href="/cycles#current">change</a>{% endif %}) · {{ total_ctl }} controls · updated {{ data.generated }}</div></div>
 {% if user.sees_everything %}<a class="btn ghost small" href="/cycles/{{ cycle.RowKey }}/export">{{ icon('backups') }} Download auditor export</a>{% endif %}</div>
 
 <div class="hero-strip">

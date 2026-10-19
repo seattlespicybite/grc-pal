@@ -111,7 +111,25 @@ def cmd_collect(args) -> int:
             print(f"FAIL  {name}: {type(exc).__name__}: {exc}", file=sys.stderr)
     if getattr(args, "checks", False) and (os.getenv("GRCPAL_TABLES_URL") or os.getenv("GRCPAL_SQLITE")):
         failed += _run_checks(args, force=False)
+    if args.all and (os.getenv("GRCPAL_TABLES_URL") or os.getenv("GRCPAL_SQLITE")):
+        _automation_mail(args)
     return 1 if failed else 0
+
+
+def _automation_mail(args) -> None:
+    """After the scheduled collection: email admins about failures and send the digests due today. A mail
+    problem is reported but never fails the collection job (the evidence is already stored)."""
+    from grcpal.portal.auth import SYSTEM
+
+    try:
+        portal = _admin_portal(args)
+        for f in portal.send_automation_alerts(SYSTEM):
+            print(f"alert {f['source']}: failed run {f['run']} emailed to admins")
+        for d in portal.send_digests(SYSTEM):
+            print(f"digest {d['kind']}: sent to {len(d['sent'])} admin(s)")
+        portal.mailer._pool and portal.mailer._pool.shutdown(wait=True)
+    except Exception as exc:  # noqa: BLE001 - mail must never break evidence collection
+        print(f"WARN  automation email: {type(exc).__name__}: {exc}", file=sys.stderr)
 
 
 def _run_checks(args, force: bool) -> int:

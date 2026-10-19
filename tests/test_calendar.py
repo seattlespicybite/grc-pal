@@ -407,3 +407,50 @@ def test_page_has_only_manual_and_automated_groups(client):
     assert "Quarterly (" not in page and "Monthly (" not in page and "Annual (" not in page
     assert 'data-sortable="manual"' in page and 'aria-label="Move' in page
     assert "(out of scope)" in client.get("/calendar/a/access-review").text
+
+
+# ---------------------------------------------------------------- batch 2: past months and popup
+def test_unticked_months_can_also_leave_past_months_but_recorded_ones_stay(portal):
+    """Access reviews go from quarterly to annual; with "also remove from past" only recorded months stay."""
+    portal.update_occurrence(ADMIN, "access-review~2026-04", "performed", "2026-04-20", "Done")
+    before_2025 = set(cells(portal, "access-review", 2025))
+    portal.save_activity(ADMIN, "access-review", {**form(title="Quarterly user access review", months=["12"],
+                                                          controls=["IAM-05"]), "clear_past": True})
+    assert set(cells(portal, "access-review")) == {4, 12}  # April has a record (evidence), so it stays
+    assert set(cells(portal, "access-review", 2027)) == {12}
+    assert set(cells(portal, "access-review", 2025)) == before_2025 & {12}
+    entry = [r for r in portal.log.records() if r["action"] == "calendar.activity.edit"][-1]
+    assert entry["detail"]["changes"]["removed_from_past"] == [1, 4, 7, 10]
+    # a later edit without the box does not bring the removed past months back
+    portal.save_activity(ADMIN, "access-review", form(title="Annual user access review", months=["12"],
+                                                       controls=["IAM-05"]))
+    assert set(cells(portal, "access-review")) == {4, 12}
+
+
+def test_without_the_box_past_months_stay_as_before(portal):
+    portal.save_activity(ADMIN, "access-review", form(title="Quarterly user access review", months=["12"],
+                                                       controls=["IAM-05"]))
+    assert set(cells(portal, "access-review")) == {1, 4, 7, 12}
+
+
+def test_calendar_popup_records_and_adds_without_leaving_the_calendar(portal, client):
+    as_(client, ADMIN)
+    page = client.get("/calendar?year=2026").text
+    assert "data-cal-dialog" in page and "data-cal-popup" in page
+    pop = client.get("/calendar/o/access-review~2026-07?popup=1")
+    assert pop.status_code == 200 and "<html" not in pop.text and 'name="return_to" value="/calendar?year=2026#row-access-review"' in pop.text
+    token = csrf(client, "/calendar")
+    r = client.post("/calendar/o/access-review~2026-07", data={"csrf": token, "status": "performed",
+                                                                "completed_on": "2026-07-20", "note": "",
+                                                                "return_to": "/calendar?year=2026#row-access-review"},
+                    follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/calendar?year=2026&msg=") \
+        and r.headers["location"].endswith("#row-access-review")
+    add = client.get("/calendar/o/access-review~2026-08?popup=1").text
+    assert "Add for August" in add
+    r = client.post("/calendar/o/access-review~2026-08/add", data={"csrf": token, "return_to": "https://evil.example.com/"},
+                    follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/calendar/o/access-review~2026-08")  # off-site refused
+    for who in (CONTRIB, AUDITOR):
+        as_(client, who)
+        assert client.get("/calendar/o/access-review~2026-07?popup=1").status_code in (403, 404)

@@ -7,15 +7,7 @@
 
 <div class="grid g2">
 <section class="card"><h2>Record</h2>
-<form method="post" action="/calendar/o/{{ occ.key }}"><input type="hidden" name="csrf" value="{{ csrf }}">
-<fieldset class="cal-choices"><legend>Status</legend>
-{% for k, v in labels.items() %}<label class="check"><input type="radio" name="status" value="{{ k }}" required{% if occ.status == k %} checked{% endif %}> {{ v }}</label>{% endfor %}</fieldset>
-<div class="form-row"><div><label for="done">Performed on</label><input id="done" name="completed_on" type="date" max="{{ today }}" value="{{ occ.completed_on }}"></div>
-<div><label for="move">Due date (change it to move this month's activity)</label><input id="move" name="move_to" type="date" value="{{ occ.due }}"></div></div>
-<label for="note">Note (required for Missed)</label>
-<textarea id="note" name="note" maxlength="2000" placeholder="What was done, or why it was missed and what happens next">{{ occ.note }}</textarea>
-<div class="actions"><button class="btn" type="submit">Save</button></div>
-<p class="hint">Every save is kept below and in the audit log. The original due date ({{ occ.planned_due }}) stays on record.</p></form></section>
+{% set return_to = "" %}{% set id_suffix = "" %}{% include "_cal_record.html" %}</section>
 
 <section class="card"><h2>Steps and expected evidence</h2>
 {% if act.instructions %}<div class="note cal-note">{{ act.instructions }}</div>{% else %}<div class="empty">No steps written yet. <a href="/calendar/a/{{ act.id }}">Add them</a>.</div>{% endif %}

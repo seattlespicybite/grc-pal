@@ -1,0 +1,13 @@
+{# Popup content for the calendar (no page layout). The forms post normally and come back to the calendar row. #}
+{% set id_suffix = "-pop" %}<div class="cal-pop">
+<div class="cal-pop-head"><h2>{% if occ %}{{ occ.title }}: {{ month_name }} {{ occ.year }}{% else %}Add {{ act.title }} in {{ month_name }} {{ year }}?{% endif %}</h2>
+<button type="button" class="btn ghost small" data-pop-close aria-label="Close">&times;</button></div>
+{% if occ %}<div class="sub mb">Due {{ occ.due }}{% if occ.moved %} (moved from {{ occ.planned_due }}){% endif %} ·
+<span class="cal-cell cal-{{ 'past_due' if occ.past_due else occ.status }}">{{ 'Past due' if occ.past_due else labels[occ.status] }}</span></div>
+{% include "_cal_record.html" %}
+{% if act.instructions %}<details class="mt"><summary>Steps and expected evidence</summary><div class="note cal-note">{{ act.instructions }}</div></details>{% endif %}
+{% else %}<p>This activity is not scheduled for {{ month_name }}. Adding it creates a one-off occurrence for that month only; the regular schedule does not change.</p>
+<form method="post" action="/calendar/o/{{ key }}/add"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="return_to" value="{{ return_to }}">
+<div class="actions"><button class="btn" type="submit">Add for {{ month_name }}</button></div></form>{% endif %}
+<p class="sub mt"><a href="{{ full_url }}">Open the full page</a> (linked controls, evidence, history)</p>
+</div>

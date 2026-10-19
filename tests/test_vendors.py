@@ -502,3 +502,28 @@ def test_long_cuec_and_exception_lists_are_refused(portal):
         for _ in range(40):
             portal.save_cuec(ADMIN, v["RowKey"], "new", {"text": "x" * 600, "status": "not_mapped"})
     assert 15 <= len(portal.vendor(ADMIN, v["RowKey"])["cuecs"]) < 40
+
+
+# ---------------------------------------------------------------- form wording (batch 1)
+def test_contract_answers_start_blank_and_allow_not_applicable(portal, client):
+    v = vendor(portal, contract_terms="na", dpa="unknown")
+    assert v["contract_terms"] == "na"
+    with pytest.raises(Invalid):
+        vendor(portal, name="Other Vendor", dpa="maybe")
+    as_(client, ADMIN)
+    form = client.get(f"/vendors/{v['RowKey']}/edit").text
+    assert "Not checked" not in form
+    assert '<option value="unknown" selected></option>' in form  # the DPA nobody checked yet is an empty choice
+    assert '<option value="na">Not applicable</option>' in form
+    page = client.get(f"/vendors/{v['RowKey']}").text
+    assert "Not checked" not in page and "Not applicable" in page
+
+
+def test_report_result_replaces_auditors_opinion_and_start_date_is_gone(portal, client):
+    v = vendor(portal, opinion="qualified")
+    as_(client, ADMIN)
+    form = client.get(f"/vendors/{v['RowKey']}/edit").text
+    assert "Report result" in form and "Auditor's opinion" not in form and "Auditor&#39;s opinion" not in form
+    assert "With exceptions" in form and "started sharing" not in form
+    page = client.get(f"/vendors/{v['RowKey']}").text
+    assert "result: With exceptions" in page and "Sharing data since" not in page

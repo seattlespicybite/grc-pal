@@ -13,6 +13,9 @@ Plain model:
     approved) or archived.
 - Who sees what: admins change everything. Auditors read everything, read-only. Control owners see only approved
   official versions (the published copy), never templates or drafts.
+- Trash: deleting a document or removing an old template only hides it (it moves to the Trash page, where an
+  admin can restore it). Files stay in the write-once evidence store, so nothing an auditor relies on is ever
+  destroyed, and every delete and restore is in the audit log.
 - Approval needs a different admin than the uploader, unless there is no other active admin (then it is marked
   self-approved for the auditor). Every write is in the hash-chained audit log.
 """
@@ -99,9 +102,10 @@ class DocLibMixin:
 
     @staticmethod
     def _active_template(versions: list[dict]) -> dict | None:
-        """The newest template entry that is a real upload; a built-in marker (or none) means the shipped file."""
+        """The newest template entry that is a real upload; a built-in marker (or none) means the shipped file.
+        Templates moved to the Trash are skipped."""
         for v in versions:  # newest first
-            if v["kind"] == "template":
+            if v["kind"] == "template" and not v.get("removed_at"):
                 return None if v.get("builtin") else v
         return None
 
@@ -145,6 +149,8 @@ class DocLibMixin:
         ids = list(cat["docs"]) + [i for i in rows if i not in cat["docs"]]
         docs = []
         for did in ids:
+            if (rows.get(did) or {}).get("deleted_at"):
+                continue  # in the Trash
             d = self._merge_doc(did, cat["docs"].get(did), rows.get(did), versions.get(did, []))
             if not user.sees_everything and not d["current"]:
                 continue  # staff only see documents that have an approved official version
@@ -152,7 +158,7 @@ class DocLibMixin:
         docs.sort(key=lambda d: (d["folder"], d["number"] or "~", d["title"].lower()))
         folders = [{**f, "count": sum(1 for d in docs if d["folder"] == f["id"])} for f in cat["folders"]]
         other = [d for d in docs if d["folder"] not in {f["id"] for f in cat["folders"]}]
-        if other or any(r.get("custom") for r in rows.values()):
+        if other or any(r.get("custom") and not r.get("deleted_at") for r in rows.values()):
             folders.append({"id": "other", "name": "Other documents", "note": "Documents your organization added.",
                             "count": len(other)})
         needle = (q or "").strip().lower()
@@ -188,6 +194,8 @@ class DocLibMixin:
         cat, rows = builtin_catalog(), self._doc_rows()
         if did not in cat["docs"] and did not in rows:
             raise self._invalid("Document not found")
+        if (rows.get(did) or {}).get("deleted_at"):
+            raise self._invalid("Document not found")  # in the Trash: restore it first
         versions = self._all_versions().get(did, [])
         d = self._merge_doc(did, cat["docs"].get(did), rows.get(did), versions)
         if not user.sees_everything and not d["current"]:
@@ -201,7 +209,7 @@ class DocLibMixin:
         self.library_doc(user, did)
         rows = self._all_versions().get(did, [])
         official = [v for v in rows if v["kind"] == "official" and (user.sees_everything or v["status"] == "approved")]
-        templates = [v for v in rows if v["kind"] == "template"] if user.sees_everything else []
+        templates = [v for v in rows if v["kind"] == "template" and not v.get("removed_at")] if user.sees_everything else []
         return {"official": official, "templates": templates, "active_template": self._active_template(rows)}
 
     # ------------------------------------------------------------------ files
@@ -318,6 +326,11 @@ class DocLibMixin:
         for key, limit in (("owner", 80), ("approver", 80)):
             if key in fields:
                 clean[key] = " ".join(str(fields[key] or "").split())[:limit]
+        if "summary" in fields:
+            summary = str(fields["summary"] or "").replace("\r\n", "\n").strip()
+            if len(summary) > 1000:
+                raise self._invalid("The description can be at most 1000 characters")
+            clean["summary"] = summary
         if "classification" in fields:
             cls = str(fields["classification"] or "")
             if cls and cls not in CLASSIFICATIONS:
@@ -365,6 +378,82 @@ class DocLibMixin:
         self.store.insert("docs", row)
         self.audit(actor, "doclib.add", did, {"controls": GOV_CONTROLS, "folder": folder, "number": number, "title": title})
         return self.library_doc(actor, did)
+
+    # ------------------------------------------------------------------ trash
+    def trash_docs(self, actor, ids: list[str], reason: str = "") -> list[str]:
+        """Move documents to the Trash. They disappear from the library for everyone; their files stay in the
+        write-once evidence store, and an admin can restore them from the Trash page."""
+        self._need_admin(actor, "delete documents")
+        ids = list(dict.fromkeys(i for i in ids if i))
+        if not ids:
+            raise self._invalid("Tick at least one document to delete")
+        if len(ids) > 200:
+            raise self._invalid("Delete at most 200 documents at a time")
+        rows, done = self._doc_rows(), []
+        for did in ids:
+            d = self.library_doc(actor, did)  # also refuses unknown ids and ones already in the Trash
+            stamp = {"deleted_at": _now(), "deleted_by": actor.email, "deleted_reason": (reason or "").strip()[:500]}
+            if did in rows:
+                self.store.update("docs", "d", did, stamp)
+            else:
+                self.store.insert("docs", {"PartitionKey": "d", "RowKey": did, **stamp})
+            self.audit(actor, "doclib.delete", did, {"controls": GOV_CONTROLS, "title": d["title"][:160],
+                                                     "number": d["number"], "approved_versions": len(d["current"]),
+                                                     "reason": stamp["deleted_reason"]})
+            done.append(did)
+        return done
+
+    def restore_doc(self, actor, did: str) -> dict:
+        self._need_admin(actor, "restore documents")
+        row = self.store.get("docs", "d", did) if _ID.match(did or "") or did in builtin_catalog()["docs"] else None
+        if not row or not row.get("deleted_at"):
+            raise self._invalid("That document is not in the Trash")
+        self.store.update("docs", "d", did, {"deleted_at": "", "deleted_by": "", "deleted_reason": ""})
+        self.audit(actor, "doclib.restore", did, {"controls": GOV_CONTROLS, "deleted_at": row["deleted_at"]})
+        return self.library_doc(actor, did)
+
+    def remove_template(self, actor, did: str, vid: str) -> dict:
+        """Take an old template out of the list (to the Trash). The active one falls back to the next newest."""
+        self._need_admin(actor, "remove templates")
+        self.library_doc(actor, did)
+        v = self.store.get("docversions", did, vid) if _VID.match(vid or "") else None
+        if not v or v["kind"] != "template" or v.get("removed_at"):
+            raise self._invalid("Template not found")
+        self.store.update("docversions", did, vid, {"removed_at": _now(), "removed_by": actor.email})
+        self.audit(actor, "doclib.template.remove", did, {"controls": GOV_CONTROLS, "file": v["filename"],
+                                                          "sha256": v.get("sha256", "")})
+        return v
+
+    def restore_template(self, actor, did: str, vid: str) -> dict:
+        self._need_admin(actor, "restore templates")
+        v = self.store.get("docversions", did, vid) if _VID.match(vid or "") else None
+        if not v or v["kind"] != "template" or not v.get("removed_at"):
+            raise self._invalid("That template is not in the Trash")
+        self.store.update("docversions", did, vid, {"removed_at": "", "removed_by": ""})
+        self.audit(actor, "doclib.template.restore_from_trash", did, {"controls": GOV_CONTROLS, "file": v["filename"]})
+        return v
+
+    def library_trash(self, user) -> dict:
+        """What is in the Trash: deleted documents and removed templates (admins and auditors)."""
+        if not user.sees_everything:
+            raise self._forbidden("Only admins and auditors can see the Trash")
+        cat, rows, versions = builtin_catalog(), self._doc_rows(), self._all_versions()
+        docs = []
+        for did, row in rows.items():
+            if row.get("deleted_at"):
+                d = self._merge_doc(did, cat["docs"].get(did), row, versions.get(did, []))
+                docs.append(d)
+        templates = []
+        for did, rs in versions.items():
+            if (rows.get(did) or {}).get("deleted_at"):
+                continue  # shown with its document
+            for v in rs:
+                if v["kind"] == "template" and v.get("removed_at"):
+                    base = cat["docs"].get(did) or rows.get(did) or {}
+                    templates.append({**v, "doc_title": base.get("title", did), "doc_number": base.get("number", "")})
+        docs.sort(key=lambda d: d["deleted_at"], reverse=True)
+        templates.sort(key=lambda v: v["removed_at"], reverse=True)
+        return {"docs": docs, "templates": templates}
 
     # ------------------------------------------------------------------ status
     def set_version_status(self, actor, did: str, vid: str, status: str, note: str = "") -> dict:
