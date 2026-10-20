@@ -35,6 +35,11 @@ the person who defines controls from the people who operate them, which auditors
 | Send reminders | ✓ |  |  |
 | Override control status | ✓ (justification, expiry, current cycle) |  |  |
 | Acknowledge policies | ✓ | ✓ |  |
+| Document library: upload versions and templates, edit details and numbers, delete and restore | ✓ |  |  |
+| Document library: send for approval, reassign or withdraw a request | ✓ |  |  |
+| Document library: approve or send back a version | named approver only, never one they uploaded or sent; **Approve directly** as backup (never own upload while another admin is active) | named approver only, sees just that version while it waits | |
+| Document library: download | everything | approved versions (and the version waiting for their approval) | everything (logged) |
+| Document library: register and Excel export | ✓ |  | ✓ (logged) |
 | Users and roles | ✓ |  | user list CSV |
 | Start a cycle | ✓ |  |  |
 | Security calendar: view, edit activities, record Performed or Missed, CSV | ✓ |  | (cycle export only) |

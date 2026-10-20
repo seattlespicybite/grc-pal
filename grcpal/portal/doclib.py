@@ -21,8 +21,15 @@ Plain model:
   unique); the internal id never changes, so versions, acknowledgments and the audit log keep pointing at it.
 - A version number is suggested on upload (major 2.0, minor 1.1) and can be typed to match the file. It can be
   corrected while the version is a draft or in review, and is locked once approved.
-- Approval needs a different admin than the uploader, unless there is no other active admin (then it is marked
-  self-approved for the auditor). Every write is in the hash-chained audit log.
+- Approval, the formal way: an admin presses "Send for approval"; the document's named approver (a person, never
+  the uploader or the sender) gets an email and an item in My work, opens the review page, confirms they read the
+  version and approves, or denies with a reason. The item closes only when the decision is recorded. Admins can
+  withdraw or reassign a request; a reminder goes out every 7 days while it waits.
+- Approval, the backup way: an admin approves directly (for example a copy signed inside the document). It still
+  needs a different admin than the uploader unless there is no other active admin (then it is marked
+  self-approved), and it is recorded as a direct approval so the auditor can tell the two apart.
+- Every decision is in the hash-chained audit log and is also written to the write-once evidence store
+  (`doclib_approval`, control GOV-01).
 """
 from __future__ import annotations
 
@@ -38,7 +45,7 @@ import yaml
 STARTER = Path(__file__).resolve().parent.parent / "starter" / "doctemplates"
 DOC_EXTENSIONS = {".docx", ".pdf", ".xlsx", ".pptx"}
 CLASSIFICATIONS = ["Public", "Internal", "Confidential", "Restricted"]
-STATUSES = {"draft": "Draft", "in_review": "In review", "approved": "Approved", "superseded": "Superseded",
+STATUSES = {"draft": "Draft", "in_review": "Waiting for approval", "approved": "Approved", "superseded": "Superseded",
             "archived": "Archived"}
 CHANGES = {"major": "Major (a commitment changed)", "minor": "Minor (wording or formatting)"}
 KINDS = {"policy": "Policy", "standard": "Standard", "procedure": "Procedure / plan", "soc2": "SOC 2 document",
@@ -50,6 +57,7 @@ _VID = re.compile(r"^\d{8}T\d{12}-[0-9a-f]{8}$")
 _LABEL = re.compile(r"^\d{1,4}(\.\d{1,4}){1,2}$")
 _NUMBER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._/-]{0,19}$")
 GOV_CONTROLS = ["GOV-01"]
+REMIND_DAYS = 7
 
 
 def _new_vid() -> str:
@@ -233,7 +241,7 @@ class DocLibMixin:
             raise self._invalid("Document not found")  # in the Trash: restore it first
         versions = self._all_versions().get(did, [])
         d = self._merge_doc(did, cat["docs"].get(did), rows.get(did), versions)
-        if not user.sees_everything and not d["current"]:
+        if not user.sees_everything and not d["current"] and not self._waiting_for(user, versions):
             raise self._invalid("Document not found")  # staff never learn about unpublished documents
         d["parent_doc"] = cat["docs"].get(d.get("parent", ""))
         d["children"] = [c for c in cat["docs"].values() if c.get("parent") == did]
@@ -243,7 +251,8 @@ class DocLibMixin:
         """Official versions (newest first) and template history, as far as this user may see them."""
         self.library_doc(user, did)
         rows = self._all_versions().get(did, [])
-        official = [v for v in rows if v["kind"] == "official" and (user.sees_everything or v["status"] == "approved")]
+        official = [v for v in rows if v["kind"] == "official" and (user.sees_everything or v["status"] == "approved"
+                                                                    or self._waiting_for(user, [v]))]
         everything = user.sees_everything
         templates = [v for v in rows if v["kind"] == "template" and not v.get("removed_at")] if everything else []
         active = self._active_template(rows)
@@ -401,7 +410,9 @@ class DocLibMixin:
             v = active
         else:
             v = self.store.get("docversions", did, vid) if _VID.match(vid or "") else None
-            if not v or v.get("builtin") or (not user.sees_everything and not (v["kind"] == "official" and v["status"] == "approved")):
+            visible = v and (user.sees_everything or (v["kind"] == "official" and v["status"] == "approved")
+                             or self._waiting_for(user, [v]))
+            if not v or v.get("builtin") or not visible:
                 raise self._invalid("File not found")
         source, run = v["evidence_run"].split("/", 1)
         data = self.evidence.read(source, run, v["stored_name"])
@@ -621,35 +632,240 @@ class DocLibMixin:
 
     # ------------------------------------------------------------------ status
     def set_version_status(self, actor, did: str, vid: str, status: str, note: str = "") -> dict:
-        """Move an official version through draft, in review, approved or archived. Files never change."""
+        """Admin changes: approve directly (the backup to the approval workflow), return to draft, archive, restore.
+        "Waiting for approval" is only reached through request_approval. Files never change."""
         self._need_admin(actor, "change the status of a document version")
         v = self.store.get("docversions", did, vid) if _VID.match(vid or "") else None
         if not v or v["kind"] != "official":
             raise self._invalid("Version not found")
-        if status not in ("draft", "in_review", "approved", "archived"):
+        if status == "in_review":
+            raise self._invalid("Use Send for approval: it needs the document's approver")
+        if status not in ("draft", "approved", "archived"):
             raise self._invalid("Choose a status")
         old, note = v["status"], (note or "").strip()[:1000]
-        allowed = {"draft": {"in_review", "approved", "archived"}, "in_review": {"draft", "approved", "archived"},
+        allowed = {"draft": {"approved", "archived"}, "in_review": {"draft", "approved", "archived"},
                    "approved": {"archived"}, "superseded": {"archived"}, "archived": {"draft"}}
         if status not in allowed.get(old, set()):
             raise self._invalid(f"A {STATUSES[old].lower()} version cannot become {STATUSES[status].lower()}")
         if status in ("draft", "archived") and old != "draft" and not note:
             raise self._invalid("Write a short reason")
-        fields = {"status": status, "status_note": note}
-        superseded = []
         if status == "approved":
             others = [e for e in self.active_emails("admin") if e != actor.email]
             if v["uploaded_by"] == actor.email and others:
                 raise self._forbidden("Another admin must approve a version you uploaded (segregation of duties)")
-            fields.update(approved_by=actor.email, approved_at=_now(), self_approved=v["uploaded_by"] == actor.email)
-            for other in self.store.list("docversions", did):
-                if (other["kind"] == "official" and other["status"] == "approved" and other["RowKey"] != vid
-                        and other.get("variant", "") == v.get("variant", "")):
-                    self.store.update("docversions", did, other["RowKey"], {"status": "superseded", "superseded_by": v["label"]})
-                    superseded.append(other["label"])
-        self.store.update("docversions", did, vid, fields)
+            return self._approve(actor, did, v, "direct", note, self_approved=v["uploaded_by"] == actor.email)
+        waiting = old == "in_review" and v.get("approval_approver")
+        self.store.update("docversions", did, vid, {"status": status, "status_note": note})
         self.audit(actor, f"doclib.status.{status}", did, {"controls": GOV_CONTROLS, "version": v["label"],
-                                                           "variant": v.get("variant", ""), "from": old, "sha256": v["sha256"],
-                                                           "superseded": superseded, "note": note[:300],
-                                                           "self_approved": fields.get("self_approved", False)})
+                                                           "variant": v.get("variant", ""), "from": old,
+                                                           "sha256": v["sha256"], "note": note[:300]})
+        if waiting:
+            self._approval_mail("closed", v["approval_approver"], actor, did, v, note)
         return self.store.get("docversions", did, vid)
+
+    def _approve(self, actor, did: str, v: dict, method: str, note: str, self_approved: bool = False,
+                 read_confirmed: bool = False) -> dict:
+        """Record an approval (workflow or direct): supersede the earlier approved version of the same variant,
+        audit it, keep a write-once evidence record, tell the people involved."""
+        vid, old = v["RowKey"], v["status"]
+        fields = {"status": "approved", "status_note": note, "approved_by": actor.email, "approved_at": _now(),
+                  "self_approved": self_approved, "approval_method": method, "decision_note": note,
+                  "read_confirmed": read_confirmed}
+        superseded = []
+        for other in self.store.list("docversions", did):
+            if (other["kind"] == "official" and other["status"] == "approved" and other["RowKey"] != vid
+                    and other.get("variant", "") == v.get("variant", "")):
+                self.store.update("docversions", did, other["RowKey"], {"status": "superseded", "superseded_by": v["label"]})
+                superseded.append(other["label"])
+        self.store.update("docversions", did, vid, fields)
+        detail = {"controls": GOV_CONTROLS, "version": v["label"], "variant": v.get("variant", ""), "from": old,
+                  "sha256": v["sha256"], "superseded": superseded, "note": note[:300], "method": method,
+                  "self_approved": self_approved, "uploaded_by": v["uploaded_by"],
+                  "named_approver": v.get("approval_approver", ""), "read_confirmed": read_confirmed}
+        self.audit(actor, "doclib.status.approved", did, detail)
+        self._approval_evidence(actor, did, v, "approved", detail)
+        waiting_on = v.get("approval_approver", "") if old == "in_review" else ""
+        if waiting_on and waiting_on != actor.email:
+            self._approval_mail("closed", waiting_on, actor, did, v, note or "Approved directly by an admin")
+        self._approval_mail("approved", [v["uploaded_by"], v.get("approval_requested_by", "")], actor, did, v, note)
+        return self.store.get("docversions", did, vid)
+
+    # ------------------------------------------------------------------ approval workflow
+    @staticmethod
+    def _waiting_for(user, versions: list[dict]) -> bool:
+        """True when one of these versions is waiting for this user's approval."""
+        return any(v.get("kind") == "official" and v.get("status") == "in_review"
+                   and v.get("approval_approver") == user.email for v in versions)
+
+    def _pending_version(self, did: str, vid: str) -> dict:
+        v = self.store.get("docversions", did, vid) if _VID.match(vid or "") else None
+        if not v or v["kind"] != "official":
+            raise self._invalid("Version not found")
+        return v
+
+    def _check_approver(self, email: str, v: dict, actor) -> str:
+        email = (email or "").strip().lower()
+        if email not in self.doc_people():
+            raise self._invalid("Set the document's approver to an active person first (Details > Edit)")
+        if email in (v["uploaded_by"], actor.email):
+            raise self._invalid("The approver cannot be the person who uploaded or sends the version")
+        return email
+
+    def request_approval(self, actor, did: str, vid: str, note: str = "") -> dict:
+        """Send a draft to the document's named approver: email, My work item, audit."""
+        self._need_admin(actor, "send documents for approval")
+        d = self.library_doc(actor, did)
+        v = self._pending_version(did, vid)
+        if v["status"] != "draft":
+            raise self._invalid("Only a draft can be sent for approval")
+        approver = self._check_approver(d.get("approver", ""), v, actor)
+        note = (note or "").strip()[:1000]
+        fields = {"status": "in_review", "status_note": "", "approval_approver": approver, "approval_requested_by": actor.email,
+                  "approval_requested_at": _now(), "approval_reminded_at": "", "approval_note": note}
+        self.store.update("docversions", did, vid, fields)
+        self.audit(actor, "doclib.approval.request", did, {"controls": GOV_CONTROLS, "version": v["label"],
+                                                           "variant": v.get("variant", ""), "approver": approver,
+                                                           "sha256": v["sha256"], "note": note[:300]})
+        v = self.store.get("docversions", did, vid)
+        self._approval_mail("request", approver, actor, did, v, note)
+        return v
+
+    def decide_approval(self, user, did: str, vid: str, decision: str, note: str = "", read: bool = False) -> dict:
+        """The named approver approves (after confirming they read it) or denies (with a reason)."""
+        v = self._pending_version(did, vid)
+        if v["status"] != "in_review" or not v.get("approval_approver"):
+            raise self._invalid("This version is not waiting for approval any more")
+        if v["approval_approver"] != user.email or user.is_auditor:
+            raise self._forbidden("Only the approver named on this request can decide it")
+        if user.email in (v["uploaded_by"], v.get("approval_requested_by")):
+            raise self._forbidden("You cannot approve a version you uploaded or sent (segregation of duties)")
+        note = (note or "").strip()[:1000]
+        if decision == "approve":
+            if not read:
+                raise self._invalid(f"Confirm that you have read version {v['label']}")
+            return self._approve(user, did, v, "workflow", note, read_confirmed=True)
+        if decision != "deny":
+            raise self._invalid("Choose approve or deny")
+        if not note:
+            raise self._invalid("Write why you deny it, so the author knows what to change")
+        self.store.update("docversions", did, vid, {"status": "draft", "status_note": note, "decision_note": note,
+                                                    "denied_by": user.email, "denied_at": _now()})
+        detail = {"controls": GOV_CONTROLS, "version": v["label"], "variant": v.get("variant", ""),
+                  "sha256": v["sha256"], "note": note[:300]}
+        self.audit(user, "doclib.approval.deny", did, detail)
+        self._approval_evidence(user, did, v, "denied", detail)
+        self._approval_mail("denied", [v["uploaded_by"], v.get("approval_requested_by", "")], user, did, v, note)
+        return self.store.get("docversions", did, vid)
+
+    def withdraw_approval(self, actor, did: str, vid: str, note: str = "") -> dict:
+        self._need_admin(actor, "withdraw approval requests")
+        v = self._pending_version(did, vid)
+        if v["status"] != "in_review":
+            raise self._invalid("This version is not waiting for approval")
+        note = (note or "").strip()[:1000] or "Withdrawn by an admin"
+        self.store.update("docversions", did, vid, {"status": "draft", "status_note": note})
+        self.audit(actor, "doclib.approval.withdraw", did, {"controls": GOV_CONTROLS, "version": v["label"],
+                                                            "approver": v.get("approval_approver", ""), "note": note[:300]})
+        if v.get("approval_approver"):
+            self._approval_mail("closed", v["approval_approver"], actor, did, v, note)
+        return self.store.get("docversions", did, vid)
+
+    def reassign_approval(self, actor, did: str, vid: str, approver: str) -> dict:
+        self._need_admin(actor, "reassign approval requests")
+        v = self._pending_version(did, vid)
+        if v["status"] != "in_review":
+            raise self._invalid("This version is not waiting for approval")
+        new = self._check_approver(approver, v, actor)
+        old = v.get("approval_approver", "")
+        if new == old:
+            return v
+        self.store.update("docversions", did, vid, {"approval_approver": new, "approval_requested_at": _now(),
+                                                    "approval_reminded_at": ""})
+        self.audit(actor, "doclib.approval.reassign", did, {"controls": GOV_CONTROLS, "version": v["label"],
+                                                            "from": old, "to": new})
+        v = self.store.get("docversions", did, vid)
+        if old:
+            self._approval_mail("closed", old, actor, did, v, f"Reassigned to {self._who(new, self.doc_people())}")
+        self._approval_mail("request", new, actor, did, v, v.get("approval_note", ""))
+        return v
+
+    def approval_view(self, user, did: str, vid: str) -> dict:
+        """What the review page shows: the document, this version and the current approved version of the same
+        variant (to compare). Admins and auditors see any request; anyone else only one addressed to them."""
+        d = self.library_doc(user, did)
+        v = self._pending_version(did, vid)
+        if not user.sees_everything and v.get("approval_approver") != user.email:
+            raise self._invalid("Version not found")
+        current = next((c for c in d["current"] if c.get("variant", "") == v.get("variant", "") and c["RowKey"] != vid), None)
+        people = self.doc_people()
+        return {"d": d, "v": v, "current": current, "approver_name": self._who(v.get("approval_approver", ""), people),
+                "can_decide": (v["status"] == "in_review" and v.get("approval_approver") == user.email
+                               and not user.is_auditor and user.email not in (v["uploaded_by"], v.get("approval_requested_by")))}
+
+    def pending_approvals(self, user) -> dict:
+        """For My work: versions waiting for this user, and (for admins) every request still waiting."""
+        cat, rows, people = builtin_catalog(), self._doc_rows(), self.doc_people()
+        mine, waiting = [], []
+        for did, versions in self._all_versions().items():
+            if (rows.get(did) or {}).get("deleted_at"):
+                continue
+            for v in versions:
+                if v["kind"] != "official" or v["status"] != "in_review" or not v.get("approval_approver"):
+                    continue
+                base = {**(cat["docs"].get(did) or {}), **(rows.get(did) or {})}
+                item = {**v, "doc_id": did, "doc_title": base.get("title", did), "doc_number": base.get("number", ""),
+                        "approver_name": self._who(v["approval_approver"], people),
+                        "days": self._days_since(v.get("approval_requested_at", ""))}
+                if v["approval_approver"] == user.email:
+                    mine.append(item)
+                elif user.is_admin:
+                    waiting.append(item)
+        key = lambda x: x.get("approval_requested_at", "")  # noqa: E731
+        return {"mine": sorted(mine, key=key), "waiting": sorted(waiting, key=key)}
+
+    def _days_since(self, stamp: str) -> int:
+        try:
+            return max(0, (self.today - dt.date.fromisoformat(stamp[:10])).days)
+        except ValueError:
+            return 0
+
+    def send_approval_reminders(self, actor) -> list[dict]:
+        """Daily (after the scheduled collection): remind approvers of requests waiting REMIND_DAYS or more,
+        at most once every REMIND_DAYS days per request."""
+        out = []
+        for did, versions in self._all_versions().items():
+            if (self.store.get("docs", "d", did) or {}).get("deleted_at"):
+                continue
+            for v in versions:
+                if v["kind"] != "official" or v["status"] != "in_review" or not v.get("approval_approver"):
+                    continue
+                last = v.get("approval_reminded_at") or v.get("approval_requested_at", "")
+                if self._days_since(last) < REMIND_DAYS:
+                    continue
+                self.store.update("docversions", did, v["RowKey"], {"approval_reminded_at": self.today.isoformat()})
+                sent = self._approval_mail("reminder", v["approval_approver"], actor, did, v, v.get("approval_note", ""))
+                self.audit(actor, "doclib.approval.remind", did, {"controls": GOV_CONTROLS, "version": v["label"],
+                                                                  "approver": v["approval_approver"],
+                                                                  "waiting_days": self._days_since(v.get("approval_requested_at", ""))})
+                out.append({"doc": did, "version": v["label"], "sent": sent})
+        return out
+
+    def _approval_evidence(self, actor, did: str, v: dict, decision: str, detail: dict) -> None:
+        """A small write-once record of the decision next to the file it is about."""
+        run = self.evidence.new_run("doclib_approval", GOV_CONTROLS, {"document": did, "decision": decision,
+                                                                     "by": actor.email})
+        taken = set(self.evidence.list_runs("doclib_approval"))
+        while run.prefix.split("/", 1)[1] in taken:
+            run.started += dt.timedelta(seconds=1)
+        run.add("decision", {"document": did, "file": v["filename"], "decision": decision, "by": actor.email,
+                                  "at": _now(), **{k: x for k, x in detail.items() if k != "controls"}})
+        run.finish([])
+
+    def _approval_mail(self, kind: str, to, actor, did: str, v: dict, note: str) -> list[str]:
+        from grcpal.portal import notify
+
+        d = {**(builtin_catalog()["docs"].get(did) or {}), **(self.store.get("docs", "d", did) or {})}
+        recipients = [to] if isinstance(to, str) else list(to)
+        content = notify.doc_approval(self, kind, d.get("number", ""), d.get("title", did), did, v, note, actor)
+        return self._notify("doc_approval", [r for r in recipients if r], actor, content, GOV_CONTROLS)
+

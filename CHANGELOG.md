@@ -12,6 +12,13 @@ No data model change.
   contents (`/static/app.css?v=...`), so browsers fetch the new file as soon as it changes.
 
 ### Added
+- **Document approval workflow.** **Send for approval** emails the document's named approver with a link and puts
+  an item in their **My work**. On the review page they confirm they read the version and **Approve**, or **Send
+  back** with a reason. The approver can never be the uploader or sender; control owners who approve see only the
+  version waiting for them. Admins can **Reassign** or **Withdraw** a request; reminders go out every 7 days with
+  the daily scheduled run. **Approve directly** stays as the admin backup and is recorded as a direct approval.
+  Every decision is in the audit log (`doclib.approval.*`, `doclib.status.approved` with `method`) and kept as
+  write-once evidence (`doclib_approval`, GOV-01).
 - Document library, one document: a single **Details** card with an **✏ Edit** button that turns it into a
   form. The **document number** is now editable (it must stay unique; versions and history stay attached), and
   **owner and approver** are picked from active admins and control owners instead of typed text.
@@ -44,6 +51,9 @@ No data model change.
 - Vendors: **Not applicable** is now a choice for contract security terms and the data processing agreement.
 
 ### Changed
+- Document versions: "In review" is now **Waiting for approval** and is reached only through Send for approval.
+  The old "Send to review" button is gone. A version left in review from before can be withdrawn and sent again.
+- Document page: the versions table is narrower (product and size are shown under the version and file name).
 - Document numbers of documents in the Trash stay reserved, so restoring a document never creates two
   documents with the same number.
 - Vendors: contract and DPA answers nobody has checked yet show as an empty choice instead of "Not checked".

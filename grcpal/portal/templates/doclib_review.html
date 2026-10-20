@@ -1,0 +1,38 @@
+{% extends "base.html" %}{% from "_macros.html" import when %}{% block title %}Approve {{ d.title }}{% endblock %}
+{% block content %}
+<div class="mb"><a href="/work">‹ My work</a>{% if user.sees_everything %} / <a href="/library/{{ d.id }}">{{ d.number }} {{ d.title }}</a>{% endif %}</div>
+<div class="page-head"><div><h1>{{ d.title }} v{{ v.label }}</h1>
+<div class="sub"><span class="mono">{{ d.number or 'No number' }}</span>{% if v.variant %} · {{ v.variant }}{% endif %} · {{ kinds.get(d.kind, 'Document') }}</div></div>
+<div class="head-actions"><span class="pill dl-{{ v.status }}">{{ statuses[v.status] }}</span></div></div>
+
+<div class="grid g-main"><div>
+<section class="card"><h2>The version to approve</h2><dl class="kv">
+<dt>File</dt><dd><a href="/library/{{ d.id }}/files/{{ v.RowKey }}">{{ v.filename }}</a></dd>
+<dt>Version</dt><dd>v{{ v.label }} · {{ changes.get(v.change, v.change) }}</dd>
+<dt>Uploaded</dt><dd>{{ when(v.uploaded_at) }} by {{ v.uploaded_by }}</dd>
+{% if v.comment %}<dt>Summary of the change</dt><dd>{{ v.comment }}</dd>{% endif %}
+{% if v.approval_requested_by %}<dt>Sent for approval</dt><dd>{{ when(v.approval_requested_at) }} by {{ v.approval_requested_by }}</dd>{% endif %}
+{% if v.approval_note %}<dt>Note from the sender</dt><dd>{{ v.approval_note }}</dd>{% endif %}
+<dt>Approver</dt><dd>{{ approver_name or '—' }}</dd>
+<dt>SHA-256</dt><dd class="mono">{{ v.sha256 }}</dd></dl>
+<div class="actions"><a class="btn" href="/library/{{ d.id }}/files/{{ v.RowKey }}">⬇ Download v{{ v.label }}</a>
+{% if current %}<a class="btn ghost" href="/library/{{ d.id }}/files/{{ current.RowKey }}">⬇ Current approved v{{ current.label }} (to compare)</a>{% endif %}</div>
+</section>
+
+{% if can_decide %}<section class="card" id="decide"><h2>Your decision</h2>
+<p class="sub">Open the file and read it. Approve it to make it the published version, or send it back with a reason.</p>
+<form method="post" action="/library/{{ d.id }}/review/{{ v.RowKey }}"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label for="rv-note">Note (needed if you send it back)</label><textarea id="rv-note" name="note" maxlength="1000" placeholder="For example: approved for 2027, or: section 4 must name the backup owner"></textarea>
+<label class="inline-check"><input type="checkbox" name="read" value="1"> I have read version {{ v.label }} of this document</label>
+<div class="actions"><button class="btn" type="submit" name="decision" value="approve">Approve</button>
+<button class="btn ghost" type="submit" name="decision" value="deny">Send back</button></div></form>
+<div class="hint">Your decision, the time, your note and the file's SHA-256 are kept in the audit log and as write-once evidence.</div>
+</section>
+{% elif v.status == 'in_review' %}<div class="note">This version is waiting for {{ approver_name or 'its approver' }}.</div>
+{% else %}<div class="note">This request is closed: the version is now {{ statuses[v.status]|lower }}{% if v.approved_by %}, approved by {{ v.approved_by }} on {{ when(v.approved_at) }}{% if v.approval_method == 'direct' %} (directly by an admin){% endif %}{% elif v.denied_by %}, sent back by {{ v.denied_by }}{% endif %}.{% if v.decision_note %} Note: {{ v.decision_note }}{% endif %}</div>{% endif %}
+</div>
+<aside><section class="card"><h2>About the document</h2><dl class="kv">
+<dt>Owner</dt><dd>{{ d.owner_name or '—' }}</dd><dt>Classification</dt><dd>{{ d.classification or '—' }}</dd>
+{% if d.summary %}<dt>Covers</dt><dd>{{ d.summary }}</dd>{% endif %}
+{% if d.soc2 %}<dt>SOC 2</dt><dd>{{ d.soc2 }}</dd>{% endif %}</dl></section></aside></div>
+{% endblock %}

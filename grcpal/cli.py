@@ -127,6 +127,8 @@ def _automation_mail(args) -> None:
             print(f"alert {f['source']}: failed run {f['run']} emailed to admins")
         for d in portal.send_digests(SYSTEM):
             print(f"digest {d['kind']}: sent to {len(d['sent'])} admin(s)")
+        for r in portal.send_approval_reminders(SYSTEM):
+            print(f"reminder: {r['doc']} v{r['version']} still waiting for approval")
         portal.mailer._pool and portal.mailer._pool.shutdown(wait=True)
     except Exception as exc:  # noqa: BLE001 - mail must never break evidence collection
         print(f"WARN  automation email: {type(exc).__name__}: {exc}", file=sys.stderr)

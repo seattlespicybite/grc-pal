@@ -44,10 +44,25 @@ guidance, and drop any statement that is not true today: every "must" is somethi
    version corrects the number. Once a version is approved its number is locked, because it is part of the
    approval record. Use **Product / variant** when the same policy exists for several products; each product has
    its own version line (Product A 1.0, 1.1 ... and Product B 1.0 ...).
-3. **Send to review**, then **Approve**. A different admin must approve (segregation of duties); if there is only
-   one active admin the approval is marked self-approved so the auditor can see it. Approving a version makes
-   the earlier approved version of the same product **Superseded**. Nothing is deleted: archive a version with a
-   reason to hide it from staff.
+3. **Approval.** Set the document's **Approver** in Details (a person, for example the CTO for the Information
+   Security Policy, the VP for topic policies, the team lead for standards and procedures). Then press
+   **Send for approval** on the draft:
+   - The approver gets an email with a link (never the file) and an item under **Waiting for your approval** in
+     **My work**. The link opens the review page after sign-in.
+   - On the review page they download the version (and the current approved one to compare), tick
+     **I have read version X**, and press **Approve**, or **Send back** with a reason (the version returns to
+     draft and you get the reason by email).
+   - The approver can never be the person who uploaded or sent the version. Control owners who are approvers see
+     only the version waiting for them, only while it waits.
+   - While it waits, admins can **Reassign** it to someone else or **Withdraw** it. A reminder email goes out
+     every 7 days (sent by the daily scheduled run). Admins see every request under **Documents waiting on
+     others** in My work.
+   - **Approve directly** is the admin backup (for example when the approval is signed inside the document).
+     It still needs a different admin than the uploader, unless there is only one active admin (then it is
+     marked self-approved), and it is recorded as "directly by admin", so the auditor can tell it from an
+     approval by the named approver. If someone was asked to approve, their request closes and they are told.
+   Approving makes the earlier approved version of the same product **Superseded**. Nothing is deleted:
+   archive a version with a reason to hide it from staff.
 4. **Template**: a small table of the templates for this document (file name, date, who uploaded it).
    **⬆ Upload template** adds a new one and puts it in use straight away. The pencil ✏ renames a template (only
    the name it downloads as; the file and its SHA-256 never change), the bin 🗑 removes it from the list. Removed
@@ -82,6 +97,9 @@ trust that no approved version was quietly removed. The Trash never empties itse
   hash-chained audit log (`doclib.*`) with the version, product, approver and SHA-256.
 - Files are stored write-once in the evidence store (`doclib_upload/`). The SHA-256 on the page must equal the hash
   in the audit entry and in the evidence manifest.
+- Each approval or denial is also kept as a write-once record (`doclib_approval` in the evidence store, control
+  GOV-01) with the file's SHA-256, the decision, who made it, when, the note, whether the reader confirmed
+  reading it, and whether it was the named approver (`method: workflow`) or an admin (`method: direct`).
 - Sample a policy: approved version, approver (not the uploader), approval date within the review period, next
   review date in the future.
 

@@ -190,7 +190,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                    cycle=portal.active_cycle(), org=portal.org, request_id=request_id.get(),
                    review_count=len(portal.reviewable(user)), ar_open=portal.access_review_badge(user),
                    calendar_due=portal.calendar_past_due_count() if user.is_admin else 0,
-                   my_open=sum(1 for a in portal.assignments(user=user, mine=True) if a["status"] in ("open", "returned")),
+                   my_open=sum(1 for a in portal.assignments(user=user, mine=True) if a["status"] in ("open", "returned"))
+                   + (len(portal.pending_approvals(user)["mine"]) if user.can_write else 0),
                    flash=request.query_params.get("msg"), error=request.query_params.get("err"))
         return templates.TemplateResponse(request, name, ctx)
 
@@ -504,7 +505,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             rows = [a for a in rows if a["status"] in ("open", "returned", "submitted")]
         managed = [a for a in portal.assignments() if a["status"] not in ("approved", "cancelled")] if user.is_admin else []
         owned = sorted(portal.owned_controls(user.email))
-        return render(request, user, "work.html", rows=rows, show=show, managed=managed,
+        approvals = portal.pending_approvals(user)
+        return render(request, user, "work.html", rows=rows, show=show, managed=managed, approvals=approvals,
                       owned=[portal.catalog.control(c) for c in owned])
 
     @app.get("/assignments/{assignment_id}", response_class=HTMLResponse)

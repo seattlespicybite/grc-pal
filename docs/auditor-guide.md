@@ -64,6 +64,7 @@ program repository for the audit period.
 | VUL-01 vulnerabilities | `github_vulns`, `prowler` runs | Sample findings; confirm remediation within SLA or exception |
 | IR-02 incidents | `issues_export` issues labeled `incident` | Inspect handling records |
 | Recurring tasks | `issues_export/*/grc_issues.json` | Confirm completion each period and approver sign-off |
+| GOV-01 policy approval | Document library **Register** (Excel export) + `doclib_approval/*/decision.json` + audit log `doclib.status.approved` | Sample policies; confirm the approved file's SHA-256 matches the decision record, the approver is not the uploader, `method` is `workflow` (named approver) or `direct` (admin backup, look for the note), and the approval falls before the policy took effect |
 | VEN-01 new vendors | `vendors.csv` (onboarding approved in the period) + `vendor_reviews.csv` (kind onboarding) | Sample new vendors; confirm the onboarding check was approved before `start_date` (`data_shared_before_approval` is false) |
 | VEN-02 vendor reviews | `vendors.csv` (critical and high, active) + `vendor_reviews.csv` (kind annual) + `vendor_files/` | Sample vendors; inspect the report (period within 12 months), our questionnaire, exceptions with responses and the CUEC mapping; confirm sign-off by someone other than the submitter |
 | VEN-05 vendor offboarding | `vendors.csv` (status offboarded, `end_date` in the period) + `vendor_reviews.csv` (kind offboarding) | Confirm each checklist item has a note and evidence under `vendor_files/` |
