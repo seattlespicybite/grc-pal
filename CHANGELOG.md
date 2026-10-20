@@ -5,8 +5,8 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Added
-- **Updates page manual check and verification**: Admins can manually trigger an update check with the **Check for updates** button, receiving immediate confirmation of whether newer releases are available or the instance is up to date.
-- **Installation verification and rollback**: Added **Verify installation** on the Updates page to validate data models, audit log hash chains, evidence SHA-256 integrity, and row counts. Added a **Revert to previous version** action with typed confirmation.
+- **Updates page manual check**: Admins can manually trigger an update check with the **Check for updates** button, receiving immediate confirmation of whether newer releases are available or the instance is up to date, protected by a request cooldown.
+- **Tenant installation verification**: Added **Verify installation** on the Updates page to validate the signed-in tenant's data model version, audit log hash chain, and evidence digests via a background job.
 - **Activity log table**: Enhanced the Updates page history table with status indicators and audit log fallback.
 
 ## [0.5.0] - 2026-10-20 - Document approvals, signed VM updates

@@ -56,13 +56,6 @@
 <button class="btn" type="submit">Approve and install {{ av.version }}</button></form></section>
 {% else %}<section class="card"><h2>No update waiting</h2><p class="sub">Copy a signed update file (grcpal-X.Y.Z.grcupdate) to /var/lib/grcpal/updates on the server; the monthly check (or <span class="mono">sudo grcpal-update check</span>) finds it.</p></section>{% endif %}
 
-{% set prev = data.previous %}
-{% if prev.version %}<section class="card"><h2>Revert to previous version</h2>
-<p class="sub">The previous version (GRC-pal {{ prev.version }}) and its data copy taken before the update are kept on the server. If needed, you can revert back to {{ prev.version }}.</p>
-<form method="post" action="/updates/rollback" class="actions"><input type="hidden" name="csrf" value="{{ csrf }}">
-<input class="input small mono" type="text" name="confirm" placeholder="Type ROLLBACK to confirm" autocomplete="off" required>
-<button class="btn danger small" type="submit">Revert to {{ prev.version }}</button></form></section>{% endif %}
-
 <section class="card"><h2>Settings</h2>
 <form method="post" action="/updates/policy"><input type="hidden" name="csrf" value="{{ csrf }}">
 <label class="check"><input type="checkbox" name="auto_patch"{% if data.policy.auto_patch %} checked{% endif %}> Install patch releases automatically during the check (off by default: every update waits for an admin)</label>

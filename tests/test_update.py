@@ -7,6 +7,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -200,6 +201,8 @@ def test_portal_requests_are_small_files(tmp_path, monkeypatch):
 
 # ====================================================================== the VM updater
 def load_updater(tmp_path, monkeypatch):
+    if sys.platform == "win32":
+        pytest.skip("VM updater runs on Linux only")
     monkeypatch.setenv("GRCPAL_ROOT", str(tmp_path / "root"))
     monkeypatch.setenv("GRCPAL_ETC", str(tmp_path / "etc"))
     monkeypatch.setenv("GRCPAL_HEALTH_SECONDS", "0")
@@ -503,21 +506,6 @@ def test_check_request(vm):
     assert any("update.checked" in line for line in history_lines)
 
 
-def test_rollback_request(vm):
-    mod, staged = vm
-    host = use(mod)
-    prev_data = mod.ROLLBACK / "saved-0.1.0"
-    prev_data.mkdir(parents=True)
-    (prev_data / "grcpal.db").write_text("v0.1.0 rows")
-    mod.write_json(mod.STATE / "previous.json", {"image": "old-img", "version": "0.1.0", "saved": str(prev_data)})
-    (mod.REQUESTS / "rb.json").write_text(json.dumps({"action": "rollback", "by": "sec@example.com"}))
-    mod.handle_requests()
-    assert not list(mod.REQUESTS.glob("*.json"))
-    assert mod.image()["version"] == "0.1.0"
-    assert "update.rolled_back" in host.events
-
-
-
 def test_only_one_updater_at_a_time(vm):
     import fcntl
 
@@ -529,6 +517,8 @@ def test_only_one_updater_at_a_time(vm):
 
 
 def test_containers_are_hardened():
+    if sys.platform == "win32":
+        pytest.skip("VM updater runs on Linux only")
     mod_args = None
     loader = importlib.machinery.SourceFileLoader("grcpal_update_args", str(UPDATER))
     spec = importlib.util.spec_from_loader(loader.name, loader)

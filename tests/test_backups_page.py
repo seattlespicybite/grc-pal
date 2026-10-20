@@ -471,11 +471,16 @@ def test_manual_check_needs_valid_csrf(vm_site):
 def test_verify_installation_endpoint(vm_site):
     portal, client, _ = vm_site
     as_(client, ADMIN)
-    r = client.post("/updates/verify", data={"csrf": csrf(client, "/updates")}, follow_redirects=True)
-    assert r.status_code == 200
-    assert "Verification passed" in r.text
-    actions_list = [rec["action"] for rec in portal.log.records()]
-    assert "update.verified" in actions_list
+    r = client.post("/updates/verify", data={"csrf": csrf(client, "/updates")}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/jobs/")
+    job_id = r.headers["location"].split("/")[-1]
+    job = portal.jobs.get(job_id)
+    assert job["status"] == "done"
+    assert job["result"]["ok"] is True
+    assert "Checking audit log hash chain" in " ".join(job["steps"])
+    assert "update.verified" in [rec["action"] for rec in portal.log.records()]
+    job_page = client.get(r.headers["location"])
+    assert job_page.status_code == 200 and "Verify installation" in job_page.text
 
 
 @pytest.mark.parametrize("who", [CONTRIB, AUDITOR])
@@ -486,23 +491,17 @@ def test_verify_installation_is_admin_only(vm_site, who):
     assert r.status_code == 403
 
 
-def test_rollback_endpoint_and_validation(vm_site):
+def test_manual_check_respects_cooldown(vm_site, feed):
     portal, client, tmp = vm_site
+    (tmp / "state" / "policy.json").write_text(json.dumps({"online": True}))
     as_(client, ADMIN)
-    token = csrf(client, "/updates")
-    # No previous recorded
-    with pytest.raises(Invalid, match="Nothing to roll back to"):
-        portal.request_rollback(ADMIN, "ROLLBACK")
-    r_bad_confirm = client.post("/updates/rollback", data={"confirm": "NO", "csrf": token}, follow_redirects=False)
-    assert r_bad_confirm.status_code == 303
-    # Setup previous
-    (tmp / "state" / "previous.json").write_text(json.dumps({"version": "0.2.0", "image": "sha256:prev"}))
-    with pytest.raises(Invalid, match="Type ROLLBACK"):
-        portal.request_rollback(ADMIN, "wrong")
-    r_ok = client.post("/updates/rollback", data={"confirm": "ROLLBACK", "csrf": csrf(client, "/updates")}, follow_redirects=False)
-    assert r_ok.status_code == 303
-    reqs = requests_in(tmp)
-    assert any(req.get("action") == "rollback" and req.get("by") == ADMIN.email for req in reqs)
-    actions_list = [rec["action"] for rec in portal.log.records()]
-    assert "update.rollback_requested" in actions_list
+    # First check fetches
+    r1 = client.post("/updates/check", data={"csrf": csrf(client, "/updates")}, follow_redirects=True)
+    assert r1.status_code == 200
+    assert len(feed) == 1
+    # Immediate second check reuses cached feed due to CHECK_COOLDOWN
+    r2 = client.post("/updates/check", data={"csrf": csrf(client, "/updates")}, follow_redirects=True)
+    assert r2.status_code == 200
+    assert len(feed) == 1  # Not fetched again
+
 
