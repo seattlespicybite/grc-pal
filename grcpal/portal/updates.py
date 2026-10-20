@@ -33,7 +33,7 @@ class UpdatesMixin:
             return "vm"
         return "azure" if os.getenv("GRCPAL_TABLES_URL") else "manual"
 
-    def release_feed(self, online: bool) -> dict:
+    def release_feed(self, online: bool, force: bool = False) -> dict:
         """Releases newer than this one, with a "do I need it?" answer each. Read from GitHub's public release
         list (nothing about this instance is sent). Off with GRCPAL_UPDATE_CHECK=off; on VMs only when the admin
         allowed the server to download releases (`online`)."""
@@ -42,7 +42,7 @@ class UpdatesMixin:
         repo = os.getenv("GRCPAL_UPDATE_REPO", "seattlespicybite/grc-pal")
         now = time.time()
         hit = _FEED.get(repo)
-        if not hit or now - hit["at"] > (FEED_RETRY if hit["error"] else FEED_TTL):
+        if force or not hit or now - hit["at"] > (FEED_RETRY if hit["error"] else FEED_TTL):
             try:
                 hit = {"at": now, "rows": update.fetch_releases(repo), "error": ""}
             except (update.UpdateError, Blocked, OSError, ValueError) as exc:
@@ -64,12 +64,73 @@ class UpdatesMixin:
         except migrations.SchemaError as exc:
             model = {"error": str(exc)}
         policy = {"auto_patch": False, "online": False, **(update.read_state("policy.json", {}) or {})}
+        hist = update.history()
+        if not hist and hasattr(self, "log") and hasattr(self.log, "recent"):
+            for r in self.log.recent(limit=30):
+                act = str(r.get("action") or "")
+                if act.startswith("update.") or act.startswith("restore."):
+                    detail = r.get("detail") or {}
+                    hist.append({
+                        "at": r.get("at", ""),
+                        "event": act,
+                        "by": r.get("actor", ""),
+                        "from": detail.get("from", ""),
+                        "to": detail.get("to", "") or r.get("target", ""),
+                        "backup": detail.get("backup", ""),
+                        "reason": detail.get("reason", "") or detail.get("error", "")
+                    })
         return {"deployment": self.deployment, "version": __version__, "data_model": model,
                 "status": update.read_state("status.json", {}) or {},
+                "previous": update.read_state("previous.json", {}) or {},
                 "available": update.read_state("available.json", {}) or {},
                 "policy": policy, "feed": self.release_feed(bool(policy.get("online"))),
-                "history": update.history(), "pending": update.pending_requests(), "steps": UPDATE_STEPS,
+                "history": hist, "pending": update.pending_requests(), "steps": UPDATE_STEPS,
                 "progress": self.update_progress(actor)}
+
+    def check_for_updates(self, actor) -> dict:
+        """Trigger a manual check for updates: refresh GitHub release feed and request host updater check."""
+        self._admin(actor)
+        policy = {"auto_patch": False, "online": False, **(update.read_state("policy.json", {}) or {})}
+        req = None
+        if self.deployment == "vm":
+            try:
+                req = update.write_request("check", {}, actor.email)
+            except update.UpdateError as exc:
+                log.warning("could not write check request: %s", exc)
+        feed = self.release_feed(bool(policy.get("online")), force=True)
+        count = len(feed.get("releases", []))
+        newest = feed["releases"][0]["version"] if count else None
+        detail = {"releases_found": count, "newest": newest, "error": feed.get("error", "")}
+        if req:
+            detail["request"] = req["id"]
+        self.audit(actor, "update.checked", "updates", detail)
+        return {"feed": feed, "count": count, "newest": newest, "error": feed.get("error", "")}
+
+    def verify_installation(self, actor) -> dict:
+        """Verify the health and data integrity of the running installation (self-test)."""
+        self._admin(actor)
+        evidence_root = getattr(self.evidence, "root", None) if hasattr(self, "evidence") else None
+        res = update.selftest(self.store.backend, evidence_root)
+        self.audit(actor, "update.verified", "updates", {"ok": res.get("ok", False),
+                                                         "problems": res.get("problems", [])[:5]})
+        return res
+
+    def request_rollback(self, actor, confirm: str) -> dict:
+        """Revert back to the previous version and data copy (VM installs)."""
+        self._admin(actor)
+        if self.deployment != "vm":
+            raise self._invalid("Rollback needs the VM updater; on Azure run the workflow with 'rollback'")
+        if (confirm or "").strip() != "ROLLBACK":
+            raise self._invalid("Type ROLLBACK to confirm")
+        prev = update.read_state("previous.json", {}) or {}
+        if not prev or not prev.get("version"):
+            raise self._invalid("Nothing to roll back to (no previous version recorded)")
+        try:
+            req = update.write_request("rollback", {}, actor.email)
+        except update.UpdateError as exc:
+            raise self._invalid(str(exc)) from None
+        self.audit(actor, "update.rollback_requested", str(prev.get("version")), {"request": req["id"]})
+        return req
 
     def update_progress(self, actor) -> dict:
         """What the updater is doing now, for the live progress bar (polled by the Updates page)."""

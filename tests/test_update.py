@@ -492,6 +492,32 @@ def test_policy_request(vm):
     assert mod.policy()["auto_patch"] is False
 
 
+def test_check_request(vm):
+    mod, staged = vm
+    host = use(mod)
+    (mod.REQUESTS / "c.json").write_text(json.dumps({"action": "check", "by": "sec@example.com"}))
+    mod.handle_requests()
+    assert not list(mod.REQUESTS.glob("*.json"))
+    assert "update.checked" in host.events
+    history_lines = (mod.STATE / "history.jsonl").read_text().splitlines()
+    assert any("update.checked" in line for line in history_lines)
+
+
+def test_rollback_request(vm):
+    mod, staged = vm
+    host = use(mod)
+    prev_data = mod.ROLLBACK / "saved-0.1.0"
+    prev_data.mkdir(parents=True)
+    (prev_data / "grcpal.db").write_text("v0.1.0 rows")
+    mod.write_json(mod.STATE / "previous.json", {"image": "old-img", "version": "0.1.0", "saved": str(prev_data)})
+    (mod.REQUESTS / "rb.json").write_text(json.dumps({"action": "rollback", "by": "sec@example.com"}))
+    mod.handle_requests()
+    assert not list(mod.REQUESTS.glob("*.json"))
+    assert mod.image()["version"] == "0.1.0"
+    assert "update.rolled_back" in host.events
+
+
+
 def test_only_one_updater_at_a_time(vm):
     import fcntl
 

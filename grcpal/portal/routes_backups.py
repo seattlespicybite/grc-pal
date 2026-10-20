@@ -120,3 +120,43 @@ def register(app, h) -> None:
         except (Invalid, Forbidden) as exc:
             return back("/updates", err=str(exc))
         return back("/updates", msg="Update settings sent to the updater.")
+
+    @app.post("/updates/check")
+    def updates_check(request: Request, csrf: str = Form(""), user: User = Depends(current_user)):
+        h.need(user, "admin")
+        h.check_csrf(request, user.email, csrf)
+        try:
+            res = p().check_for_updates(user)
+        except (Invalid, Forbidden) as exc:
+            return back("/updates", err=str(exc))
+        if res.get("error"):
+            msg = f"Check completed: {res['error']}"
+        elif res.get("count"):
+            msg = f"Check completed: GRC-pal {res['newest']} is available."
+        else:
+            msg = f"Check completed: GRC-pal {p().updates_overview(user)['version']} is up to date."
+        return back("/updates", msg=msg)
+
+    @app.post("/updates/verify")
+    def updates_verify(request: Request, csrf: str = Form(""), user: User = Depends(current_user)):
+        h.need(user, "admin")
+        h.check_csrf(request, user.email, csrf)
+        try:
+            res = p().verify_installation(user)
+        except (Invalid, Forbidden) as exc:
+            return back("/updates", err=str(exc))
+        if res.get("ok"):
+            return back("/updates", msg="Verification passed: data model, audit log chains, and evidence are healthy.")
+        return back("/updates", err=f"Verification found problems: {'; '.join(res.get('problems', [])[:3])}")
+
+    @app.post("/updates/rollback")
+    def updates_rollback(request: Request, confirm: str = Form(""), csrf: str = Form(""),
+                         user: User = Depends(current_user)):
+        h.need(user, "admin")
+        h.check_csrf(request, user.email, csrf)
+        try:
+            p().request_rollback(user, confirm)
+        except (Invalid, Forbidden) as exc:
+            return back("/updates", err=str(exc))
+        return back("/updates", msg="Rollback requested. GRC-pal will stop for a few minutes, put back the previous "
+                                    "version and its data copy, and restart.")

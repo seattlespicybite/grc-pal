@@ -439,3 +439,70 @@ def test_release_list_survives_github_being_down(site, monkeypatch):
     portal, client, _ = site
     r = as_(client, ADMIN).get("/updates")
     assert r.status_code == 200 and "Could not reach GitHub" in r.text
+
+
+def test_manual_check_triggers_feed_refresh_and_writes_vm_request(vm_site, feed):
+    portal, client, tmp = vm_site
+    (tmp / "state" / "policy.json").write_text(json.dumps({"online": True}))
+    as_(client, ADMIN)
+    r = client.post("/updates/check", data={"csrf": csrf(client, "/updates")}, follow_redirects=False)
+    assert r.status_code == 303 and "/updates" in r.headers["location"]
+    reqs = requests_in(tmp)
+    assert any(req.get("action") == "check" and req.get("by") == ADMIN.email for req in reqs)
+    actions_list = [rec["action"] for rec in portal.log.records()]
+    assert "update.checked" in actions_list
+
+
+@pytest.mark.parametrize("who", [CONTRIB, AUDITOR])
+def test_manual_check_is_admin_only(vm_site, who):
+    _, client, _ = vm_site
+    as_(client, who)
+    r = client.post("/updates/check", data={"csrf": "test"}, follow_redirects=False)
+    assert r.status_code == 403
+
+
+def test_manual_check_needs_valid_csrf(vm_site):
+    _, client, _ = vm_site
+    as_(client, ADMIN)
+    r = client.post("/updates/check", data={"csrf": "invalid-token"}, follow_redirects=False)
+    assert r.status_code in (400, 403)
+
+
+def test_verify_installation_endpoint(vm_site):
+    portal, client, _ = vm_site
+    as_(client, ADMIN)
+    r = client.post("/updates/verify", data={"csrf": csrf(client, "/updates")}, follow_redirects=True)
+    assert r.status_code == 200
+    assert "Verification passed" in r.text
+    actions_list = [rec["action"] for rec in portal.log.records()]
+    assert "update.verified" in actions_list
+
+
+@pytest.mark.parametrize("who", [CONTRIB, AUDITOR])
+def test_verify_installation_is_admin_only(vm_site, who):
+    _, client, _ = vm_site
+    as_(client, who)
+    r = client.post("/updates/verify", data={"csrf": "test"}, follow_redirects=False)
+    assert r.status_code == 403
+
+
+def test_rollback_endpoint_and_validation(vm_site):
+    portal, client, tmp = vm_site
+    as_(client, ADMIN)
+    token = csrf(client, "/updates")
+    # No previous recorded
+    with pytest.raises(Invalid, match="Nothing to roll back to"):
+        portal.request_rollback(ADMIN, "ROLLBACK")
+    r_bad_confirm = client.post("/updates/rollback", data={"confirm": "NO", "csrf": token}, follow_redirects=False)
+    assert r_bad_confirm.status_code == 303
+    # Setup previous
+    (tmp / "state" / "previous.json").write_text(json.dumps({"version": "0.2.0", "image": "sha256:prev"}))
+    with pytest.raises(Invalid, match="Type ROLLBACK"):
+        portal.request_rollback(ADMIN, "wrong")
+    r_ok = client.post("/updates/rollback", data={"confirm": "ROLLBACK", "csrf": csrf(client, "/updates")}, follow_redirects=False)
+    assert r_ok.status_code == 303
+    reqs = requests_in(tmp)
+    assert any(req.get("action") == "rollback" and req.get("by") == ADMIN.email for req in reqs)
+    actions_list = [rec["action"] for rec in portal.log.records()]
+    assert "update.rollback_requested" in actions_list
+

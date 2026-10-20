@@ -34,7 +34,7 @@ from pathlib import Path
 
 FORMAT = "grcpal-update-1"
 VERSION_RE = re.compile(r"^\d{1,4}\.\d{1,4}\.\d{1,4}$")
-REQUEST_ACTIONS = ("apply", "restore", "policy")
+REQUEST_ACTIONS = ("apply", "restore", "policy", "check", "rollback")
 
 
 class UpdateError(Exception):
