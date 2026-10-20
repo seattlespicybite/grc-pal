@@ -4,6 +4,11 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-20 - Document approvals, signed VM updates
+
+First release whose VM installer carries the update-signing key and ships a signed `.grcupdate` file.
+VM installs should start from 0.5.0 (0.4.0's installer has no signing key).
+
 No data model change.
 
 ### Fixed
