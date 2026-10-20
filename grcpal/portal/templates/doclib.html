@@ -6,7 +6,8 @@
 <div class="sub">{% if user.sees_everything %}Policies, standards, procedures and SOC 2 documents: the built-in templates and your official versions, with every old version kept.{% else %}Approved company documents. Download the current copy; policies you must accept are on the Policies page.{% endif %}</div></div>
 <div class="head-actions"><div class="tabs" role="tablist" aria-label="View">
 <a href="/library?view=docs&amp;f={{ folder }}&amp;q={{ q|urlencode }}" class="{{ 'on' if lview == 'docs' }}">Documents</a>
-<a href="/library?view=files&amp;f={{ folder }}&amp;q={{ q|urlencode }}" class="{{ 'on' if lview == 'files' }}">All files</a></div>
+<a href="/library?view=files&amp;f={{ folder }}&amp;q={{ q|urlencode }}" class="{{ 'on' if lview == 'files' }}">All files</a>
+{% if user.sees_everything %}<a href="/library?view=register&amp;f={{ folder }}&amp;q={{ q|urlencode }}" class="{{ 'on' if lview == 'register' }}">Register</a>{% endif %}</div>
 {% if user.is_admin and lview == 'docs' %}{% if editing %}<a class="btn ghost small" href="/library?f={{ folder }}&amp;q={{ q|urlencode }}">Done editing</a>{% else %}<a class="btn ghost small" href="/library?edit=1&amp;f={{ folder }}&amp;q={{ q|urlencode }}">Edit list</a>{% endif %}{% endif %}
 {% if user.sees_everything %}<a class="btn ghost small" href="/library/trash">Trash{% if trash_count %} ({{ trash_count }}){% endif %}</a>{% endif %}</div></div>
 
@@ -24,17 +25,30 @@
 
 {% if lview == 'docs' %}
 {% if editing %}<form method="post" action="/library/trash" data-confirm="Move the ticked documents to the Trash? They disappear from the library, and you can restore them from the Trash."><input type="hidden" name="csrf" value="{{ csrf }}">
-<div class="note mb">Tick the documents to delete, then press <b>Delete ticked documents</b>. Deleted documents go to the Trash; their files are kept and can be restored.</div>{% endif %}
+<div class="note mb">Press ✏ to change a document's number or title. Tick documents to delete, then press <b>Delete ticked documents</b>. Deleted documents go to the Trash; their files are kept and can be restored.</div>{% endif %}
 <div class="card table-wrap">{% if lib.docs %}<table class="lib-table lib-index"><thead><tr>{% if editing %}<th title="Delete">🗑</th>{% endif %}<th>No.</th><th>Title</th><th>Owner</th><th>Official version</th><th>Next review</th><th>Last change</th></tr></thead><tbody>
 {% for d in lib.docs %}<tr>{% if editing %}<td><label class="check"><input type="checkbox" name="ids" value="{{ d.id }}" aria-label="Delete {{ d.title }}"></label></td>{% endif %}<td class="mono">{{ d.number or '—' }}</td>
-<td><a href="/library/{{ d.id }}"><b>{{ d.title }}</b></a>{% if d.custom %} <span class="pill custom">Added</span>{% endif %}{% if user.sees_everything and d.template_source == 'Custom' %} <span class="pill custom">Custom template</span>{% endif %}{% if d.pending and user.sees_everything %} <span class="pill dl-draft">{{ d.pending }} pending</span>{% endif %}</td>
+<td>{% if editing %}<details class="pen row-pen"><summary aria-label="Edit number and title of {{ d.title }}" title="Edit number and title">✏</summary>
+<div class="pen-form"><input form="rn-{{ d.id }}" name="number" value="{{ d.number }}" maxlength="20" class="pen-num" aria-label="Number of {{ d.title }}" placeholder="No.">
+<input form="rn-{{ d.id }}" name="title" value="{{ d.title }}" required minlength="3" maxlength="160" aria-label="Title of {{ d.title }}"><button form="rn-{{ d.id }}" class="btn small" type="submit">Save</button></div></details> {% endif %}<a href="/library/{{ d.id }}"><b>{{ d.title }}</b></a>{% if d.custom %} <span class="pill custom">Added</span>{% endif %}{% if user.sees_everything and d.template_source == 'Custom' %} <span class="pill custom">Custom template</span>{% endif %}{% if d.pending and user.sees_everything %} <span class="pill dl-draft">{{ d.pending }} pending</span>{% endif %}</td>
 <td>{{ d.owner_name or '—' }}</td>
 <td>{% if d.current %}{% for c in d.current[:2] %}<div><span class="pill dl-approved">v{{ c.label }}</span>{% if c.variant %} <span class="sub">{{ c.variant }}</span>{% endif %}</div>{% endfor %}{% if d.current|length > 2 %}<div class="sub">+{{ d.current|length - 2 }} more</div>{% endif %}{% else %}<span class="sub">None yet</span>{% endif %}</td>
 <td>{% if d.review_state %}<span class="pill dl-rev-{{ d.review_state }}">{{ d.next_review }}</span>{% else %}<span class="sub">{{ d.next_review or '—' }}</span>{% endif %}</td>
 <td class="mono">{{ d.last_change[:10] if d.last_change else '—' }}</td></tr>{% endfor %}
 </tbody></table>{% else %}<div class="empty">{% if user.sees_everything %}No documents match.{% else %}No approved documents have been published yet.{% endif %}</div>{% endif %}</div>
 {% if editing %}<label for="tr-reason" class="mt">Reason (optional, kept in the audit log)</label><input id="tr-reason" name="reason" maxlength="500" placeholder="For example: we do not use this procedure">
-<div class="actions"><button class="btn danger" type="submit">Delete ticked documents</button> <a class="btn ghost" href="/library?f={{ folder }}">Cancel</a></div></form>{% endif %}
+<div class="actions"><button class="btn danger" type="submit">Delete ticked documents</button> <a class="btn ghost" href="/library?f={{ folder }}">Cancel</a></div></form>
+{% for d in lib.docs %}<form id="rn-{{ d.id }}" method="post" action="/library/{{ d.id }}/edit" hidden><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="back" value="list"><input type="hidden" name="f" value="{{ folder }}"></form>{% endfor %}{% endif %}
+
+{% elif lview == 'register' %}
+<div class="card-head mb"><p class="sub">The master list of documents for auditors: who owns and approves each one, the version in force and when it is next reviewed.</p>
+<a class="btn small" href="/library/register.xlsx">⬇ Export to Excel</a></div>
+<div class="card table-wrap">{% if register %}<table class="lib-table lib-index"><thead><tr><th>No.</th><th>Title</th><th>Folder</th><th>Owner</th><th>Approver</th><th>Current version</th><th>Status</th><th>Next review</th></tr></thead><tbody>
+{% for d in register %}<tr><td class="mono">{{ d.number or '—' }}</td><td><a href="/library/{{ d.id }}">{{ d.title }}</a></td><td>{{ d.folder_name }}</td>
+<td>{{ d.owner_name or '—' }}</td><td>{{ d.approver_name or '—' }}</td><td>{{ d.versions or '—' }}</td>
+<td><span class="pill {{ 'dl-approved' if d.current else 'dl-draft' if d.pending else 'dl-archived' }}">{{ d.state }}</span></td>
+<td>{% if d.review_state %}<span class="pill dl-rev-{{ d.review_state }}">{{ d.next_review }}</span>{% else %}{{ d.next_review or '—' }}{% endif %}</td></tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty">No documents match.</div>{% endif %}</div>
 
 {% else %}
 <div class="card table-wrap">{% if files %}<table class="lib-table"><thead><tr><th>File</th><th>Document</th><th>Version</th><th>Product / variant</th><th>Status</th><th>Size</th><th>Added by</th><th>SHA-256</th></tr></thead><tbody>

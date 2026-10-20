@@ -458,3 +458,22 @@ a.stat:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .cal-dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .cal-pop-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .cal-pop-head h2 { margin: 0 0 6px; }
+
+/* Document page: one Details card, compact template table, pencil editors */
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.card-head h2 { margin-bottom: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.file-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.file-hidden:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tpl-upload { display: flex; gap: 6px; align-items: center; margin: 0; }
+.tpl-upload label { margin: 0; cursor: pointer; }
+.tpl-table td { vertical-align: middle; } .tpl-acts { white-space: nowrap; text-align: right; }
+.icon-btn { background: none; border: 0; cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 6px; color: var(--text); }
+.icon-btn:hover, .pen > summary:hover { background: var(--surface-2); }
+.pen { display: inline-block; vertical-align: middle; }
+.pen > summary { list-style: none; cursor: pointer; display: inline-block; padding: 2px 6px; border-radius: 6px; }
+.pen > summary::-webkit-details-marker { display: none; }
+.pen-form { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+.pen-form input { width: auto; min-width: 90px; margin: 0; }
+.row-pen .pen-form input { min-width: 0; } .row-pen .pen-num { width: 90px; flex: 0 0 90px; }
+.row-pen[open] { display: block; margin-bottom: 4px; } .row-pen .pen-form input:not(.pen-num) { flex: 1 1 220px; }
