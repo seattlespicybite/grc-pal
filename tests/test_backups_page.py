@@ -505,3 +505,71 @@ def test_manual_check_respects_cooldown(vm_site, feed):
     assert len(feed) == 1  # Not fetched again
 
 
+def test_verify_installation_two_tenants_isolation(tmp_path, monkeypatch):
+    monkeypatch.setenv("GRCPAL_AUTH_MODE", "dev")
+    monkeypatch.setenv("GRCPAL_JOBS_SYNC", "1")
+    for var in ("GRCPAL_ENV", "GRCPAL_TENANT", "GRCPAL_BOOTSTRAP_ADMINS", "GRCPAL_EVIDENCE_ACCOUNT_URL",
+                "GRCPAL_TABLES_URL", "GRCPAL_PUBLIC_URL", "GRCPAL_DEV_PRINCIPAL", "GRCPAL_SQLITE"):
+        monkeypatch.delenv(var, raising=False)
+
+    from grcpal.portal.store import SqliteStore
+    shared_store = SqliteStore(str(tmp_path / "shared.db"))
+    portal_a = make_portal(tmp_path, tenant="acme", base_store=shared_store)
+    portal_b = make_portal(tmp_path, tenant="globex", base_store=shared_store)
+
+    # Globex creates an evidence run under tmp_path / "evidence" / "globex"
+    run_b = portal_b.evidence.new_run("entra_users", ["IAM-01"])
+    run_b.add("users", [{"upn": "user-b@globex.com"}])
+    run_b.finish([])
+
+    # Globex's evidence folder exists, but Acme's evidence folder does not exist yet
+    assert (tmp_path / "evidence" / "globex").is_dir()
+    assert not (tmp_path / "evidence" / "acme").exists()
+
+    # Tamper with Globex's evidence file
+    globex_files = list((tmp_path / "evidence" / "globex").rglob("users.json"))
+    assert len(globex_files) == 1
+    globex_files[0].write_bytes(b"tampered content")
+
+    # Tenant A verify when its folder does not exist:
+    # Checks 0 runs, never falls back to root (which contains Globex's tampered run), passes with ok=True
+    job_a1 = portal_a.verify_installation(ADMIN)
+    assert job_a1["status"] == "done"
+    assert job_a1["result"]["ok"] is True
+    assert job_a1["result"]["checked"]["evidence"] == {"runs_checked": 0, "files_checked": 0}
+    assert job_a1["result"]["problems"] == []
+
+    # Tenant A now creates its own valid evidence run
+    run_a = portal_a.evidence.new_run("github_mfa", ["IAM-02"])
+    run_a.add("mfa", [{"login": "alice", "mfa": True}])
+    run_a.finish([])
+
+    assert (tmp_path / "evidence" / "acme").is_dir()
+
+    # Tenant A verify when its folder exists:
+    # Checks only its own run, passes with ok=True, never reads Globex's tampered run
+    job_a2 = portal_a.verify_installation(ADMIN)
+    assert job_a2["status"] == "done"
+    assert job_a2["result"]["ok"] is True
+    assert job_a2["result"]["checked"]["evidence"] == {"runs_checked": 1, "files_checked": 2}
+    assert job_a2["result"]["problems"] == []
+
+    # Tenant B verify:
+    # Checks its own evidence, detects the tampered file, and fails
+    job_b = portal_b.verify_installation(ADMIN)
+    assert job_b["status"] == "done"
+    assert job_b["result"]["ok"] is False
+    assert any("changed" in p for p in job_b["result"]["problems"])
+
+
+def test_verify_installation_blob_storage_skips_file_check(site):
+    portal, _, _ = site
+    portal.evidence.account_url = "https://example.blob.core.windows.net"
+    job = portal.verify_installation(ADMIN)
+    assert job["status"] == "done"
+    assert job["result"]["ok"] is True
+    assert job["result"]["checked"]["evidence"] == "not checked (blob storage)"
+    assert "Evidence: not checked (blob storage)" in job["steps"]
+
+
+

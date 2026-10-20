@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import os
+from pathlib import Path
 import time
 
 from grcpal import __version__, backup_store, update
@@ -134,13 +135,24 @@ class UpdatesMixin:
             if not audit_res["ok"]:
                 problems.extend(audit_res["problems"][:3])
 
-            job.log("Checking evidence files...")
-            files_checked, runs_checked = 0, 0
-            if hasattr(self, "evidence") and hasattr(self.evidence, "root"):
-                tenant_dir = (self.evidence.root / self.evidence.namespace
-                              if getattr(self.evidence, "namespace", "") and (self.evidence.root / self.evidence.namespace).is_dir()
-                              else self.evidence.root)
-                if tenant_dir.is_dir():
+            if getattr(self.evidence, "account_url", None):
+                job.log("Evidence: not checked (blob storage)")
+                checked["evidence"] = "not checked (blob storage)"
+            else:
+                job.log("Checking evidence files...")
+                files_checked, runs_checked = 0, 0
+                tenant_dir = None
+                if hasattr(self, "evidence") and hasattr(self.evidence, "root"):
+                    root = Path(self.evidence.root)
+                    ns = getattr(self.evidence, "namespace", None) or ""
+                    if ns:
+                        cand = root / ns
+                        if cand.is_dir():
+                            tenant_dir = cand
+                    elif root.is_dir():
+                        tenant_dir = root
+
+                if tenant_dir is not None:
                     runs = sorted(p.parent for p in tenant_dir.rglob("manifest.json"))
                     runs_checked = len(runs)
                     for run in runs:
@@ -150,16 +162,20 @@ class UpdatesMixin:
                             problems.append(f"evidence run {run.name}: manifest unreadable")
                             continue
                         for f in man.get("files", []):
-                            p = run / f.get("name", "")
+                            fname = f.get("name")
+                            if not fname:
+                                continue
+                            p = run / fname
                             try:
-                                digest = hashlib.file_digest(p.open("rb"), "sha256").hexdigest()
+                                with p.open("rb") as fp:
+                                    digest = hashlib.file_digest(fp, "sha256").hexdigest()
                             except OSError:
-                                problems.append(f"evidence file {f.get('name')}: missing")
+                                problems.append(f"evidence file {fname}: missing")
                                 continue
                             files_checked += 1
                             if digest != f.get("sha256"):
-                                problems.append(f"evidence file {f.get('name')}: changed")
-            checked["evidence"] = {"runs_checked": runs_checked, "files_checked": files_checked}
+                                problems.append(f"evidence file {fname}: changed")
+                checked["evidence"] = {"runs_checked": runs_checked, "files_checked": files_checked}
 
             ok = not problems
             job.log(f"Verification {'passed' if ok else 'failed'}")
