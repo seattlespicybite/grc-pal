@@ -1,10 +1,10 @@
 name: Publish program configuration to the portal
-# Every merge to main that changes the catalog, registers or policies is validated and sent to
+# Every merge to main that changes the catalog, registers, policies, kb or frameworks is validated and sent to
 # the portal's storage account. The pull request approval is the change-management record.
 on:
   push:
     branches: [main]
-    paths: ["catalog/**", "registers/**", "policies/**"]
+    paths: ["catalog/**", "registers/**", "policies/**", "kb/**", "frameworks/**"]
   workflow_dispatch:
 permissions:
   id-token: write   # OIDC login to Azure, no stored secrets

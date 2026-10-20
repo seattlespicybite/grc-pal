@@ -643,7 +643,7 @@ def main(argv: list[str] | None = None) -> int:
     ai.add_argument("--limit", type=int, default=0, help="review only the first N controls (trial runs)")
     ai.set_defaults(fn=cmd_ai)
 
-    pc = sub.add_parser("publish-config", help="send catalog, registers and policies to the deployed portal")
+    pc = sub.add_parser("publish-config", help="send catalog, registers, policies, kb and frameworks to the deployed portal")
     pc.add_argument("--out", help="write the bundle to a file instead of uploading")
     pc.set_defaults(fn=cmd_publish_config)
 
