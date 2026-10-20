@@ -3,7 +3,7 @@ without building your own container image.
 
     grcpal publish-config            (run by your program repo's workflow on every merge to main)
 
-uploads catalog/, registers/ and policies/ as one tar.gz to the storage account's `config`
+uploads catalog/, registers/, policies/, kb/ (your knowledge articles) and frameworks/ as one tar.gz to the storage account's `config`
 container under the instance's tenant prefix. The portal downloads it at start-up with its
 managed identity. The public GRC-pal image therefore stays generic, and your organization's
 data (staff emails in roles.yaml, policies) never goes into a registry.
@@ -16,7 +16,7 @@ import os
 import tarfile
 from pathlib import Path
 
-FOLDERS = ("catalog", "registers", "policies")
+FOLDERS = ("catalog", "registers", "policies", "kb", "frameworks")
 CONTAINER = "config"
 MAX_BYTES = 20 * 1024 * 1024
 
