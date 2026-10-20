@@ -4,6 +4,12 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Fixed
+- **Program repository knowledge articles and frameworks now reach Azure portals.** `grcpal publish-config`
+  sent only `catalog/`, `registers/` and `policies/`, so your own `kb/` articles and `frameworks/` files worked
+  on a VM (local folder) but were silently ignored on Azure. The bundle now carries `kb/` and `frameworks/` too.
+  No data model change.
+
 ## [0.5.0] - 2026-10-20 - Document approvals, signed VM updates
 
 First release whose VM installer carries the update-signing key and ships a signed `.grcupdate` file.

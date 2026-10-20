@@ -777,6 +777,26 @@ def test_config_bundle_extract_is_safe(tmp_path):
     assert not (tmp_path / "escape.txt").exists() and not (tmp_path / "escape2.txt").exists()
 
 
+def test_config_bundle_carries_program_kb_and_frameworks(tmp_path):
+    """Azure portals get the program repo only through the bundle, so kb/ and frameworks/ must be in it."""
+    from grcpal import configbundle, frameworks, kb
+
+    prog = tmp_path / "prog"
+    for folder in ("catalog", "registers"):
+        shutil.copytree(ROOT / folder, prog / folder)
+    (prog / "kb").mkdir()
+    article = (ROOT / "kb/A1.1.yaml").read_text(encoding="utf-8")
+    (prog / "kb/A1.1.yaml").write_text(article.replace("criterion:", "# program copy\ncriterion:", 1), encoding="utf-8")
+    (prog / "frameworks").mkdir()
+    (prog / "frameworks/inhouse.yaml").write_text(
+        "id: inhouse\nname: In-house standard\nrequirements:\n  - {id: IH-1, title: Example, group: General}\n",
+        encoding="utf-8")
+    out = configbundle.extract(configbundle.build(prog), tmp_path / "cfg")
+    assert (out / "kb/A1.1.yaml").read_text(encoding="utf-8").startswith("# program copy")
+    assert "A1.1" in kb.load(out)
+    assert "inhouse" in frameworks.load(Catalog.load(out))
+
+
 def test_publish_config_bundle_to_file(tmp_path, monkeypatch):
     target = tmp_path / "prog"
     cli.main(["init", str(target)])

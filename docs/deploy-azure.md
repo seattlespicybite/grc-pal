@@ -137,7 +137,7 @@ In the program repository, the workflows from the starter kit are already in `.g
 | Workflow | When | What |
 | --- | --- | --- |
 | `validate.yml` | Every pull request | Catalog checks; the PR approval is your change record |
-| `publish-config.yml` | Merge to main | Sends catalog, registers and policies to the portal |
+| `publish-config.yml` | Merge to main | Sends catalog, registers, policies, knowledge articles (`kb/`) and frameworks to the portal |
 | `collect-daily.yml` | Daily | Runs collectors, stores evidence, opens deficiency issues, builds the health report |
 | `scanners.yml` | Weekly | Prowler (Azure) and Maester (Entra) |
 | `tls-weekly.yml` | Weekly | testssl.sh against your public endpoints |

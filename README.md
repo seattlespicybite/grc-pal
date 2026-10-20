@@ -251,7 +251,7 @@ grcpal tasks                            open this month's recurring activities a
 grcpal report                           control health dashboard (HTML and JSON)
 grcpal store --source NAME FILES        add result files (Prowler, Maester, ...) as evidence
 grcpal checks run                       run custom HTTP, TLS and command checks now
-grcpal publish-config                   send your catalog, registers and policies to the portal
+grcpal publish-config                   send your catalog, registers, policies, kb and frameworks to the portal
 grcpal create-admin EMAIL               first admin, or break-glass admin (local sign-in)
 grcpal users list                       list portal users
 grcpal users add EMAIL --role admin     add a user (admin, contributor = Control owner, auditor)

@@ -21,4 +21,4 @@ grcpal validate                 # before every pull request
 grcpal serve --base . --db portal.db   # try the portal locally on this catalog
 ```
 
-Merging to `main` publishes the catalog, registers and policies to the portal automatically.
+Merging to `main` publishes the catalog, registers, policies, knowledge articles (`kb/`) and frameworks to the portal automatically.
