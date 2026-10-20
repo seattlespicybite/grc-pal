@@ -14,7 +14,7 @@ from grcpal.portal import doclib
 from grcpal.portal.app import create_app
 from grcpal.portal.service import Forbidden, Invalid
 from grcpal.portal.store import SqliteStore
-from test_portal import ADMIN, ADMIN2, AUDITOR, CONTRIB, PDF, as_, csrf, make_portal
+from test_portal import ADMIN, ADMIN2, AUDITOR, CONTRIB, HR, PDF, as_, csrf, make_portal
 
 DOCX = doclib.builtin_template("p-05")[1]  # any real Word file will do as an "uploaded" document
 
@@ -221,10 +221,10 @@ def test_template_replace_history_and_restore(portal):
 
 # ------------------------------------------------------------------ details and custom documents
 def test_edit_title_keeps_number_and_is_audited(portal):
-    d = portal.edit_doc(ADMIN, "p-05", {"title": "  Access   Control and Identity Policy ", "owner": "IT lead",
+    d = portal.edit_doc(ADMIN, "p-05", {"title": "  Access   Control and Identity Policy ", "owner": HR.email,
                                         "classification": "Internal", "next_review": "2027-10-01"})
     assert d["title"] == "Access Control and Identity Policy" and d["number"] == "P-05"
-    assert d["owner_name"] == "IT lead" and d["builtin_title"] == "Access Control Policy"
+    assert d["owner_name"] == "HR Lead" and d["owner_is_person"] and d["builtin_title"] == "Access Control Policy"
     rec = [r for r in portal.log.records() if r["action"] == "doclib.edit"][-1]
     assert rec["detail"]["before"]["title"] == "Access Control Policy" and rec["detail"]["after"]["next_review"] == "2027-10-01"
     n = len(portal.log.records())
@@ -281,7 +281,8 @@ def test_pages_render_under_strict_csp(portal, client):
     portal.set_version_status(ADMIN2, "p-05", v["RowKey"], "approved")
     portal.upload_template(ADMIN, "p-05", "t.docx", DOCX, "")
     paths = ["/library", "/library?f=tier2", "/library?view=files", "/library?q=access&view=files", "/library/p-05", "/library/isp",
-             "/library/p-05-s1", "/library/soc2-03", "/library?f=other"]
+             "/library/p-05-s1", "/library/soc2-03", "/library?f=other", "/library?view=register", "/library?edit=1",
+             "/library/p-05?edit=1"]
     for who in (ADMIN, AUDITOR):
         as_(client, who)
         for path in paths:
@@ -292,10 +293,10 @@ def test_pages_render_under_strict_csp(portal, client):
     assert 'class="on">All files' in client.get("/library?view=files").text  # not the program-wide "view" variable
     assert 'class="on">Documents' in client.get("/library").text
     page = client.get("/library/p-05").text
-    assert "Upload an official version" in page and "Replace the template" in page and "Product A" in page
+    assert "Upload an official version" in page and "Upload template" in page and "Product A" in page
     as_(client, AUDITOR)
     page = client.get("/library/p-05").text
-    assert "Upload an official version" not in page and "Replace the template" not in page and "Download template" in page
+    assert "Upload an official version" not in page and "Upload template" not in page and "/library/p-05/files/template" in page
 
 
 def test_staff_pages_show_only_published(portal, client):
@@ -425,3 +426,170 @@ def test_edit_mode_and_trash_pages(portal, client):
     assert client.get("/library/trash").status_code == 403
     r = client.post("/library/trash", data={"csrf": csrf(client, "/library"), "ids": ["p-07"]}, follow_redirects=False)
     assert r.status_code == 403
+
+
+# ------------------------------------------------------------------ PR: one Details card, people, numbers, labels
+def test_owner_and_approver_are_active_people(portal):
+    d = portal.library_doc(ADMIN, "isp")
+    assert not d["approver_is_person"] and d["approver_name"] == "Executive sponsor"  # built-in role until picked
+    assert portal.edit_doc(ADMIN, "isp", {"approver": d["approver"]})["approver"] == d["approver"]  # unchanged role is kept
+    d = portal.edit_doc(ADMIN, "isp", {"approver": ADMIN2.email, "owner": ADMIN.email})
+    assert d["approver_is_person"] and d["approver_name"] == "VP" and d["owner_name"] == "Sec Lead"
+    for bad in ({"approver": AUDITOR.email}, {"approver": "ceo@other.example"}, {"owner": "IT lead"}):
+        with pytest.raises(Invalid):
+            portal.edit_doc(ADMIN, "isp", bad)  # auditors, strangers and free text are refused
+    assert portal.edit_doc(ADMIN, "isp", {"approver": ""})["approver"] == ""  # can be cleared
+    with pytest.raises(Forbidden):
+        portal.edit_doc(CONTRIB, "isp", {"approver": CONTRIB.email})
+
+
+def test_document_number_is_editable_unique_and_audited(portal):
+    v = official(portal)
+    d = portal.edit_doc(ADMIN, "p-05", {"number": " POL-05 "})
+    assert d["number"] == "POL-05" and d["id"] == "p-05"  # the internal id never changes
+    assert portal.doc_versions(ADMIN, "p-05")["official"][0]["RowKey"] == v["RowKey"]  # versions still attached
+    rec = [r for r in portal.log.records() if r["action"] == "doclib.edit"][-1]
+    assert rec["detail"]["before"]["number"] == "P-05" and rec["detail"]["after"]["number"] == "POL-05"
+    for bad in ("p-06", "P-06", "<b>x</b>", "x" * 21):
+        with pytest.raises(Invalid):
+            portal.edit_doc(ADMIN, "p-05", {"number": bad})  # taken (any case), unsafe or too long
+    with pytest.raises(Invalid):
+        portal.add_doc(ADMIN, "tier2", "pol-05", "Another policy")
+    assert portal.edit_doc(ADMIN, "p-05", {"number": "P-05"})["number"] == "P-05"
+
+
+def test_version_number_typed_on_upload_and_locked_after_approval(portal):
+    v = portal.upload_official(ADMIN, "p-05", "a.docx", DOCX, "", "major", "", label="v3.2")
+    assert v["label"] == "3.2"
+    assert portal.doc_versions(ADMIN, "p-05")["next"] == {"major": "4.0", "minor": "3.3"}
+    with pytest.raises(Invalid):
+        portal.upload_official(ADMIN, "p-05", "b.docx", DOCX, "", "major", "", label="3.2")  # already used
+    with pytest.raises(Invalid):
+        portal.upload_official(ADMIN, "p-05", "b.docx", DOCX, "", "major", "", label="three")
+    assert portal.upload_official(ADMIN, "p-05", "b.docx", DOCX, "Product A", "major", "", label="3.2")["label"] == "3.2"
+    w = official(portal)  # left empty: numbered automatically
+    assert w["label"] == "4.0"
+    fixed = portal.set_version_label(ADMIN, "p-05", w["RowKey"], "3.3.1")
+    assert fixed["label"] == "3.3.1"
+    rec = [r for r in portal.log.records() if r["action"] == "doclib.version.label"][-1]
+    assert rec["detail"]["from"] == "4.0" and rec["detail"]["to"] == "3.3.1" and rec["detail"]["sha256"] == w["sha256"]
+    with pytest.raises(Invalid):
+        portal.set_version_label(ADMIN, "p-05", w["RowKey"], "3.2")  # duplicate
+    with pytest.raises(Forbidden):
+        portal.set_version_label(AUDITOR, "p-05", w["RowKey"], "5.0")
+    portal.set_version_status(ADMIN2, "p-05", w["RowKey"], "approved")
+    with pytest.raises(Invalid):
+        portal.set_version_label(ADMIN, "p-05", w["RowKey"], "5.0")  # approved: locked
+    assert portal.store.get("docversions", "p-05", w["RowKey"])["label"] == "3.3.1"
+
+
+def test_template_rename_keeps_file_and_extension(portal):
+    t = portal.upload_template(ADMIN, "p-05", "old-name.docx", DOCX, "")
+    r = portal.rename_template(ADMIN, "p-05", t["RowKey"], "Access Control Template 2026")
+    assert r["filename"] == "Access_Control_Template_2026.docx" and r["original_filename"] == "old-name.docx"
+    assert portal.doc_file(ADMIN, "p-05", "template") == ("Access_Control_Template_2026.docx", DOCX)  # same bytes
+    rec = [r for r in portal.log.records() if r["action"] == "doclib.template.rename"][-1]
+    assert rec["detail"]["sha256"] == t["sha256"] and rec["detail"]["from"] == "old-name.docx"
+    for bad in ("other.pdf", "", "   "):
+        with pytest.raises(Invalid):
+            portal.rename_template(ADMIN, "p-05", t["RowKey"], bad)
+    with pytest.raises(Forbidden):
+        portal.rename_template(AUDITOR, "p-05", t["RowKey"], "x")
+    portal.remove_template(ADMIN, "p-05", t["RowKey"])
+    v = portal.doc_versions(ADMIN, "p-05")
+    assert v["uploads"] == [] and [x["RowKey"] for x in v["removed"]] == [t["RowKey"]] and v["builtin"]["active"]
+    with pytest.raises(Invalid):
+        portal.rename_template(ADMIN, "p-05", t["RowKey"], "again")  # removed templates are not renamed
+
+
+def test_details_card_edit_mode_and_compact_templates_page(portal, client):
+    portal.upload_template(ADMIN, "p-05", "removed.docx", DOCX, "")
+    gone = portal.doc_versions(ADMIN, "p-05")["uploads"][0]
+    portal.remove_template(ADMIN, "p-05", gone["RowKey"])
+    portal.upload_template(ADMIN, "p-05", "kept.docx", DOCX, "")
+    draft = official(portal)
+    as_(client, ADMIN)
+    page = client.get("/library/p-05").text
+    assert page.count("<h2>Details</h2>") == 1 and "Edit details" not in page and 'href="/library/p-05?edit=1#details"' in page
+    assert "Choose file" not in page and 'data-autosubmit' in page and "kept.docx" in page and "removed.docx" in page
+    assert 'aria-label="Rename kept.docx"' in page and 'aria-label="Remove kept.docx"' in page
+    assert f'/versions/{draft["RowKey"]}/label' in page
+    page = client.get("/library/p-05?edit=1").text
+    for name in ("title", "number", "summary", "owner", "approver", "classification", "next_review"):
+        assert f'name="{name}"' in page, name
+    assert f'value="{ADMIN2.email}"' in page and f'value="{AUDITOR.email}"' not in page  # auditors are not offered
+    token = csrf(client, "/library/p-05")
+    r = client.post("/library/p-05/edit", data={"csrf": token, "title": "Access Control Policy", "number": "AC-1",
+                                                "approver": ADMIN2.email, "owner": ADMIN.email}, follow_redirects=False)
+    assert r.status_code == 303 and portal.library_doc(ADMIN, "p-05")["number"] == "AC-1"
+    r = client.post(f"/library/p-05/versions/{draft['RowKey']}/label", data={"csrf": token, "label": "1.4"},
+                    follow_redirects=False)
+    assert r.status_code == 303 and portal.store.get("docversions", "p-05", draft["RowKey"])["label"] == "1.4"
+    kept = portal.doc_versions(ADMIN, "p-05")["uploads"][0]
+    r = client.post("/library/p-05/template", data={"csrf": token, "action": "rename", "version": kept["RowKey"],
+                                                    "name": "Renamed"}, follow_redirects=False)
+    assert r.status_code == 303 and portal.doc_versions(ADMIN, "p-05")["uploads"][0]["filename"] == "Renamed.docx"
+    r = client.post("/library/p-05/official", data={"csrf": token, "change": "major", "label": "7.0"},
+                    files={"file": ("x.docx", DOCX)}, follow_redirects=False)
+    assert r.status_code == 303 and official(portal, change="minor")["label"] == "7.1"
+    as_(client, AUDITOR)
+    page = client.get("/library/p-05?edit=1").text
+    assert 'name="number"' not in page and "?edit=1" not in page and 'aria-label="Rename' not in page  # read-only
+    r = client.post(f"/library/p-05/versions/{draft['RowKey']}/label", data={"csrf": csrf(client, "/library/p-05"),
+                                                                            "label": "9.0"}, follow_redirects=False)
+    assert r.status_code == 403
+
+
+# ------------------------------------------------------------------ PR 1b: list editing, register, reserved numbers
+def test_numbers_of_trashed_documents_stay_reserved(portal):
+    portal.trash_docs(ADMIN, ["p-06"])
+    with pytest.raises(Invalid, match="in the Trash"):
+        portal.edit_doc(ADMIN, "p-05", {"number": "P-06"})
+    with pytest.raises(Invalid):
+        portal.add_doc(ADMIN, "tier2", "p-06", "New policy")
+    portal.restore_doc(ADMIN, "p-06")
+    numbers = [d["number"] for d in portal.library(ADMIN)["docs"] if d["number"]]
+    assert len(numbers) == len(set(n.lower() for n in numbers))  # no clash after restoring
+
+
+def test_register_rows_export_and_access(portal):
+    v = official(portal)
+    portal.set_version_status(ADMIN2, "p-05", v["RowKey"], "approved")
+    official(portal, did="p-06")
+    portal.edit_doc(ADMIN, "p-05", {"approver": ADMIN2.email})
+    rows = {d["id"]: d for d in portal.document_register(AUDITOR)}
+    assert len(rows) == len(portal.library(ADMIN)["docs"])
+    assert rows["p-05"]["state"] == "Approved" and rows["p-05"]["versions"] == "v1.0" and rows["p-05"]["approver_name"] == "VP"
+    assert rows["p-06"]["state"] == "Draft or in review" and rows["isp"]["state"] == "No version yet"
+    data = portal.register_xlsx(AUDITOR)
+    sheet = zipfile.ZipFile(io.BytesIO(data)).read("xl/worksheets/sheet1.xml").decode()
+    assert "Access Control Policy" in sheet and "Approver" in sheet and "VP" in sheet
+    assert [r for r in portal.log.records() if r["action"] == "doclib.register.export"][-1]["actor"] == AUDITOR.email
+    with pytest.raises(Forbidden):
+        portal.document_register(CONTRIB)
+
+
+def test_list_pencil_register_tab_and_export_route(portal, client):
+    as_(client, ADMIN)
+    page = client.get("/library?edit=1&f=tier2").text
+    assert 'form="rn-p-05"' in page and 'id="rn-p-05"' in page and 'aria-label="Edit number and title of' in page
+    assert page.count("<form") - page.count('<form id="rn-') >= 1  # row forms sit outside the delete form
+    r = client.post("/library/p-05/edit", data={"csrf": csrf(client, "/library"), "number": "AC-05",
+                                                "title": "Access Control Policy", "back": "list", "f": "tier2"},
+                    follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/library?edit=1&f=tier2")
+    assert portal.library_doc(ADMIN, "p-05")["number"] == "AC-05"
+    r = client.post("/library/p-05/edit", data={"csrf": csrf(client, "/library"), "title": "Access Control Policy",
+                                                "back": "list", "f": "//evil.example"}, follow_redirects=False)
+    assert r.headers["location"].startswith("/library?edit=1") and "evil" not in r.headers["location"]
+    page = client.get("/library?view=register").text
+    assert "Export to Excel" in page and "AC-05" in page and 'class="on">Register' in page
+    r = client.get("/library/register.xlsx")
+    assert r.status_code == 200 and "attachment" in r.headers["content-disposition"] and r.content[:2] == b"PK"
+    as_(client, AUDITOR)
+    assert client.get("/library/register.xlsx").status_code == 200
+    assert 'form="rn-' not in client.get("/library?edit=1").text
+    as_(client, CONTRIB)
+    assert client.get("/library/register.xlsx").status_code == 403
+    page = client.get("/library?view=register").text
+    assert "Export to Excel" not in page and ">Register<" not in page  # staff fall back to the normal list

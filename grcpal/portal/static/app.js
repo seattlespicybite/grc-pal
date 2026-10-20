@@ -64,6 +64,8 @@
   });
 
   // Filter selects and checkboxes submit their form when changed.
+  // Buttons only needed without JavaScript (an upload that sends itself once a file is chosen).
+  document.querySelectorAll('[data-nojs]').forEach(function (b) { b.hidden = true; });
   document.querySelectorAll('[data-autosubmit]').forEach(function (s) {
     s.addEventListener('change', function () { s.form.submit(); });
   });

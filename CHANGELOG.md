@@ -7,6 +7,18 @@ All notable changes are listed here. The project follows [semantic versioning](h
 No data model change.
 
 ### Added
+- Document library, one document: a single **Details** card with an **✏ Edit** button that turns it into a
+  form. The **document number** is now editable (it must stay unique; versions and history stay attached), and
+  **owner and approver** are picked from active admins and control owners instead of typed text.
+- Document library: type the **version number** written inside the file when uploading (or leave it empty for
+  automatic numbering), and correct it with the pencil while the version is a draft or in review. Approved
+  version numbers are locked. Changes are in the audit log (`doclib.version.label`).
+- Document library: the **Template** section is a compact table (file name, uploaded, uploaded by) with an
+  upload button, a pencil to rename a template (`doclib.template.rename`; the file and hash never change) and a
+  bin to remove it, plus a **Removed templates** table with who removed each one, when, and a Restore button.
+- Document library list: in **Edit list**, a pencil on each row changes the document's number and title in
+  place. A new **Register** tab (admins and auditors) shows the master document list (owner, approver, current
+  version, status, next review) with **Export to Excel**; exports are in the audit log.
 - **Back button** at the top of every page. It works like the browser's Back button, so the previous page
   opens at the same scroll position. It appears only when the previous page was a page of this portal.
 - Calendar: clicking a month or the **+** of an empty month opens a **small window on the calendar** to
@@ -27,6 +39,8 @@ No data model change.
 - Vendors: **Not applicable** is now a choice for contract security terms and the data processing agreement.
 
 ### Changed
+- Document numbers of documents in the Trash stay reserved, so restoring a document never creates two
+  documents with the same number.
 - Vendors: contract and DPA answers nobody has checked yet show as an empty choice instead of "Not checked".
 - Vendors: "Auditor's opinion" is now **Report result** with plain choices (Clean, With exceptions,
   Unfavorable, No conclusion, Not applicable). Stored values and the auditor export keep the formal terms.

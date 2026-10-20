@@ -16,6 +16,11 @@ Plain model:
 - Trash: deleting a document or removing an old template only hides it (it moves to the Trash page, where an
   admin can restore it). Files stay in the write-once evidence store, so nothing an auditor relies on is ever
   destroyed, and every delete and restore is in the audit log.
+- Owner and approver are people (active admins or control owners, by email); the built-in catalog starts with
+  a role name until an admin picks a person. The document number shown to people can be edited (it must stay
+  unique); the internal id never changes, so versions, acknowledgments and the audit log keep pointing at it.
+- A version number is suggested on upload (major 2.0, minor 1.1) and can be typed to match the file. It can be
+  corrected while the version is a draft or in review, and is locked once approved.
 - Approval needs a different admin than the uploader, unless there is no other active admin (then it is marked
   self-approved for the auditor). Every write is in the hash-chained audit log.
 """
@@ -42,6 +47,8 @@ ROLE_NAMES = {"security-lead": "Security lead", "hr-lead": "HR lead", "it-lead":
               "engineering-lead": "Engineering lead", "legal-lead": "Legal lead", "executive-sponsor": "Executive sponsor"}
 _ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
 _VID = re.compile(r"^\d{8}T\d{12}-[0-9a-f]{8}$")
+_LABEL = re.compile(r"^\d{1,4}(\.\d{1,4}){1,2}$")
+_NUMBER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._/-]{0,19}$")
 GOV_CONTROLS = ["GOV-01"]
 
 
@@ -79,12 +86,27 @@ def bump(labels: list[str], change: str) -> str:
     """Next version label for one document and variant: 1.0 first, then major (2.0) or minor (1.1)."""
     best = (0, 0)
     for lab in labels:
-        m = re.match(r"^(\d+)\.(\d+)$", lab or "")
+        m = re.match(r"^(\d+)\.(\d+)(?:\.\d+)?$", lab or "")
         if m:
             best = max(best, (int(m.group(1)), int(m.group(2))))
     if best == (0, 0):
         return "1.0"
     return f"{best[0] + 1}.0" if change == "major" else f"{best[0]}.{best[1] + 1}"
+
+
+def clean_label(raw: str) -> str:
+    """A version number typed by a person: "v2.1" or "2.1" becomes "2.1". Two or three numbers only."""
+    s = (raw or "").strip()
+    if s[:1] in ("v", "V"):
+        s = s[1:].strip()
+    if not _LABEL.match(s):
+        raise ValueError("Write the version as numbers like 1.0, 2.1 or 2.1.3")
+    return s
+
+
+class _Everyone:
+    """Read-only viewpoint used for library-wide checks (such as unique numbers); never used for permissions."""
+    sees_everything = True
 
 
 class DocLibMixin:
@@ -109,15 +131,28 @@ class DocLibMixin:
                 return None if v.get("builtin") else v
         return None
 
-    def _merge_doc(self, did: str, base: dict | None, row: dict | None, versions: list[dict]) -> dict:
+    def doc_people(self) -> dict[str, dict]:
+        """People who can own or approve a document: active admins and control owners (never auditors)."""
+        return {u["RowKey"]: u for u in self.users() if u.get("active", True) and u["role"] in ("admin", "contributor")}
+
+    @staticmethod
+    def _who(value: str, people: dict[str, dict]) -> str:
+        """How an owner or approver value is shown: a person's name, a built-in role name, or the text as stored."""
+        if value in people:
+            return people[value].get("name") or value
+        return ROLE_NAMES.get(value, value)
+
+    def _merge_doc(self, did: str, base: dict | None, row: dict | None, versions: list[dict],
+                   people: dict[str, dict] | None = None) -> dict:
         d = {"id": did, "number": "", "folder": "other", "kind": "other", "title": did, "owner": "", "approver": "",
              "soc2": "", "iso": "", "controls": "", "summary": "", "parent": "", "custom": False, "classification": "",
              "next_review": "", "updated_at": "", "updated_by": ""}
         d.update(base or {})
         d.update({k: v for k, v in (row or {}).items() if k not in ("PartitionKey", "RowKey")})
         d["builtin_title"] = (base or {}).get("title", "")
-        d["owner_name"] = ROLE_NAMES.get(d["owner"], d["owner"])
-        d["approver_name"] = ROLE_NAMES.get(d["approver"], d["approver"])
+        people = self.doc_people() if people is None else people
+        d["owner_name"], d["approver_name"] = self._who(d["owner"], people), self._who(d["approver"], people)
+        d["owner_is_person"], d["approver_is_person"] = d["owner"] in people, d["approver"] in people
         official = [v for v in versions if v["kind"] == "official"]
         approved = [v for v in official if v["status"] == "approved"]
         seen, current = set(), []
@@ -145,13 +180,13 @@ class DocLibMixin:
 
     def library(self, user, folder: str = "", q: str = "") -> dict:
         """Folders with counts and the documents this user may see."""
-        cat, rows, versions = builtin_catalog(), self._doc_rows(), self._all_versions()
+        cat, rows, versions, people = builtin_catalog(), self._doc_rows(), self._all_versions(), self.doc_people()
         ids = list(cat["docs"]) + [i for i in rows if i not in cat["docs"]]
         docs = []
         for did in ids:
             if (rows.get(did) or {}).get("deleted_at"):
                 continue  # in the Trash
-            d = self._merge_doc(did, cat["docs"].get(did), rows.get(did), versions.get(did, []))
+            d = self._merge_doc(did, cat["docs"].get(did), rows.get(did), versions.get(did, []), people)
             if not user.sees_everything and not d["current"]:
                 continue  # staff only see documents that have an approved official version
             docs.append(d)
@@ -209,8 +244,18 @@ class DocLibMixin:
         self.library_doc(user, did)
         rows = self._all_versions().get(did, [])
         official = [v for v in rows if v["kind"] == "official" and (user.sees_everything or v["status"] == "approved")]
-        templates = [v for v in rows if v["kind"] == "template" and not v.get("removed_at")] if user.sees_everything else []
-        return {"official": official, "templates": templates, "active_template": self._active_template(rows)}
+        everything = user.sees_everything
+        templates = [v for v in rows if v["kind"] == "template" and not v.get("removed_at")] if everything else []
+        active = self._active_template(rows)
+        builtin = None
+        if everything and builtin_template(did):
+            name, size, digest = _builtin_facts(did)
+            builtin = {"filename": name, "size": size, "sha256": digest, "active": active is None}
+        labels = [v["label"] for v in rows if v["kind"] == "official" and not v.get("variant")]
+        return {"official": official, "templates": templates, "active_template": active, "builtin": builtin,
+                "uploads": [v for v in templates if not v.get("builtin")],
+                "removed": [v for v in rows if v["kind"] == "template" and v.get("removed_at")] if everything else [],
+                "next": {"major": bump(labels, "major"), "minor": bump(labels, "minor")}}
 
     # ------------------------------------------------------------------ files
     def _store_file(self, actor, did: str, kind: str, filename: str, data: bytes, comment: str) -> dict:
@@ -244,7 +289,7 @@ class DocLibMixin:
             raise self._invalid("Document not found")
 
     def upload_official(self, actor, did: str, filename: str, data: bytes, variant: str, change: str,
-                        comment: str) -> dict:
+                        comment: str, label: str = "") -> dict:
         self._need_admin(actor, "upload documents")
         self._doc_exists(did)
         if change not in CHANGES:
@@ -252,14 +297,45 @@ class DocLibMixin:
         variant = " ".join((variant or "").split())[:60]
         same = [v["label"] for v in self.store.list("docversions", did)
                 if v["kind"] == "official" and v.get("variant", "") == variant]
+        typed = bool((label or "").strip())
+        if typed:
+            label = self._label(label, same)
         row = self._store_file(actor, did, "official", filename, data, comment)
-        row.update(label=bump(same, change), variant=variant, change=change, status="draft", approved_by="",
+        row.update(label=label if typed else bump(same, change), variant=variant, change=change, status="draft", approved_by="",
                    approved_at="", self_approved=False)
         self.store.insert("docversions", row)
         self.audit(actor, "doclib.upload", did, {"controls": GOV_CONTROLS, "version": row["label"], "variant": variant,
                                                  "change": change, "file": row["filename"], "sha256": row["sha256"],
-                                                 "run": row["evidence_run"]})
+                                                 "run": row["evidence_run"], "numbered": "typed" if typed else "auto"})
         return row
+
+    def _label(self, raw: str, taken: list[str]) -> str:
+        try:
+            label = clean_label(raw)
+        except ValueError as exc:
+            raise self._invalid(str(exc)) from None
+        if label in taken:
+            raise self._invalid(f"Version {label} already exists for this document")
+        return label
+
+    def set_version_label(self, actor, did: str, vid: str, label: str) -> dict:
+        """Correct the version number of a draft or in-review version. Approved versions are locked: the number is
+        part of the approval record and the audit log."""
+        self._need_admin(actor, "change version numbers")
+        v = self.store.get("docversions", did, vid) if _VID.match(vid or "") else None
+        if not v or v["kind"] != "official":
+            raise self._invalid("Version not found")
+        if v["status"] not in ("draft", "in_review"):
+            raise self._invalid("The number of an approved version is locked; upload a new version instead")
+        taken = [o["label"] for o in self.store.list("docversions", did) if o["kind"] == "official"
+                 and o.get("variant", "") == v.get("variant", "") and o["RowKey"] != vid]
+        label = self._label(label, taken)
+        if label == v["label"]:
+            return v
+        self.store.update("docversions", did, vid, {"label": label})
+        self.audit(actor, "doclib.version.label", did, {"controls": GOV_CONTROLS, "from": v["label"], "to": label,
+                                                         "variant": v.get("variant", ""), "sha256": v["sha256"]})
+        return self.store.get("docversions", did, vid)
 
     def upload_template(self, actor, did: str, filename: str, data: bytes, comment: str) -> dict:
         self._need_admin(actor, "replace templates")
@@ -270,6 +346,31 @@ class DocLibMixin:
         self.audit(actor, "doclib.template.replace", did, {"controls": GOV_CONTROLS, "file": row["filename"],
                                                            "sha256": row["sha256"], "run": row["evidence_run"]})
         return row
+
+    def rename_template(self, actor, did: str, vid: str, name: str) -> dict:
+        """Change the file name a template downloads as. The stored file and its SHA-256 never change."""
+        from grcpal.portal.security import safe_filename
+
+        self._need_admin(actor, "rename templates")
+        v = self.store.get("docversions", did, vid) if _VID.match(vid or "") else None
+        if not v or v["kind"] != "template" or v.get("builtin") or v.get("removed_at"):
+            raise self._invalid("Template not found")
+        ext = "." + v["filename"].rsplit(".", 1)[-1].lower()
+        raw = " ".join((name or "").split())
+        if raw and not raw.lower().endswith(ext):
+            if "." + raw.rsplit(".", 1)[-1].lower() in DOC_EXTENSIONS:
+                raise self._invalid(f"Keep the {ext} ending; the file itself does not change")
+            raw += ext
+        new = safe_filename(raw) if raw else ""
+        if not 1 <= len(new) - len(ext) or len(new) > 120:
+            raise self._invalid("The name must be 1 to 120 characters")
+        if new == v["filename"]:
+            return v
+        self.store.update("docversions", did, vid, {"filename": new,
+                                                    "original_filename": v.get("original_filename") or v["filename"]})
+        self.audit(actor, "doclib.template.rename", did, {"controls": GOV_CONTROLS, "from": v["filename"], "to": new,
+                                                          "sha256": v["sha256"]})
+        return self.store.get("docversions", did, vid)
 
     def restore_builtin_template(self, actor, did: str) -> dict:
         self._need_admin(actor, "replace templates")
@@ -313,7 +414,9 @@ class DocLibMixin:
 
     # ------------------------------------------------------------------ document details
     def edit_doc(self, actor, did: str, fields: dict) -> dict:
-        """Change the title and details of a document. The document number never changes."""
+        """Change the details of a document: title, number, description, owner, approver, classification, next
+        review. The internal id never changes. Owner and approver must be active people (or the value they already
+        have, such as a built-in role name, left as it is)."""
         self._need_admin(actor, "edit documents")
         self._doc_exists(did)
         d = self.library_doc(actor, did)
@@ -323,9 +426,15 @@ class DocLibMixin:
             if not 3 <= len(title) <= 160:
                 raise self._invalid("The title must be 3 to 160 characters")
             clean["title"] = title
-        for key, limit in (("owner", 80), ("approver", 80)):
+        if "number" in fields:
+            clean["number"] = self._number(str(fields["number"] or ""), did)
+        people = self.doc_people()
+        for key, what in (("owner", "owner"), ("approver", "approver")):
             if key in fields:
-                clean[key] = " ".join(str(fields[key] or "").split())[:limit]
+                value = str(fields[key] or "").strip()
+                if value and value != d.get(key, "") and value not in people:
+                    raise self._invalid(f"Choose the {what} from the list of active people")
+                clean[key] = value
         if "summary" in fields:
             summary = str(fields["summary"] or "").replace("\r\n", "\n").strip()
             if len(summary) > 1000:
@@ -344,8 +453,7 @@ class DocLibMixin:
                 except ValueError:
                     raise self._invalid("Write the review date as YYYY-MM-DD") from None
             clean["next_review"] = nr
-        shown = {"owner": d["owner_name"], "approver": d["approver_name"]}  # a role id is shown by its name
-        changed = {k: v for k, v in clean.items() if (shown.get(k, d.get(k)) or "") != v}
+        changed = {k: v for k, v in clean.items() if (d.get(k) or "") != v}
         if not changed:
             return d
         stamp = {"updated_by": actor.email, "updated_at": _now()}
@@ -358,13 +466,69 @@ class DocLibMixin:
                                                "before": {k: d.get(k, "") for k in changed}, "after": changed})
         return self.library_doc(actor, did)
 
+    def _number(self, raw: str, did: str = "") -> str:
+        """A document number people see (P-05, ISP): letters, digits, space . _ / -, unique in the library.
+        Numbers of documents in the Trash stay reserved, so restoring one never creates a clash."""
+        number = " ".join(raw.split())
+        if not number:
+            return ""
+        if not _NUMBER.match(number):
+            raise self._invalid("The number can have up to 20 letters, digits, spaces and . _ / -")
+        cat, rows = builtin_catalog(), self._doc_rows()
+        for other in list(cat["docs"]) + [i for i in rows if i not in cat["docs"]]:
+            if other == did:
+                continue
+            row = rows.get(other) or {}
+            merged = {**(cat["docs"].get(other) or {}), **row}
+            if (merged.get("number") or "").lower() == number.lower():
+                where = " (in the Trash)" if row.get("deleted_at") else ""
+                raise self._invalid(f"{merged['number']} is already used by {merged.get('title', other)}{where}")
+        return number
+
+    # ------------------------------------------------------------------ register
+    def document_register(self, user) -> list[dict]:
+        """The master list of documents an auditor asks for: one row per document with its owner, approver,
+        current version, status and review date. Admins and auditors only."""
+        if not user.sees_everything:
+            raise self._forbidden("Only admins and auditors can see the document register")
+        lib = self.library(user)
+        folders = {f["id"]: f["name"] for f in lib["folders"]}
+        out = []
+        for d in lib["docs"]:
+            if d["current"]:
+                state = "Approved"
+            elif d["pending"]:
+                state = "Draft or in review"
+            else:
+                state = "No version yet"
+            out.append({**d, "folder_name": folders.get(d["folder"], d["folder"]), "state": state,
+                        "versions": ", ".join(f"v{c['label']}" + (f" ({c['variant']})" if c.get("variant") else "")
+                                              for c in d["current"])})
+        return out
+
+    def register_xlsx(self, user) -> bytes:
+        """The register as an Excel file. Every export is in the audit log."""
+        from grcpal import xlsx
+
+        rows = self.document_register(user)
+        head = ["Number", "Title", "Folder", "Type", "Owner", "Approver", "Current version", "Status",
+                "Pending drafts", "Classification", "Next review", "Last change"]
+        table = [[(h, xlsx.HEADER) for h in head]]
+        for d in rows:
+            table.append([d["number"], d["title"], d["folder_name"], KINDS.get(d["kind"], "Other"), d["owner_name"],
+                          d["approver_name"], d["versions"], d["state"], str(d["pending"]), d["classification"],
+                          d["next_review"], (d["last_change"] or "")[:10]])
+        self.audit(user, "doclib.register.export", "register", {"controls": GOV_CONTROLS, "documents": len(rows)})
+        return xlsx.workbook([{"name": "Document register", "rows": table, "freeze_row": 1,
+                               "widths": [10, 44, 28, 16, 22, 22, 16, 18, 10, 14, 12, 12]}])
+
     def add_doc(self, actor, folder: str, number: str, title: str, kind: str = "other") -> dict:
         self._need_admin(actor, "add documents")
         cat = builtin_catalog()
         if folder not in {f["id"] for f in cat["folders"]} | {"other"}:
             raise self._invalid("Choose a folder")
         title = " ".join((title or "").split())
-        number = " ".join((number or "").split())[:20]
+        number = self._number(number or "")
         if not 3 <= len(title) <= 160:
             raise self._invalid("The title must be 3 to 160 characters")
         if kind not in KINDS:
