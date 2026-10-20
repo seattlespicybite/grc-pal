@@ -6,6 +6,11 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 No data model change.
 
+### Fixed
+- After an update, some browsers (seen in Brave) kept an old copy of the stylesheet and showed the new pages with
+  icons as huge black shapes. Stylesheet and script links now carry a version tag taken from the file's
+  contents (`/static/app.css?v=...`), so browsers fetch the new file as soon as it changes.
+
 ### Added
 - **Back button** at the top of every page. It works like the browser's Back button, so the previous page
   opens at the same scroll position. It appears only when the previous page was a page of this portal.
