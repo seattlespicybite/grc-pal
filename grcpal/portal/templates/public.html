@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Sign in{% endblock %} · GRC-pal</title>
-<link rel="icon" href="/static/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/static/app.css"></head>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/static/app.css?v={{ asset_v['app.css'] }}"></head>
 <body><main class="main narrow" id="main">
 <div class="brand brand-light"><span class="brand-mark" aria-hidden="true">✓</span><span>GRC-pal<small>{{ org }}</small></span></div>
 {% block content %}{% endblock %}

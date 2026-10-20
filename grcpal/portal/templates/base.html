@@ -6,7 +6,7 @@
 <title>{% block title %}GRC-pal{% endblock %} · GRC-pal</title>
 <meta name="csrf-token" content="{{ csrf }}">
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/app.css?v={{ asset_v['app.css'] }}">
 {% if refresh %}<meta http-equiv="refresh" content="3">{% endif %}
 </head>
 <body>
@@ -74,6 +74,6 @@
     {% block content %}{% endblock %}
   </main>
 </div>
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v={{ asset_v['app.js'] }}"></script>
 </body>
 </html>

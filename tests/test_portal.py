@@ -1208,3 +1208,22 @@ def test_admin_sets_the_current_cycle_dates_and_it_is_audited(env):
     r = client.post("/cycles/current", data={"csrf": csrf(client, "/cycles"), "name": "Hack", "start": "2027-02-01",
                                              "end": "2028-01-31"}, follow_redirects=False)
     assert r.status_code == 403
+
+
+def test_stylesheet_and_script_links_carry_a_content_version(env):
+    """After an update, browsers must fetch the new app.css/app.js instead of reusing an old cached copy
+    with the new pages (that showed icons as huge black shapes)."""
+    import hashlib
+    from pathlib import Path
+
+    portal, client = env
+    static = Path(create_app.__globals__["HERE"]) / "static"
+    css = hashlib.sha256((static / "app.css").read_bytes()).hexdigest()[:12]
+    js = hashlib.sha256((static / "app.js").read_bytes()).hexdigest()[:12]
+    as_(client, ADMIN)
+    html = client.get("/").text
+    assert f'href="/static/app.css?v={css}"' in html and f'src="/static/app.js?v={js}"' in html
+    as_(client, AUDITOR)
+    assert f"/static/app.css?v={css}" in client.get("/settings").text  # the error page (403) too
+    r = client.get(f"/static/app.css?v={css}")
+    assert r.status_code == 200 and "max-age" in r.headers["cache-control"]

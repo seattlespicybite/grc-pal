@@ -72,6 +72,15 @@ def portal_from_env() -> Portal:
     return portal
 
 
+def asset_versions() -> dict[str, str]:
+    """Short content hash per stylesheet and script. Pages link to /static/app.css?v=<hash>, so a browser fetches
+    the new file as soon as it changes instead of reusing an old cached copy with the new pages."""
+    import hashlib
+
+    return {name: hashlib.sha256((HERE / "static" / name).read_bytes()).hexdigest()[:12]
+            for name in ("app.css", "app.js")}
+
+
 def create_app(portal: Portal | None = None) -> FastAPI:
     configure_logging()
     mode = auth_mode()  # fail fast on an unsafe configuration
@@ -84,6 +93,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                                  roles=ROLES, auth_mode=mode, accept=ACCEPT)
     from grcpal.settings import OPTION_LABELS
     templates.env.globals["option_labels"] = OPTION_LABELS
+    templates.env.globals["asset_v"] = asset_versions()
     app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
     logout_url = {"easyauth": "/.auth/logout", "dev": "/dev/logout", "local": "/logout"}.get(mode, os.getenv("GRCPAL_LOGOUT_URL", "/oauth2/sign_out"))
     templates.env.globals["logout_url"] = logout_url
