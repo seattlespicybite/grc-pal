@@ -160,8 +160,10 @@ def test_status_flow_segregation_and_superseding(portal):
     v1 = official(portal)
     with pytest.raises(Forbidden):  # ADMIN uploaded it, ADMIN2 exists
         portal.set_version_status(ADMIN, "p-05", v1["RowKey"], "approved")
-    portal.set_version_status(ADMIN, "p-05", v1["RowKey"], "in_review")
-    assert portal.set_version_status(ADMIN2, "p-05", v1["RowKey"], "approved")["approved_by"] == ADMIN2.email
+    with pytest.raises(Invalid):
+        portal.set_version_status(ADMIN, "p-05", v1["RowKey"], "in_review")  # only through Send for approval
+    done = portal.set_version_status(ADMIN2, "p-05", v1["RowKey"], "approved")
+    assert done["approved_by"] == ADMIN2.email and done["approval_method"] == "direct"
     v2 = official(portal, change="minor")
     portal.set_version_status(ADMIN2, "p-05", v2["RowKey"], "approved")
     states = {v["label"]: v["status"] for v in portal.doc_versions(ADMIN, "p-05")["official"]}
@@ -593,3 +595,162 @@ def test_list_pencil_register_tab_and_export_route(portal, client):
     assert client.get("/library/register.xlsx").status_code == 403
     page = client.get("/library?view=register").text
     assert "Export to Excel" not in page and ">Register<" not in page  # staff fall back to the normal list
+
+
+# ------------------------------------------------------------------ approval workflow
+def mails(portal, to=None):
+    return [m for m in portal.mailer.outbox if to is None or m.to == to]
+
+
+def sent_for_approval(portal, approver=HR, did="p-05", **kw):
+    portal.edit_doc(ADMIN, did, {"approver": approver.email})
+    v = official(portal, did=did, **kw)
+    return portal.request_approval(ADMIN, did, v["RowKey"], "Please review before Friday")
+
+
+def test_send_for_approval_emails_only_the_named_approver(portal):
+    v = official(portal)
+    with pytest.raises(Invalid, match="approver"):
+        portal.request_approval(ADMIN, "p-05", v["RowKey"])  # built-in role, not a person yet
+    portal.edit_doc(ADMIN, "p-05", {"approver": ADMIN.email})
+    with pytest.raises(Invalid, match="cannot be"):
+        portal.request_approval(ADMIN, "p-05", v["RowKey"])  # the uploader cannot approve their own upload
+    portal.edit_doc(ADMIN, "p-05", {"approver": HR.email})
+    with pytest.raises(Forbidden):
+        portal.request_approval(CONTRIB, "p-05", v["RowKey"])
+    w = portal.request_approval(ADMIN, "p-05", v["RowKey"], "Please review")
+    assert w["status"] == "in_review" and w["approval_approver"] == HR.email and w["approval_requested_by"] == ADMIN.email
+    m = mails(portal, HR.email)[0]
+    assert "Approval needed" in m.subject and f"/library/p-05/review/{v['RowKey']}" in m.text and len(mails(portal)) == 1
+    assert "access-control.docx" not in m.text  # a link, never the file
+    assert portal.pending_approvals(HR)["mine"][0]["RowKey"] == v["RowKey"]
+    assert portal.pending_approvals(ADMIN)["waiting"][0]["approver_name"] == "HR Lead"
+    assert portal.pending_approvals(CONTRIB) == {"mine": [], "waiting": []}
+    with pytest.raises(Invalid):
+        portal.request_approval(ADMIN, "p-05", v["RowKey"])  # already waiting
+    assert "doclib.approval.request" in actions(portal)
+
+
+def test_approver_approves_after_reading_and_it_is_evidence(portal):
+    old = official(portal)
+    portal.set_version_status(ADMIN2, "p-05", old["RowKey"], "approved")
+    v = sent_for_approval(portal)
+    assert portal.library_doc(HR, "p-05")  # the approver can open the document while it waits for them
+    assert portal.doc_file(HR, "p-05", v["RowKey"])[1] == DOCX
+    with pytest.raises(Invalid, match="read"):
+        portal.decide_approval(HR, "p-05", v["RowKey"], "approve", "", read=False)
+    done = portal.decide_approval(HR, "p-05", v["RowKey"], "approve", "OK for 2027", read=True)
+    assert done["status"] == "approved" and done["approval_method"] == "workflow" and done["read_confirmed"]
+    assert done["approved_by"] == HR.email and done["decision_note"] == "OK for 2027"
+    assert portal.store.get("docversions", "p-05", old["RowKey"])["status"] == "superseded"
+    rec = [r for r in portal.log.records() if r["action"] == "doclib.status.approved"][-1]
+    assert rec["detail"]["method"] == "workflow" and rec["detail"]["sha256"] == v["sha256"]
+    assert rec["detail"]["uploaded_by"] == ADMIN.email and rec["actor"] == HR.email
+    run = portal.evidence.list_runs("doclib_approval")[-1]
+    record = __import__("json").loads(portal.evidence.read("doclib_approval", run, "decision.json"))
+    assert record["decision"] == "approved" and record["sha256"] == v["sha256"] and record["by"] == HR.email
+    assert any("Approved:" in m.subject for m in mails(portal, ADMIN.email))
+    assert portal.pending_approvals(HR)["mine"] == []  # the My work item closes by itself
+    with pytest.raises(Invalid):
+        portal.decide_approval(HR, "p-05", v["RowKey"], "approve", "", read=True)  # no double approval
+
+
+def test_deny_needs_a_reason_and_returns_to_draft(portal):
+    v = sent_for_approval(portal)
+    with pytest.raises(Invalid, match="why"):
+        portal.decide_approval(HR, "p-05", v["RowKey"], "deny", "  ")
+    done = portal.decide_approval(HR, "p-05", v["RowKey"], "deny", "Section 4 needs the backup owner")
+    assert done["status"] == "draft" and done["denied_by"] == HR.email
+    m = [m for m in mails(portal, ADMIN.email) if "Not approved" in m.subject][0]
+    assert "Section 4 needs the backup owner" in m.text
+    assert "doclib.approval.deny" in actions(portal) and portal.library(HR)["docs"] == []  # nothing published
+    with pytest.raises(Invalid):
+        portal.library_doc(HR, "p-05")  # access ended with the request
+    again = portal.request_approval(ADMIN, "p-05", v["RowKey"])  # can be sent again after a fix note
+    assert again["status"] == "in_review"
+
+
+def test_only_the_named_approver_decides_and_sees_nothing_else(portal):
+    v = sent_for_approval(portal)
+    other = official(portal, did="p-06")  # an unrelated draft
+    for who in (CONTRIB, AUDITOR, ADMIN2, ADMIN):
+        with pytest.raises(Forbidden):
+            portal.decide_approval(who, "p-05", v["RowKey"], "approve", "", read=True)
+    with pytest.raises(Invalid):
+        portal.library_doc(CONTRIB, "p-05")
+    with pytest.raises(Invalid):
+        portal.doc_file(HR, "p-06", other["RowKey"])  # the approver sees only the version sent to them
+    with pytest.raises(Invalid):
+        portal.approval_view(CONTRIB, "p-05", v["RowKey"])
+    assert [x["RowKey"] for x in portal.doc_versions(HR, "p-05")["official"]] == [v["RowKey"]]
+    assert portal.doc_versions(HR, "p-05")["templates"] == []
+    with pytest.raises(Invalid):
+        portal.request_approval(ADMIN, "p-06", other["RowKey"])  # p-06 has no person as approver yet
+
+
+def test_withdraw_reassign_and_direct_approval_close_the_request(portal):
+    v = sent_for_approval(portal)
+    with pytest.raises(Invalid):
+        portal.reassign_approval(ADMIN, "p-05", v["RowKey"], ADMIN.email)  # the uploader
+    w = portal.reassign_approval(ADMIN, "p-05", v["RowKey"], CONTRIB.email)
+    assert w["approval_approver"] == CONTRIB.email
+    assert any("No longer needed" in m.subject for m in mails(portal, HR.email))
+    assert any("Approval needed" in m.subject for m in mails(portal, CONTRIB.email))
+    with pytest.raises(Forbidden):
+        portal.decide_approval(HR, "p-05", v["RowKey"], "approve", "", read=True)  # no longer theirs
+    portal.withdraw_approval(ADMIN, "p-05", v["RowKey"], "Wrong file")
+    assert portal.store.get("docversions", "p-05", v["RowKey"])["status"] == "draft"
+    assert portal.pending_approvals(CONTRIB)["mine"] == []
+    portal.request_approval(ADMIN, "p-05", v["RowKey"])  # back to HR, the document's approver
+    done = portal.set_version_status(ADMIN2, "p-05", v["RowKey"], "approved", "Signed copy inside the document")
+    assert done["approval_method"] == "direct" and done["approved_by"] == ADMIN2.email
+    assert portal.pending_approvals(HR)["mine"] == []
+    assert sum("No longer needed" in m.subject for m in mails(portal, HR.email)) == 2
+    assert {"doclib.approval.reassign", "doclib.approval.withdraw"} <= set(actions(portal))
+
+
+def test_reminders_every_seven_days(portal):
+    import datetime as dt
+
+    v = sent_for_approval(portal)
+    assert portal.send_approval_reminders(ADMIN2) == []  # not due yet
+    portal._today = dt.date.today() + dt.timedelta(days=8)
+    sent = portal.send_approval_reminders(ADMIN2)
+    assert [r["version"] for r in sent] == [v["label"]] and any("Reminder" in m.subject for m in mails(portal, HR.email))
+    assert portal.send_approval_reminders(ADMIN2) == []  # once per 7 days
+    portal.decide_approval(HR, "p-05", v["RowKey"], "approve", "", read=True)
+    portal._today = dt.date.today() + dt.timedelta(days=30)
+    assert portal.send_approval_reminders(ADMIN2) == []  # nothing waiting any more
+    assert "doclib.approval.remind" in actions(portal)
+
+
+def test_review_page_my_work_and_forms(portal, client):
+    v = sent_for_approval(portal)
+    as_(client, HR)
+    work = client.get("/work").text
+    assert f"/library/p-05/review/{v['RowKey']}" in work and "Waiting for your approval" in work
+    page = client.get(f"/library/p-05/review/{v['RowKey']}").text
+    assert 'name="decision" value="approve"' in page and 'name="read"' in page
+    assert 'style="' not in page and "<script>" not in page and "onclick" not in page
+    token = csrf(client, "/work")
+    r = client.post(f"/library/p-05/review/{v['RowKey']}", data={"csrf": token, "decision": "approve"}, follow_redirects=False)
+    assert r.status_code == 303 and "err=" in r.headers["location"]  # read box not ticked
+    r = client.post(f"/library/p-05/review/{v['RowKey']}", data={"csrf": token, "decision": "approve", "read": "1"},
+                    follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/work")
+    assert portal.store.get("docversions", "p-05", v["RowKey"])["status"] == "approved"
+    assert "This request is closed" in client.get(f"/library/p-05/review/{v['RowKey']}").text
+    w = official(portal, change="minor")
+    portal.request_approval(ADMIN, "p-05", w["RowKey"])
+    as_(client, CONTRIB)
+    assert client.get(f"/library/p-05/review/{w['RowKey']}").status_code == 404
+    r = client.post(f"/library/p-05/review/{w['RowKey']}", data={"csrf": csrf(client, "/work"), "decision": "approve",
+                                                                 "read": "1"}, follow_redirects=False)
+    assert r.status_code == 403
+    as_(client, ADMIN)
+    page = client.get("/library/p-05").text
+    assert "Waiting for <b>hr@example.com</b>" in page and "Reassign" in page and "Withdraw" in page
+    assert "Documents waiting on others" in client.get("/work").text
+    as_(client, AUDITOR)
+    page = client.get(f"/library/p-05/review/{w['RowKey']}").text
+    assert "waiting for" in page and 'name="decision"' not in page

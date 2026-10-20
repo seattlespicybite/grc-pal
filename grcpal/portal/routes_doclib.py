@@ -116,7 +116,7 @@ def register(app, h) -> None:
             raise h.HTTPError(404, str(exc)) from exc
         folders = {f["id"]: f for f in portal.library(user)["folders"]}
         editing = bool(edit and user.is_admin)
-        people = sorted(portal.doc_people().values(), key=lambda u: ((u.get("name") or u["RowKey"]).lower())) if editing else []
+        people = sorted(portal.doc_people().values(), key=lambda u: ((u.get("name") or u["RowKey"]).lower())) if user.is_admin else []
         return render(request, user, "doclib_doc.html", nav_active="library", d=doc, folder=folders.get(doc["folder"]),
                       v=portal.doc_versions(user, did), editing=editing, people=people, **options())
 
@@ -170,6 +170,43 @@ def register(app, h) -> None:
         raw = await posted(request, user)
         return run(f"/library/{did}", "Version number changed", p().set_version_label, user, did, vid,
                    str(raw.get("label", "")))
+
+    @app.post("/library/{did}/versions/{vid}/approval")
+    async def library_approval(request: Request, did: str, vid: str, user: User = Depends(current_user)):
+        raw = await posted(request, user)
+        action, portal = str(raw.get("action", "")), p()
+        if action == "send":
+            return run(f"/library/{did}", "Sent for approval. The approver has an email and an item in My work.",
+                       portal.request_approval, user, did, vid, str(raw.get("note", "")))
+        if action == "withdraw":
+            return run(f"/library/{did}", "Approval request withdrawn; the version is a draft again.",
+                       portal.withdraw_approval, user, did, vid, str(raw.get("note", "")))
+        if action == "reassign":
+            return run(f"/library/{did}", "Approval request sent to the new approver.",
+                       portal.reassign_approval, user, did, vid, str(raw.get("approver", "")))
+        return back(f"/library/{did}", err="Choose an action")
+
+    @app.get("/library/{did}/review/{vid}", response_class=HTMLResponse)
+    def library_review(request: Request, did: str, vid: str, user: User = Depends(current_user)):
+        try:
+            view = p().approval_view(user, did, vid)
+        except Invalid as exc:
+            raise h.HTTPError(404, str(exc)) from exc
+        return render(request, user, "doclib_review.html", nav_active="work", **view, **options())
+
+    @app.post("/library/{did}/review/{vid}")
+    async def library_decide(request: Request, did: str, vid: str, user: User = Depends(current_user)):
+        raw = await posted(request, user)
+        decision = str(raw.get("decision", ""))
+        msg = "Approved. It is now the published version." if decision == "approve" else "Sent back to the author with your reason."
+        dest = "/work" if decision in ("approve", "deny") else f"/library/{did}/review/{vid}"
+        try:
+            p().decide_approval(user, did, vid, decision, str(raw.get("note", "")), raw.get("read") == "1")
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(f"/library/{did}/review/{vid}", err=str(exc))
+        return back(dest, msg=msg)
 
     @app.get("/library/{did}/files/{vid}")
     def library_file(did: str, vid: str, user: User = Depends(current_user)):

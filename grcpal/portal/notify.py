@@ -105,3 +105,33 @@ def policy_reminder(p, policy: dict, actor) -> dict:
             "fields": [("Policy", policy["title"]), ("Version", policy["version"]),
                        ("Effective", policy["effective"] or "now")],
             "button": ("Read and acknowledge", p.link(f"/policies/{policy['id']}"))}
+
+
+def doc_approval(p, kind: str, number: str, title: str, did: str, v: dict, note: str, actor) -> dict:
+    """Approval workflow emails: request, reminder, approved, denied, closed (withdrawn, reassigned or approved
+    directly). Only the document's number, title and version and a link; never the file or its text."""
+    name = f"{number} {title}".strip() + f" v{v['label']}" + (f" ({v['variant']})" if v.get("variant") else "")
+    review = p.link(f"/library/{did}/review/{v['RowKey']}")
+    fields = [("Document", name), ("Uploaded by", v.get("uploaded_by", "")), ("Change", v.get("change", "") or "-")]
+    if kind in ("request", "reminder"):
+        intro = (f"{actor.name} asks you to approve this document." if kind == "request" else
+                 "This document is still waiting for your approval.")
+        return {"subject": f"{'Reminder: ' if kind == 'reminder' else ''}Approval needed: {name}",
+                "title": "A document is waiting for your approval",
+                "intro": intro + " Please sign in, read it and approve it or send it back with a reason.",
+                "fields": fields, "sections": [("Note from the sender", (note or "(none)").splitlines())],
+                "button": ("Review and approve", review)}
+    if kind == "approved":
+        return {"subject": f"Approved: {name}", "title": "Your document was approved",
+                "intro": f"{actor.name} approved it. It is now the published version.",
+                "fields": fields, "sections": [("Approver note", (note or "(none)").splitlines())],
+                "button": ("Open the document", p.link(f"/library/{did}"))}
+    if kind == "denied":
+        return {"subject": f"Not approved: {name}", "title": "Your document needs changes",
+                "intro": f"{actor.name} did not approve it. It is back to draft.",
+                "fields": fields, "sections": [("Reason", note.splitlines())],
+                "button": ("Open the document", p.link(f"/library/{did}"))}
+    return {"subject": f"No longer needed: approval of {name}", "title": "You do not need to approve this document",
+            "intro": "The approval request was closed. There is nothing for you to do.",
+            "fields": fields, "sections": [("Why", (note or "(none)").splitlines())],
+            "button": ("Open GRC-pal", p.link("/work"))}
