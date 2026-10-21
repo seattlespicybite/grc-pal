@@ -377,7 +377,9 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         if user.is_contributor:
             mine = [a for a in assignments if user.email in portal.participants(a)]
             assignments = mine or assignments
-        return render(request, user, "control.html", ctl=ctl, status=status_of(control_id), points=points,
+        status = status_of(control_id)
+        return render(request, user, "control.html", ctl=ctl, status=status, points=points,
+                      sources=soc2.split_evidence(status.get("evidence") or []), type_help=soc2.TYPE_HELP,
                       assignments=assignments, uploads=portal.uploads(control=control_id),
                       prev=prev, prev_uploads=portal.uploads(control=control_id, cycle=prev["RowKey"]) if prev else [],
                       prev_assignments=portal.assignments(control=control_id, cycle=prev["RowKey"]) if prev else [],

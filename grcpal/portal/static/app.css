@@ -482,3 +482,16 @@ a.stat:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .todo li { display: flex; gap: 12px; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--border); }
 .todo li:last-child { border-bottom: 0; } .todo li > div { flex: 1; } .todo-box { font-size: 18px; color: var(--muted); }
 .ver-table td:first-child { min-width: 170px; } .ver-table .pill { white-space: nowrap; }
+
+/* Control page: status and type panel, muted description */
+.ctl-facts { align-items: flex-start; margin-left: auto; }
+.fact { display: flex; flex-direction: column; gap: 4px; }
+.fact-l { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg-i { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; font-size: 13px; color: var(--muted);
+  opacity: .55; cursor: help; }
+.seg-i + .seg-i { border-left: 1px solid var(--border); }
+.seg-i.on { opacity: 1; color: var(--accent-ink); background: var(--accent); font-weight: 600; }
+.ico { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ico .fill { fill: currentColor; stroke: none; }
+.ctl-desc { color: var(--muted); font-size: 14px; }

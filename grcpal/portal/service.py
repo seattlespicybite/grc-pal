@@ -1040,7 +1040,7 @@ class Portal(FeaturesMixin, CalendarMixin, AutomationMixin, VendorsMixin, DocLib
             "calendar_occurrences.csv lists every scheduled activity due in the cycle and what an admin recorded for it;\n"
             "calendar_decisions.csv keeps every decision, including ones later corrected.\n"
             "audit_chain_verification.json shows whether the tamper-evident audit log verified at export time.\n"
-            "implementation_notes.csv holds every version of each control's 'How we meet this control' notes.\n"
+            "implementation_notes.csv holds every version of each control's 'Control Implementation' notes.\n"
             "vendors.csv is the vendor population (all statuses) with tier, data access, status and review dates;\n"
             "vendor_reviews.csv, vendor_exceptions.csv and vendor_cuecs.csv hold each onboarding check, annual review and\n"
             "offboarding in the cycle, the exceptions in vendors' reports and the CUEC mapping; vendor_files.csv lists\n"

@@ -5,6 +5,13 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Changed
+- **Control page layout.** "What this control does" is now **Control Description** (description text muted and
+  one size smaller) and "How we meet this control" is **Control Implementation**; they sit side by side at the
+  top of the page, followed by Upload evidence next to Submitted this cycle. A **Control type** panel next to
+  the status shows Automatic, Hybrid or Manual with the current type highlighted and the reason on hover
+  (a manual control with an automated check added now shows as Hybrid). "Automated evidence", which also
+  listed tasks and uploads, is now **Evidence sources**, grouped into *Collected automatically* and *Done by
+  people*. Display only; no data model change.
 - **Evidence uploaded by an admin is approved on upload.** Admins own the program and upload evidence that
   is already approved, so a second review made no sense, and with a single admin the upload stayed
   "pending" forever with nobody able to approve it. Admin uploads now require an approval note (who
