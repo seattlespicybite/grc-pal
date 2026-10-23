@@ -439,3 +439,137 @@ def test_release_list_survives_github_being_down(site, monkeypatch):
     portal, client, _ = site
     r = as_(client, ADMIN).get("/updates")
     assert r.status_code == 200 and "Could not reach GitHub" in r.text
+
+
+def test_manual_check_triggers_feed_refresh_and_writes_vm_request(vm_site, feed):
+    portal, client, tmp = vm_site
+    (tmp / "state" / "policy.json").write_text(json.dumps({"online": True}))
+    as_(client, ADMIN)
+    r = client.post("/updates/check", data={"csrf": csrf(client, "/updates")}, follow_redirects=False)
+    assert r.status_code == 303 and "/updates" in r.headers["location"]
+    reqs = requests_in(tmp)
+    assert any(req.get("action") == "check" and req.get("by") == ADMIN.email for req in reqs)
+    actions_list = [rec["action"] for rec in portal.log.records()]
+    assert "update.checked" in actions_list
+
+
+@pytest.mark.parametrize("who", [CONTRIB, AUDITOR])
+def test_manual_check_is_admin_only(vm_site, who):
+    _, client, _ = vm_site
+    as_(client, who)
+    r = client.post("/updates/check", data={"csrf": "test"}, follow_redirects=False)
+    assert r.status_code == 403
+
+
+def test_manual_check_needs_valid_csrf(vm_site):
+    _, client, _ = vm_site
+    as_(client, ADMIN)
+    r = client.post("/updates/check", data={"csrf": "invalid-token"}, follow_redirects=False)
+    assert r.status_code in (400, 403)
+
+
+def test_verify_installation_endpoint(vm_site):
+    portal, client, _ = vm_site
+    as_(client, ADMIN)
+    r = client.post("/updates/verify", data={"csrf": csrf(client, "/updates")}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/jobs/")
+    job_id = r.headers["location"].split("/")[-1]
+    job = portal.jobs.get(job_id)
+    assert job["status"] == "done"
+    assert job["result"]["ok"] is True
+    assert "Checking audit log hash chain" in " ".join(job["steps"])
+    assert "update.verified" in [rec["action"] for rec in portal.log.records()]
+    job_page = client.get(r.headers["location"])
+    assert job_page.status_code == 200 and "Verify installation" in job_page.text
+
+
+@pytest.mark.parametrize("who", [CONTRIB, AUDITOR])
+def test_verify_installation_is_admin_only(vm_site, who):
+    _, client, _ = vm_site
+    as_(client, who)
+    r = client.post("/updates/verify", data={"csrf": "test"}, follow_redirects=False)
+    assert r.status_code == 403
+
+
+def test_manual_check_respects_cooldown(vm_site, feed):
+    portal, client, tmp = vm_site
+    (tmp / "state" / "policy.json").write_text(json.dumps({"online": True}))
+    as_(client, ADMIN)
+    # First check fetches
+    r1 = client.post("/updates/check", data={"csrf": csrf(client, "/updates")}, follow_redirects=True)
+    assert r1.status_code == 200
+    assert len(feed) == 1
+    # Immediate second check reuses cached feed due to CHECK_COOLDOWN
+    r2 = client.post("/updates/check", data={"csrf": csrf(client, "/updates")}, follow_redirects=True)
+    assert r2.status_code == 200
+    assert len(feed) == 1  # Not fetched again
+
+
+def test_verify_installation_two_tenants_isolation(tmp_path, monkeypatch):
+    monkeypatch.setenv("GRCPAL_AUTH_MODE", "dev")
+    monkeypatch.setenv("GRCPAL_JOBS_SYNC", "1")
+    for var in ("GRCPAL_ENV", "GRCPAL_TENANT", "GRCPAL_BOOTSTRAP_ADMINS", "GRCPAL_EVIDENCE_ACCOUNT_URL",
+                "GRCPAL_TABLES_URL", "GRCPAL_PUBLIC_URL", "GRCPAL_DEV_PRINCIPAL", "GRCPAL_SQLITE"):
+        monkeypatch.delenv(var, raising=False)
+
+    from grcpal.portal.store import SqliteStore
+    shared_store = SqliteStore(str(tmp_path / "shared.db"))
+    portal_a = make_portal(tmp_path, tenant="acme", base_store=shared_store)
+    portal_b = make_portal(tmp_path, tenant="globex", base_store=shared_store)
+
+    # Globex creates an evidence run under tmp_path / "evidence" / "globex"
+    run_b = portal_b.evidence.new_run("entra_users", ["IAM-01"])
+    run_b.add("users", [{"upn": "user-b@globex.com"}])
+    run_b.finish([])
+
+    # Globex's evidence folder exists, but Acme's evidence folder does not exist yet
+    assert (tmp_path / "evidence" / "globex").is_dir()
+    assert not (tmp_path / "evidence" / "acme").exists()
+
+    # Tamper with Globex's evidence file
+    globex_files = list((tmp_path / "evidence" / "globex").rglob("users.json"))
+    assert len(globex_files) == 1
+    globex_files[0].write_bytes(b"tampered content")
+
+    # Tenant A verify when its folder does not exist:
+    # Checks 0 runs, never falls back to root (which contains Globex's tampered run), passes with ok=True
+    job_a1 = portal_a.verify_installation(ADMIN)
+    assert job_a1["status"] == "done"
+    assert job_a1["result"]["ok"] is True
+    assert job_a1["result"]["checked"]["evidence"] == {"runs_checked": 0, "files_checked": 0}
+    assert job_a1["result"]["problems"] == []
+
+    # Tenant A now creates its own valid evidence run
+    run_a = portal_a.evidence.new_run("github_mfa", ["IAM-02"])
+    run_a.add("mfa", [{"login": "alice", "mfa": True}])
+    run_a.finish([])
+
+    assert (tmp_path / "evidence" / "acme").is_dir()
+
+    # Tenant A verify when its folder exists:
+    # Checks only its own run, passes with ok=True, never reads Globex's tampered run
+    job_a2 = portal_a.verify_installation(ADMIN)
+    assert job_a2["status"] == "done"
+    assert job_a2["result"]["ok"] is True
+    assert job_a2["result"]["checked"]["evidence"] == {"runs_checked": 1, "files_checked": 2}
+    assert job_a2["result"]["problems"] == []
+
+    # Tenant B verify:
+    # Checks its own evidence, detects the tampered file, and fails
+    job_b = portal_b.verify_installation(ADMIN)
+    assert job_b["status"] == "done"
+    assert job_b["result"]["ok"] is False
+    assert any("changed" in p for p in job_b["result"]["problems"])
+
+
+def test_verify_installation_blob_storage_skips_file_check(site):
+    portal, _, _ = site
+    portal.evidence.account_url = "https://example.blob.core.windows.net"
+    job = portal.verify_installation(ADMIN)
+    assert job["status"] == "done"
+    assert job["result"]["ok"] is True
+    assert job["result"]["checked"]["evidence"] == "not checked (blob storage)"
+    assert "Evidence: not checked (blob storage)" in " ".join(job["steps"])  # steps start with a time
+
+
+

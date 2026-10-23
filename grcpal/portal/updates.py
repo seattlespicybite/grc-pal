@@ -6,8 +6,11 @@ Admins only, every request audited: update.approved, update.policy_requested, re
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import json
 import logging
 import os
+from pathlib import Path
 import time
 
 from grcpal import __version__, backup_store, update
@@ -23,6 +26,7 @@ ACTIVE_STATES = ("checking", "backing_up", "trial", "switching", "health", "rest
 # Release list from GitHub, kept in memory: one small request per 12 hours (15 minutes after a failure).
 _FEED: dict = {}
 FEED_TTL, FEED_RETRY = 12 * 3600, 15 * 60
+CHECK_COOLDOWN = 60  # seconds between manual GitHub queries to avoid rate limits
 
 
 class UpdatesMixin:
@@ -33,7 +37,7 @@ class UpdatesMixin:
             return "vm"
         return "azure" if os.getenv("GRCPAL_TABLES_URL") else "manual"
 
-    def release_feed(self, online: bool) -> dict:
+    def release_feed(self, online: bool, force: bool = False) -> dict:
         """Releases newer than this one, with a "do I need it?" answer each. Read from GitHub's public release
         list (nothing about this instance is sent). Off with GRCPAL_UPDATE_CHECK=off; on VMs only when the admin
         allowed the server to download releases (`online`)."""
@@ -42,7 +46,10 @@ class UpdatesMixin:
         repo = os.getenv("GRCPAL_UPDATE_REPO", "seattlespicybite/grc-pal")
         now = time.time()
         hit = _FEED.get(repo)
-        if not hit or now - hit["at"] > (FEED_RETRY if hit["error"] else FEED_TTL):
+        should_fetch = not hit or now - hit["at"] > (FEED_RETRY if hit["error"] else FEED_TTL)
+        if force and hit and (now - hit["at"] >= CHECK_COOLDOWN):
+            should_fetch = True
+        if should_fetch:
             try:
                 hit = {"at": now, "rows": update.fetch_releases(repo), "error": ""}
             except (update.UpdateError, Blocked, OSError, ValueError) as exc:
@@ -64,12 +71,118 @@ class UpdatesMixin:
         except migrations.SchemaError as exc:
             model = {"error": str(exc)}
         policy = {"auto_patch": False, "online": False, **(update.read_state("policy.json", {}) or {})}
+        hist = update.history()
+        if not hist and hasattr(self, "log") and hasattr(self.log, "recent"):
+            for r in self.log.recent(limit=30):
+                act = str(r.get("action") or "")
+                if act.startswith("update.") or act.startswith("restore."):
+                    detail = r.get("detail") or {}
+                    hist.append({
+                        "at": r.get("at", ""),
+                        "event": act,
+                        "by": r.get("actor", ""),
+                        "from": detail.get("from", ""),
+                        "to": detail.get("to", "") or r.get("target", ""),
+                        "backup": detail.get("backup", ""),
+                        "reason": detail.get("reason", "") or detail.get("error", "")
+                    })
         return {"deployment": self.deployment, "version": __version__, "data_model": model,
                 "status": update.read_state("status.json", {}) or {},
                 "available": update.read_state("available.json", {}) or {},
                 "policy": policy, "feed": self.release_feed(bool(policy.get("online"))),
-                "history": update.history(), "pending": update.pending_requests(), "steps": UPDATE_STEPS,
+                "history": hist, "pending": update.pending_requests(), "steps": UPDATE_STEPS,
                 "progress": self.update_progress(actor)}
+
+    def check_for_updates(self, actor) -> dict:
+        """Trigger a manual check for updates: refresh GitHub release feed (cooldown guarded) and request host check."""
+        self._admin(actor)
+        policy = {"auto_patch": False, "online": False, **(update.read_state("policy.json", {}) or {})}
+        req = None
+        if self.deployment == "vm":
+            try:
+                req = update.write_request("check", {}, actor.email)
+            except update.UpdateError as exc:
+                log.warning("could not write check request: %s", exc)
+        repo = os.getenv("GRCPAL_UPDATE_REPO", "seattlespicybite/grc-pal")
+        hit_before = _FEED.get(repo)
+        was_recent = bool(hit_before and (time.time() - hit_before["at"] < CHECK_COOLDOWN))
+        feed = self.release_feed(bool(policy.get("online")), force=True)
+        count = len(feed.get("releases", []))
+        newest = feed["releases"][0]["version"] if count else None
+        detail = {"releases_found": count, "newest": newest, "error": feed.get("error", ""), "cached": was_recent}
+        if req:
+            detail["request"] = req["id"]
+        self.audit(actor, "update.checked", "updates", detail)
+        return {"feed": feed, "count": count, "newest": newest, "error": feed.get("error", ""), "recent": was_recent}
+
+    def verify_installation(self, actor) -> dict:
+        """Submit a background job to verify data model, audit log, and evidence for this tenant only."""
+        self._admin(actor)
+
+        def work(job):
+            from grcpal import migrations
+
+            job.log("Checking data model...")
+            problems, checked = [], {}
+            try:
+                checked["data_model"] = migrations.check(self.store.backend)
+            except migrations.SchemaError as exc:
+                problems.append(str(exc))
+
+            job.log("Checking audit log hash chain...")
+            audit_res = self.log.verify()
+            checked["audit"] = {"ok": audit_res["ok"], "records": audit_res["records"]}
+            if not audit_res["ok"]:
+                problems.extend(audit_res["problems"][:3])
+
+            if getattr(self.evidence, "account_url", None):
+                job.log("Evidence: not checked (blob storage)")
+                checked["evidence"] = "not checked (blob storage)"
+            else:
+                job.log("Checking evidence files...")
+                files_checked, runs_checked = 0, 0
+                tenant_dir = None
+                if hasattr(self, "evidence") and hasattr(self.evidence, "root"):
+                    root = Path(self.evidence.root)
+                    ns = getattr(self.evidence, "namespace", None) or ""
+                    if ns:
+                        cand = root / ns
+                        if cand.is_dir():
+                            tenant_dir = cand
+                    elif root.is_dir():
+                        tenant_dir = root
+
+                if tenant_dir is not None:
+                    runs = sorted(p.parent for p in tenant_dir.rglob("manifest.json"))
+                    runs_checked = len(runs)
+                    for run in runs:
+                        try:
+                            man = json.loads((run / "manifest.json").read_text())
+                        except (OSError, ValueError):
+                            problems.append(f"evidence run {run.name}: manifest unreadable")
+                            continue
+                        for f in man.get("files", []):
+                            fname = f.get("name")
+                            if not fname:
+                                continue
+                            p = run / fname
+                            try:
+                                with p.open("rb") as fp:
+                                    digest = hashlib.file_digest(fp, "sha256").hexdigest()
+                            except OSError:
+                                problems.append(f"evidence file {fname}: missing")
+                                continue
+                            files_checked += 1
+                            if digest != f.get("sha256"):
+                                problems.append(f"evidence file {fname}: changed")
+                checked["evidence"] = {"runs_checked": runs_checked, "files_checked": files_checked}
+
+            ok = not problems
+            job.log(f"Verification {'passed' if ok else 'failed'}")
+            self.audit(actor, "update.verified", "updates", {"ok": ok, "problems": problems[:5]})
+            return {"ok": ok, "problems": problems, "checked": checked}
+
+        return self.jobs.submit("update_verify", "Verify installation", actor.email, work)
 
     def update_progress(self, actor) -> dict:
         """What the updater is doing now, for the live progress bar (polled by the Updates page)."""

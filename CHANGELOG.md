@@ -5,6 +5,7 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 feature/access-review-sources
+feature/access-review-sources
 ### Added
 - **Access reviews read the accounts themselves** (Access reviews > Applications). Admins list each in-scope application
   once and choose its source: Microsoft Entra ID / Microsoft 365 (users, guests, last sign-in, MFA, admin roles, license),
@@ -24,6 +25,14 @@ feature/access-review-sources
   to that application's host: no redirects, next-page links must stay on the same host, internal and metadata addresses
   are blocked. `Clients.gh_list(..., complete=True)` raises instead of silently returning a partial list.
 =======
+Update-button-fixed2
+Update-button-fixed2
+### Added
+- **Updates page manual check**: Admins can manually trigger an update check with the **Check for updates** button, receiving immediate confirmation of whether newer releases are available or the instance is up to date, protected by a request cooldown.
+- **Tenant installation verification**: Added **Verify installation** on the Updates page to validate the signed-in tenant's data model version, audit log hash chain, and evidence digests via a background job.
+- **Activity log table**: Enhanced the Updates page history table with status indicators and audit log fallback.
+ main
+=======
 ### Changed
 - **Evidence uploaded by an admin is approved on upload.** Admins own the program and upload evidence that
   is already approved, so a second review made no sense, and with a single admin the upload stayed
@@ -40,6 +49,7 @@ main
   sent only `catalog/`, `registers/` and `policies/`, so your own `kb/` articles and `frameworks/` files worked
   on a VM (local folder) but were silently ignored on Azure. The bundle now carries `kb/` and `frameworks/` too.
   No data model change.
+main
 
 ## [0.5.0] - 2026-10-20 - Document approvals, signed VM updates
 
