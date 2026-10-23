@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% block title %}Applications for access reviews{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Applications</h1>
+<div class="sub">Every application in scope for access reviews, and where its accounts come from. GRC-pal reads them read-only when a review starts.</div></div>
+<div class="head-actions"><a class="btn ghost" href="/access-reviews">Access reviews</a></div></div>
+
+{% if user.is_admin %}
+<div class="card mb"><h2>Add an application</h2>
+<form method="post" action="/access-reviews/apps/new" class="grid">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<label>Name<input type="text" name="name" maxlength="60" required placeholder="Customer portal"></label>
+<label>Where the accounts come from<select name="kind" required>{% for k, label in kinds.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></label>
+<label>Ready-made settings for a custom application (optional)<select name="preset"><option value="">None</option>{% for k, label in presets.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></label>
+<label>Application owner (optional; reviews accounts that have no manager)<input type="email" name="owner_email" maxlength="200" placeholder="owner@example.com"></label>
+<div><button class="btn" type="submit">Add</button></div>
+</form>
+<div class="hint mt">Your own applications: choose <b>Custom application</b> if it has an API that lists users (JSON over HTTPS), or <b>Other application</b> to upload a CSV export when a review starts.
+Applications people sign in to with Microsoft (for example monday.com or the WorkOS dashboard, when they use Entra single sign-on) can be read as an <b>Entra enterprise application</b>.</div></div>
+{% endif %}
+
+<div class="card"><div class="table-wrap"><table>
+<thead><tr><th>Application</th><th>Source</th><th>Owner</th><th>Last test</th></tr></thead>
+<tbody>{% for a in rows %}<tr>
+<td><a href="/access-reviews/apps/{{ a.RowKey }}"><b>{{ a.name }}</b></a>{% if not a.active %} <span class="pill na">Retired</span>{% endif %}{% if a.description %}<div class="sub">{{ a.description }}</div>{% endif %}</td>
+<td>{{ kinds[a.kind] }}</td>
+<td>{{ a.owner_email or '—' }}</td>
+<td>{% if a.last_test and a.last_test.ok %}<span class="pill ok">{{ a.last_test.records }} accounts</span><div class="sub">{{ a.last_test.at[:10] }}</div>{% elif a.last_test %}<span class="pill attention">Failed</span><div class="sub">{{ a.last_test.at[:10] }}</div>{% else %}<span class="sub">Not tested</span>{% endif %}</td>
+</tr>{% else %}<tr><td colspan="4"><div class="empty">No applications yet.</div></td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}

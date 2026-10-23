@@ -115,8 +115,10 @@ def test_only_admins_start_reviews_and_the_snapshot_is_write_once_with_a_hash(po
             start(portal, who=who)
     camp = start(portal, people=PEOPLE.encode())
     source, _, run = camp["snapshot_run"].partition("/")
-    raw = portal.evidence.read(source, run, "accounts.csv")
-    assert raw == ACCOUNTS.encode() and hashlib.sha256(raw).hexdigest() == camp["snapshot_sha256"]
+    assert portal.evidence.read(source, run, "accounts.csv") == ACCOUNTS.encode()   # the upload, as received
+    population = portal.evidence.read(source, run, "population.csv")                  # the list reviewed
+    assert hashlib.sha256(population).hexdigest() == camp["snapshot_sha256"]
+    assert len(list(csv.DictReader(io.StringIO(population.decode())))) == 6
     assert portal.evidence.read(source, run, "people.csv") == PEOPLE.encode()
     assert camp["records"] == 6 and camp["summary"] == {"GitHub": 2, "Slack": 2, "Database": 2}
     assert camp["reviewers_without_account"] == []

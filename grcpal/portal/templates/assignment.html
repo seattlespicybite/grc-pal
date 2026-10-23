@@ -29,7 +29,7 @@
 <input type="hidden" name="csrf" value="{{ csrf }}"><input name="reason" placeholder="Reason for cancelling" required minlength="5" aria-label="Reason"><button class="btn ghost small" type="submit">Cancel request</button></form></details>{% endif %}
 </section>
 <section class="card"><h2>Upload evidence</h2>
-{% if can_upload %}{{ upload_form('/assignments/' ~ a.RowKey ~ '/upload', csrf, max_mb) }}
+{% if can_upload %}{{ upload_form('/assignments/' ~ a.RowKey ~ '/upload', csrf, max_mb, admin=user.is_admin) }}
 {% else %}<div class="empty">{% if a.status in ('approved', 'cancelled') %}This request is {{ a.status }}.{% elif a.cycle != cycle.RowKey %}This request belongs to a closed cycle.{% else %}Only the assigned people can upload here.{% endif %}</div>{% endif %}
 </section></div>
 

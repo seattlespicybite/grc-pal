@@ -15,6 +15,7 @@ $GraphAppRoles = @(
   'AuditLog.Read.All',                      # sign-in activity, MFA registration report
   'RoleManagement.Read.Directory',          # directory role assignments
   'Application.Read.All',                   # enterprise apps and app credentials
+  'GroupMember.Read.All',                   # access reviews: members of groups that have access to an app or Azure
   'Policy.Read.All',                        # Conditional Access policies
   'DeviceManagementManagedDevices.Read.All' # Intune devices
 )

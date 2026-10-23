@@ -104,7 +104,8 @@ def seed(portal) -> bool:
         "evidence_wanted": "Review notes for each critical vendor's SOC 2 report\nList of CUECs with owner confirmation"})
     portal.upload(ADMIN2, "vendor-soc2-review-2026.csv",
                   b"vendor,report_period,exceptions,cuecs_confirmed\nMicrosoft,2025-10-01..2026-09-30,0,yes\n"
-                  b"GitHub,2025-07-01..2026-06-30,1,yes\n", "Annual vendor SOC 2 review", control_id="CUS-01")
+                  b"GitHub,2025-07-01..2026-06-30,1,yes\n", "Annual vendor SOC 2 review", control_id="CUS-01",
+                  approval_note="Reviewed and approved by the security lead in the vendor review meeting")
     # Implementation notes: how each control is met here, kept for the next person and the auditor.
     for cid, text in [
         ("IAM-02", "Covered by Information Security Policy section 6 (Access control).\nMFA is enforced by the "

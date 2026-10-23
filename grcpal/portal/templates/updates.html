@@ -2,12 +2,15 @@
 {% block content %}
 <div class="page-head"><div><h1>Updates</h1>
 <div class="sub">GRC-pal {{ data.version }}{% if data.data_model.schema_version %} · data model {{ data.data_model.schema_version }}{% endif %}</div></div>
-<a class="btn ghost small" href="/backups">Backups</a></div>
+<div class="actions">
+<form method="post" action="/updates/check"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small" type="submit">Check for updates</button></form>
+<a class="btn ghost small" href="/backups">Backups</a></div></div>
 
 {% if data.data_model.error %}<div class="flash err" role="alert">{{ data.data_model.error }}</div>{% endif %}
 
 {% set fd = data.feed %}
-{% if fd.enabled %}<section class="card table-wrap"><h2>Newer releases</h2>
+{% if fd.enabled %}<section class="card table-wrap"><div class="split"><h2>Newer releases</h2>
+{% if fd.releases %}<span class="pill adv-{{ fd.releases[0].advice.level }}">Update available: {{ fd.releases[0].version }}</span>{% elif not fd.error %}<span class="pill ok">Up to date</span>{% endif %}</div>
 {% if fd.error %}<div class="flash err" role="alert">{{ fd.error }}</div>{% endif %}
 {% if fd.security %}<div class="flash err" role="alert">A newer release contains security fixes. Installing the newest release includes every fix before it.</div>{% endif %}
 {% if fd.releases %}
@@ -26,7 +29,8 @@
 {% set st = data.status %}{% set pr = data.progress %}
 {% set keys = data.steps|map('first')|list %}{% set cur = keys.index(st.state) if st.state in keys else -1 %}
 <section class="card{{ ' backup-warn' if st.state in ('failed', 'rolled_back') }}" data-update-progress="/updates/progress"{% if pr.active %} data-active{% endif %}>
-<h2>Status</h2>
+<div class="split"><h2>Status</h2>
+<form method="post" action="/updates/verify"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ghost small" type="submit">Verify installation</button></form></div>
 <p><span class="pill {{ 'ok' if st.state in ('done', 'idle') else 'error' if st.state in ('failed', 'rolled_back') else 'pending' }}" data-progress-state>{{ (st.state or 'idle')|replace('_', ' ')|capitalize }}</span>
 <span data-progress-message>{{ st.message or 'No update is running.' }}</span></p>
 <div class="update-progress" data-progress-box{% if not pr.active %} hidden{% endif %}>
@@ -61,8 +65,8 @@
 
 <section class="card table-wrap"><h2>History</h2>
 {% if data.history %}<table><thead><tr><th>When</th><th>What</th><th>Details</th></tr></thead><tbody>
-{% for e in data.history %}<tr><td class="nowrap">{{ when(e.at) }}</td><td>{{ e.event|replace('.', ' ')|replace('_', ' ') }}</td>
-<td class="sub">{% if e.from %}{{ e.from }} → {{ e.to }}{% endif %}{% if e.backup %} {{ e.backup }}{% endif %}{% if e.by %} · {{ e.by }}{% endif %}{% if e.reason %} · {{ e.reason }}{% endif %}</td></tr>{% endfor %}
+{% for e in data.history %}<tr><td class="nowrap">{{ when(e.at) }}</td><td><span class="pill {{ 'ok' if e.event in ('update.applied', 'restore.completed', 'update.checked', 'update.verified') else 'error' if e.event in ('update.trial_failed', 'update.rolled_back', 'restore.failed') else 'ghost' }}">{{ e.event|replace('.', ' ')|replace('_', ' ') }}</span></td>
+<td class="sub">{% if e.from %}{{ e.from }} → {{ e.to }}{% elif e.to %}{{ e.to }}{% endif %}{% if e.backup %} · {{ e.backup }}{% endif %}{% if e.by %} · {{ e.by }}{% endif %}{% if e.reason %} · {{ e.reason }}{% endif %}</td></tr>{% endfor %}
 </tbody></table>{% else %}<div class="empty">No updates yet.</div>{% endif %}</section>
 
 {% elif data.deployment == 'azure' %}
