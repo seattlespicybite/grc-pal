@@ -486,6 +486,14 @@ class SettingsStore:
         self._cache = None
         return changed, []
 
+    def seal_secret(self, field: str, plaintext: str) -> str:
+        """Encrypt a secret that is not a Configuration field (for example one application's API token). The
+        value is bound to this tenant and to `field`, so it cannot be moved to another tenant or field."""
+        return self._box_fn().seal(plaintext, f"{self.tenant}|{field}")
+
+    def open_secret(self, field: str, token: str) -> str:
+        return self._box_fn().open(token, f"{self.tenant}|{field}") if token else ""
+
     def record_test(self, section_id: str, result: dict) -> None:
         row = self.row(section_id) or {"PartitionKey": "cfg", "RowKey": section_id, "values": {}, "secrets": {}}
         row["last_test"] = {k: result[k] for k in ("ok", "summary", "at") if k in result}

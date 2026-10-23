@@ -30,6 +30,7 @@ from grcpal.portal.updates import UpdatesMixin
 from grcpal.portal.calendar import CalendarMixin
 from grcpal.portal.automation import AutomationMixin
 from grcpal.portal.features import FeaturesMixin
+from grcpal.portal.accessapps import AccessAppsMixin
 from grcpal.portal.accessreview import AccessReviewMixin
 from grcpal.portal.doclib import DocLibMixin
 from grcpal.portal.matrix import MatrixMixin
@@ -67,8 +68,13 @@ def _rk() -> str:
     return f"{utcnow():%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:10]}"
 
 
+ feature/control-matrix-import-export
 class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, VendorsMixin, DocLibMixin, AccessReviewMixin, AccountsMixin,
              BackupsMixin, UpdatesMixin):
+=======
+class Portal(FeaturesMixin, CalendarMixin, AutomationMixin, VendorsMixin, DocLibMixin, AccessReviewMixin, AccessAppsMixin,
+             AccountsMixin, BackupsMixin, UpdatesMixin):
+ main
     def __init__(self, catalog, store, evidence: EvidenceStore, mailer: Mailer | None = None,
                  today: dt.date | None = None, public_url: str | None = None, jobs_sync: bool | None = None) -> None:
         self.base_catalog, self.store, self.evidence = catalog, store, evidence

@@ -2,7 +2,15 @@
 {% block content %}
 <div class="page-head"><div><h1>Access reviews</h1>
 <div class="sub">{% if user.is_contributor %}Reviews that include people you manage. For each account, decide whether the access is still needed (SOC 2 CC6.2 and CC6.3).
-{% else %}Managers review the accounts of their own people across every application, on one screen. Upload the account lists, the managers decide, and the result is stored as evidence (SOC 2 CC6.2 and CC6.3).{% endif %}</div></div></div>
+{% else %}Managers review the accounts of their own people across every application, on one screen. GRC-pal reads the account lists, the managers decide, and the result is stored as evidence (SOC 2 CC6.2 and CC6.3).{% endif %}</div></div>
+{% if user.sees_everything %}<div class="head-actions"><a class="btn ghost" href="/access-reviews/apps">Applications</a></div>{% endif %}</div>
+
+{% if jobs %}<div class="card mb"><h2>Recently prepared</h2><div class="table-wrap"><table><tbody>
+{% for j in jobs %}<tr><td>{{ j.title }}<div class="sub">{{ j.created_at[:16]|replace('T', ' ') }}</div></td>
+<td>{% if j.status == 'done' %}<span class="pill ok">Ready</span>{% elif j.status == 'failed' %}<span class="pill attention">Not created</span>{% else %}<span class="pill pending">Reading applications…</span>{% endif %}</td>
+<td>{% if j.status == 'done' and j.result.campaign %}<a href="/access-reviews/{{ j.result.campaign }}">Open the review</a> · {{ j.result.records }} accounts{% if j.result.without_account %} · {{ j.result.without_account }} manager{{ 's' if j.result.without_account != 1 }} without a portal account{% endif %}
+{% for n in j.result.notes or [] %}<div class="sub">{{ n }}</div>{% endfor %}{% elif j.status == 'failed' %}{{ j.message }}{% else %}{{ j.message }}{% endif %}</td></tr>{% endfor %}
+</tbody></table></div></div>{% endif %}
 
 {% if user.is_admin %}
 <div class="card mb"><h2>Start a review</h2>
@@ -10,11 +18,17 @@
 <input type="hidden" name="csrf" value="{{ csrf }}">
 <label>Name<input type="text" name="name" maxlength="120" required placeholder="Q4 2026 user access review"></label>
 <label>Managers finish by<input type="date" name="due" required min="{{ today }}"></label>
-<label>Accounts file (CSV, up to {{ max_accounts }} accounts)<input type="file" name="accounts" accept=".csv,text/csv" required></label>
-<label>People file (optional CSV: email, manager_email)<input type="file" name="people" accept=".csv,text/csv"></label>
+<fieldset class="v-fieldset"><legend>Applications to read now</legend>
+{% for a in apps %}<label class="check"><input type="checkbox" name="apps" value="{{ a.RowKey }}" checked> {{ a.name }} <span class="sub">{{ kinds[a.kind] }}{% if a.last_test and not a.last_test.ok %} · last test failed{% endif %}</span></label>
+{% else %}<div class="sub">No applications yet. <a href="/access-reviews/apps">Add your applications</a> (Entra ID, Azure, GitHub, your own apps) so their accounts are read automatically.</div>{% endfor %}
+{% if ms_on %}<label class="check mt"><input type="checkbox" name="entra_managers" checked> Take managers from Entra ID (direct reports)</label>{% endif %}
+</fieldset>
+<label>Other accounts (optional CSV, up to {{ max_accounts }} accounts in total)<input type="file" name="accounts" accept=".csv,text/csv"></label>
+<label>People file (optional CSV: email, manager_email; it wins over Entra ID)<input type="file" name="people" accept=".csv,text/csv"></label>
 <div><button class="btn" type="submit">Start review</button> <a class="btn ghost" href="/access-reviews/template.csv">Download CSV template</a></div>
 </form>
-<div class="hint mt">Export the user list from each application (GitHub, Slack, a database, any admin console) and put them in one file with the columns
+<div class="hint mt">Applications are read in the background; if one cannot be read completely, nothing is created and the reason shows above.
+For anything without a connection, export the user list (a database, any admin console) and put it in one file with the columns
 <span class="mono">{{ columns|join(', ') }}</span>. Only <span class="mono">app</span> and <span class="mono">account_id</span> are required; the other columns improve the review.
 The managers come from <span class="mono">manager_email</span> or from the people file. If any row is wrong, nothing is imported and the message says which rows to fix.
 The files are stored write-once with a SHA-256 as proof of what was reviewed.</div></div>

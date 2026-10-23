@@ -1,0 +1,78 @@
+{% extends "base.html" %}{% block title %}{{ a.name }}{% endblock %}
+{% block content %}
+{% set cfg = a.config or {} %}
+{% set ro = not user.is_admin %}
+<div class="page-head"><div><h1>{{ a.name }}</h1><div class="sub">{{ kinds[a.kind] }}{% if not a.active %} · retired{% endif %}</div></div>
+<div class="head-actions"><a class="btn ghost" href="/access-reviews/apps">All applications</a></div></div>
+
+{% if a.last_test %}<div class="card mb {{ 'card-info' if a.last_test.ok }}"><h2>Last test · {{ a.last_test.at[:16]|replace('T', ' ') }}</h2>
+{% if a.last_test.ok %}<div>{{ a.last_test.records }} accounts read{% if a.last_test.first_page_only %} (first page only){% endif %}: {{ a.last_test.with_email }} with an email address, {{ a.last_test.service }} service accounts.
+Filled in: {{ a.last_test.filled|join(', ') or 'account IDs only' }}.</div>
+{% if a.last_test.with_email < a.last_test.records - a.last_test.service %}<div class="sub mt">Accounts without an email cannot be matched to a person or a manager. Add an identity map below, or they go to the application owner.</div>{% endif %}
+{% for n in a.last_test.notes or [] %}<div class="sub">{{ n }}</div>{% endfor %}
+{% else %}<div class="bad-text">{{ a.last_test.error }}</div>{% endif %}</div>{% endif %}
+
+<div class="card mb"><h2>Settings</h2>
+<form method="post" action="/access-reviews/apps/{{ a.RowKey }}" class="grid">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<label>Name<input type="text" name="name" maxlength="60" required value="{{ a.name }}"{% if ro %} disabled{% endif %}></label>
+<label>Application owner (reviews accounts that have no manager)<input type="email" name="owner_email" maxlength="200" value="{{ a.owner_email }}"{% if ro %} disabled{% endif %}></label>
+<label>Description (optional)<input type="text" name="description" maxlength="300" value="{{ a.description }}"{% if ro %} disabled{% endif %}></label>
+
+{% if a.kind == 'entra_app' %}
+<label>Application (client) ID<input type="text" name="app_id" maxlength="36" value="{{ cfg.app_id }}" placeholder="00000000-0000-0000-0000-000000000000"{% if ro %} disabled{% endif %}></label>
+<div class="hint">Entra ID &gt; Enterprise applications &gt; the app &gt; Overview. “Assignment required” must be on, otherwise everyone can sign in and the assigned list is not the real population.</div>
+{% elif a.kind == 'github_org' %}
+<label>Organization name<input type="text" name="org" maxlength="39" value="{{ cfg.org }}" placeholder="example-org"{% if ro %} disabled{% endif %}></label>
+<div class="hint">Uses the GitHub token from Configuration; it needs the organization permission <b>Members: read</b>. Two-factor status shows only when the token's owner is an organization owner.
+GitHub accounts carry no work email: upload an identity map below so each login is matched to a person.</div>
+{% elif a.kind == 'entra_users' %}
+<div class="hint">Every user and guest in Entra ID, with enabled status, last sign-in, MFA registration, directory admin roles and whether a Microsoft 365 license is assigned. Uses the Microsoft connection from Configuration.</div>
+{% elif a.kind == 'azure_rbac' %}
+<div class="hint">Every role assignment on the subscriptions from Configuration. Groups are expanded to people (needs GroupMember.Read.All); service principals are listed as service accounts.</div>
+{% elif a.kind == 'grcpal' %}
+<div class="hint">This portal's own users and roles. GRC-pal holds your audit evidence, so its access is in scope too.</div>
+{% elif a.kind == 'csv' %}
+<div class="hint">Accounts come from the CSV you upload when you start a review, with <span class="mono">app</span> set to “{{ a.name }}”.</div>
+{% elif a.kind == 'rest' %}
+<fieldset class="v-fieldset"><legend>Request</legend>
+<label>URL (public HTTPS)<input type="url" name="url" maxlength="500" value="{{ cfg.url }}" placeholder="https://api.example.com/v1/users"{% if ro %} disabled{% endif %}></label>
+<label>Method<select name="method"{% if ro %} disabled{% endif %}>{% for m in ('GET', 'POST') %}<option{% if cfg.method == m %} selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
+<label>Body for POST (optional, JSON; {page} and {cursor} are replaced)<textarea name="body" maxlength="4000"{% if ro %} disabled{% endif %}>{{ cfg.body }}</textarea></label>
+<label>Authentication<select name="auth"{% if ro %} disabled{% endif %}>{% for k, label in auth.items() %}<option value="{{ k }}"{% if cfg.auth == k %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label>Header name (when the token goes in a header you name)<input type="text" name="header_name" maxlength="60" value="{{ cfg.header_name }}" placeholder="Authorization"{% if ro %} disabled{% endif %}></label>
+{% if not ro %}<label>API token ({{ 'saved; leave blank to keep it' if a.token_set else 'not set' }})<input type="password" name="token" autocomplete="off" maxlength="4000"></label>
+{% if a.token_set %}<label class="check"><input type="checkbox" name="clear_token"> Remove the saved token</label>{% endif %}
+{% else %}<div class="sub">API token: {{ 'set' if a.token_set else 'not set' }}</div>{% endif %}
+</fieldset>
+<fieldset class="v-fieldset"><legend>Response</legend>
+<label>Where the list of users is (dotted path; empty when the response is the list)<input type="text" name="items_path" maxlength="300" value="{{ cfg.items_path }}" placeholder="data.users"{% if ro %} disabled{% endif %}></label>
+<label>Paging<select name="paging"{% if ro %} disabled{% endif %}>{% for k, label in paging.items() %}<option value="{{ k }}"{% if cfg.paging == k %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label>Page parameter name (page numbers)<input type="text" name="page_param" maxlength="60" value="{{ cfg.page_param }}" placeholder="page"{% if ro %} disabled{% endif %}></label>
+<label>Where the next cursor is (cursor paging)<input type="text" name="cursor_path" maxlength="300" value="{{ cfg.cursor_path }}" placeholder="list_metadata.after"{% if ro %} disabled{% endif %}></label>
+<label>Cursor parameter name<input type="text" name="cursor_param" maxlength="60" value="{{ cfg.cursor_param }}" placeholder="after"{% if ro %} disabled{% endif %}></label>
+<label>Where the next-page link is (next-page link paging)<input type="text" name="next_path" maxlength="300" value="{{ cfg.next_path }}" placeholder="links.next"{% if ro %} disabled{% endif %}></label>
+</fieldset>
+<fieldset class="v-fieldset"><legend>Field map: where each value is in one user</legend>
+{% for f in map_fields %}<label>{{ {'account_id': 'Account ID (required)', 'email': 'Email', 'name': 'Name', 'status': 'Status (true = active; start with ! to invert, e.g. !disabled)', 'role': 'Role (or flags: is_admin:Admin, is_guest:Guest)', 'last_login': 'Last sign-in', 'mfa': 'MFA (true/false)', 'is_service_account': 'Service account (true/false)'}[f] }}
+<input type="text" name="map_{{ f }}" maxlength="300" value="{{ (cfg.map or {}).get(f, '') }}"{% if ro %} disabled{% endif %}></label>{% endfor %}
+</fieldset>
+<div class="hint">The token is encrypted and only ever sent to this URL's host. Redirects are not followed and next-page links must stay on the same host.
+Internal addresses are blocked; for an application that is only reachable inside your network, use a CSV export instead.</div>
+{% endif %}
+{% if not ro %}<label class="check"><input type="checkbox" name="active"{% if a.active %} checked{% endif %}> In scope (untick to retire it; past reviews keep it)</label>
+<div><button class="btn" type="submit">Save</button></div>{% endif %}
+</form>
+{% if not ro and a.kind != 'csv' %}<form method="post" action="/access-reviews/apps/{{ a.RowKey }}/test" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+<button class="btn ghost" type="submit">Test: read the accounts now</button> <span class="sub">Shows counts only; nothing is stored except the result.</span></form>{% endif %}
+</div>
+
+{% if a.kind != 'csv' %}
+<div class="card"><h2>Identity map</h2>
+<div class="sub mb">{{ a.identity_count }} account{{ 's' if a.identity_count != 1 }} linked to a person. Use this when the application's accounts carry no work email (GitHub logins, user names): a CSV with the columns
+<span class="mono">account_id,email</span>. Uploading replaces the map; it is kept for every future review.</div>
+{% if not ro %}<form method="post" action="/access-reviews/apps/{{ a.RowKey }}/identities" enctype="multipart/form-data" class="filters">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="file" name="identities" accept=".csv,text/csv" required>
+<button class="btn ghost" type="submit">Upload identity map</button></form>{% endif %}</div>
+{% endif %}
+{% endblock %}
