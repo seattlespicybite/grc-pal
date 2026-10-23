@@ -569,7 +569,7 @@ def test_verify_installation_blob_storage_skips_file_check(site):
     assert job["status"] == "done"
     assert job["result"]["ok"] is True
     assert job["result"]["checked"]["evidence"] == "not checked (blob storage)"
-    assert "Evidence: not checked (blob storage)" in job["steps"]
+    assert "Evidence: not checked (blob storage)" in " ".join(job["steps"])  # steps start with a time
 
 
 
