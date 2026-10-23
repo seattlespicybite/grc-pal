@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from grcpal.portal.accounts import PASSWORD_MIN, SESSION_COOKIE, SESSION_HOURS
 from grcpal.portal.auth import AuthError
 from grcpal.portal.observability import request_id
-from grcpal.portal.security import csrf_token
+from grcpal.portal.security import clear_cookie, read_cookie, set_cookie
 from grcpal.portal.service import Invalid
 
 LOGIN_CSRF = "local-login"
@@ -26,7 +26,7 @@ def register(app, h) -> None:
 
     def login_page(request: Request, next: str = "/", error: str = "", status: int = 200, email: str = ""):
         return page(request, "login.html", status, next=h.safe_dest(next, "/"), error=error, email=email,
-                    csrf=csrf_token(LOGIN_CSRF), first_admin=not h.p().any_password_set(),
+                    csrf=h.form_token(request, LOGIN_CSRF), first_admin=not h.p().any_password_set(),
                     signed_out=request.query_params.get("out") == "1",
                     done=request.query_params.get("done") == "1")
 
@@ -42,33 +42,44 @@ def register(app, h) -> None:
             token = h.p().sign_in(email, password, ip=h.ip_of(request))
         except AuthError as exc:
             return login_page(request, next, str(exc), exc.status, email=email)
+        # A new session at every sign-in: the one this browser had before (if any) ends, so a session ID planted
+        # or seen before sign-in is worthless after it, and form tokens (bound to the session) rotate too.
+        h.p().sign_out(read_cookie(request.cookies, SESSION_COOKIE))
         resp = RedirectResponse(h.safe_dest(next, "/"), status_code=303)
-        resp.set_cookie(SESSION_COOKIE, token, max_age=SESSION_HOURS * 3600, path="/", httponly=True,
-                        samesite="lax", secure=request.url.scheme == "https")
+        clear_cookie(resp, request.url.scheme, SESSION_COOKIE)
+        set_cookie(resp, request.url.scheme, SESSION_COOKIE, token, max_age=SESSION_HOURS * 3600)
         return resp
 
-    @app.get("/logout")
-    def logout(request: Request):
-        h.p().sign_out(request.cookies.get(SESSION_COOKIE))
+    @app.post("/logout")
+    def logout(request: Request, csrf: str = Form("")):
+        """Sign out is a form post with a token, so a link or image on another site cannot sign people out."""
+        token = read_cookie(request.cookies, SESSION_COOKIE)
+        try:
+            user = h.p().session_user(token)
+        except AuthError:
+            user = None  # the session already ended: just clear the cookie
+        if user:
+            h.check_csrf(request, user.email, csrf)
+            h.p().sign_out(token)
         resp = RedirectResponse("/login?out=1", status_code=303)
-        resp.delete_cookie(SESSION_COOKIE, path="/")
+        clear_cookie(resp, request.url.scheme, SESSION_COOKIE)
         return resp
 
     @app.get("/account/forgot", response_class=HTMLResponse)
     def forgot(request: Request):
-        return page(request, "forgot.html", csrf=csrf_token(FORGOT_CSRF), sent=False)
+        return page(request, "forgot.html", csrf=h.form_token(request, FORGOT_CSRF), sent=False)
 
     @app.post("/account/forgot", response_class=HTMLResponse)
     def forgot_post(request: Request, email: str = Form(""), csrf: str = Form("")):
         h.check_csrf(request, FORGOT_CSRF, csrf)
         h.p().request_reset(email)
         # Same answer whether or not the account exists, so this page cannot be used to find accounts.
-        return page(request, "forgot.html", csrf=csrf_token(FORGOT_CSRF), sent=True)
+        return page(request, "forgot.html", csrf=h.form_token(request, FORGOT_CSRF), sent=True)
 
     @app.get("/account/password/{token}", response_class=HTMLResponse)
     def choose_password(request: Request, token: str):
         row = h.p().link_row(token)
-        return page(request, "choose_password.html", csrf=csrf_token(SETUP_FORM_CSRF), valid=row is not None,
+        return page(request, "choose_password.html", csrf=h.form_token(request, SETUP_FORM_CSRF), valid=row is not None,
                     email=(row or {}).get("email", ""), new=(row or {}).get("purpose") == "setup", error="")
 
     @app.post("/account/password/{token}", response_class=HTMLResponse)
@@ -83,6 +94,6 @@ def register(app, h) -> None:
                 return RedirectResponse("/login?done=1", status_code=303)
             except Invalid as exc:
                 error = str(exc)
-        return page(request, "choose_password.html", 400 if row else 200, csrf=csrf_token(SETUP_FORM_CSRF),
+        return page(request, "choose_password.html", 400 if row else 200, csrf=h.form_token(request, SETUP_FORM_CSRF),
                     valid=row is not None, email=(row or {}).get("email", ""),
                     new=(row or {}).get("purpose") == "setup", error=error)

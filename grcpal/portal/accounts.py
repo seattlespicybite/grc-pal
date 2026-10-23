@@ -8,7 +8,8 @@ How secrets are kept:
   * setup/reset links and session cookies are random tokens; only their SHA-256 hash is stored, so a copy
     of the database cannot be used to sign in or to reset a password.
 
-Accepted for the internal-only proof of concept (docs/security.md): no MFA, no lockout. Add both before
+Admin sessions also end after ADMIN_IDLE_MINUTES without activity. Accepted for the internal-only proof of
+concept (docs/security.md): no MFA, no lockout. Add both before
 the portal is reachable from outside the internal network.
 """
 from __future__ import annotations
@@ -17,6 +18,7 @@ import base64
 import datetime as dt
 import hashlib
 import hmac
+import os
 import secrets
 
 from grcpal.evidence import utcnow
@@ -28,7 +30,9 @@ SESSION_HOURS = 8
 ADMIN_LINK_HOURS = 72      # links an admin creates (new account, break-glass reset)
 SELF_RESET_HOURS = 1       # "Forgot password" links sent by email
 AUDITOR_DEFAULT_DAYS = 90
-SESSION_COOKIE = "grcpal_session"
+SESSION_COOKIE = "grcpal_session"   # in production the browser stores it as __Host-grcpal_session (security.py)
+ADMIN_IDLE_MINUTES = 30    # an admin session unused this long ends (GRCPAL_ADMIN_IDLE_MINUTES to change)
+TOUCH_SECONDS = 60         # how often a session's last activity is written (not on every request)
 # OWASP minimum for scrypt: N=2^15, r=8, p=3 (about 32 MiB of memory per check). Stored with each hash.
 SCRYPT = {"n": 2 ** 15, "r": 8, "p": 3}
 
@@ -60,6 +64,13 @@ def _digest(token: str) -> str:
 
 def _now() -> str:
     return utcnow().isoformat()
+
+
+def _admin_idle_minutes() -> int:
+    try:
+        return max(1, int(os.getenv("GRCPAL_ADMIN_IDLE_MINUTES", "") or ADMIN_IDLE_MINUTES))
+    except ValueError:
+        return ADMIN_IDLE_MINUTES
 
 
 def _later(hours: int) -> str:
@@ -222,8 +233,9 @@ class AccountsMixin:
             self.events.security(f"Sign-in refused: {exc}", actor=email, ip=ip)
             raise
         token = secrets.token_urlsafe(32)
+        now = _now()
         self.store.insert("sessions", {"PartitionKey": "s", "RowKey": _digest(token), "email": email,
-                                       "created": _now(), "expires": _later(SESSION_HOURS)})
+                                       "created": now, "last_used": now, "expires": _later(SESSION_HOURS)})
         self.store.update("users", "u", email, {"last_seen": _now()})
         self.audit(email, "auth.signin", email, {"method": "password", "ip": ip})
         return token
@@ -244,6 +256,15 @@ class AccountsMixin:
         except AuthError:
             self.store.delete("sessions", "s", s["RowKey"])
             raise
+        last_used = s.get("last_used") or s.get("created") or ""
+        idle = _admin_idle_minutes()
+        if row.get("role") == "admin" and last_used < (utcnow() - dt.timedelta(minutes=idle)).isoformat():
+            # Admin sessions are worth the most to a thief and are most often left open on a desk: end them
+            # after a short quiet period. The person signs in again; nothing they saved is lost.
+            self.store.delete("sessions", "s", s["RowKey"])
+            raise AuthError(f"you were signed out after {idle} minutes without activity; sign in again")
+        if last_used < (utcnow() - dt.timedelta(seconds=TOUCH_SECONDS)).isoformat():
+            self.store.update("sessions", "s", s["RowKey"], {"last_used": _now()})
         if (row.get("last_seen") or "") < (utcnow() - dt.timedelta(hours=1)).isoformat():
             self.store.update("users", "u", row["RowKey"], {"last_seen": _now()})
         return User(email=row["RowKey"], name=row.get("name") or row["RowKey"], role=row["role"])

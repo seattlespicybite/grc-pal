@@ -235,6 +235,24 @@ def test_request_log_names_the_user_and_hides_reset_tokens(env, caplog):
     assert any(r.fields.get("path") == "/account/password/[redacted]" for r in lines)
 
 
+
+def test_easyauth_form_tokens_are_bound_to_the_platform_session(tmp_path, monkeypatch):
+    # A form token taken from one Easy Auth session (a stolen page, a shared machine) is refused in another,
+    # and a new sign-in (a new AppServiceAuthSession cookie) rotates it.
+    monkeypatch.setenv("GRCPAL_AUTH_MODE", "easyauth")
+    monkeypatch.delenv("GRCPAL_ENV", raising=False)
+    monkeypatch.delenv("GRCPAL_ALLOWED_TENANT_IDS", raising=False)
+    client = TestClient(create_app(make_portal(tmp_path)), base_url="https://grc.example.com")
+    client.headers["X-MS-CLIENT-PRINCIPAL"] = _principal(ADMIN.email, name=ADMIN.name)
+    client.cookies.set("AppServiceAuthSession", "session-one", domain="grc.example.com")
+    one = csrf(client, "/users")
+    data = {"email": "x1@example.com", "role": "auditor"}
+    assert client.post("/users", data={**data, "csrf": one}, follow_redirects=False).status_code == 303
+    client.cookies.set("AppServiceAuthSession", "session-two", domain="grc.example.com")
+    data = {"email": "x2@example.com", "role": "auditor"}
+    assert client.post("/users", data={**data, "csrf": one}, follow_redirects=False).status_code == 403
+    assert client.post("/users", data={**data, "csrf": csrf(client, "/users")}, follow_redirects=False).status_code == 303
+
 def test_dev_mode_blocked_in_production(monkeypatch):
     monkeypatch.setenv("GRCPAL_AUTH_MODE", "dev")
     monkeypatch.setenv("GRCPAL_ENV", "dev")
@@ -347,6 +365,9 @@ def test_dev_login_first_user_becomes_admin(tmp_path, monkeypatch):
     assert r.status_code == 303 and r.headers["location"] == "/users"
     assert portal.user_row("me@example.com")["role"] == "admin"
     assert client.get("/users").status_code == 200
+    # signing in rotated the form token (B5): the old one is refused, a fresh one works
+    assert client.post("/dev/login", data={"csrf": token, "email": "nobody@example.com"}, follow_redirects=False).status_code == 403
+    token = re.search(r'name="csrf" value="([^"]+)"', client.get("/dev/login").text).group(1)
     r = client.post("/dev/login", data={"csrf": token, "email": "nobody@example.com"}, follow_redirects=False)
     assert "err=" in r.headers["location"]
 

@@ -66,6 +66,56 @@ def csrf_valid(user_email: str, token: str | None, now: float | None = None) -> 
     return hmac.compare_digest(expected, mac)
 
 
+def is_production() -> bool:
+    return os.getenv("GRCPAL_ENV", "").lower() == "production"
+
+
+# Cookies. In production every GRC-pal cookie is Secure and carries the __Host- prefix: browsers then accept it
+# only over HTTPS, for this exact host and path "/", so a sibling subdomain (another app on
+# *.azurecontainerapps.io, say) cannot plant or overwrite it. Cookies set before this change used the bare
+# name; they are read once and replaced (see legacy_cookies and the middleware in app.py).
+HOST_PREFIX = "__Host-"
+
+
+def cookie_name(base: str) -> str:
+    return HOST_PREFIX + base if is_production() else base
+
+
+def read_cookie(cookies, base: str) -> str:
+    """The cookie's value under its current name, or under its old bare name (accepted until reissued)."""
+    return cookies.get(cookie_name(base)) or cookies.get(base) or ""
+
+
+def cookie_secure(scheme: str) -> bool:
+    return is_production() or scheme == "https"
+
+
+def set_cookie(response, scheme: str, base: str, value: str, max_age: int | None = None) -> None:
+    response.set_cookie(cookie_name(base), value, max_age=max_age, path="/", httponly=True, samesite="lax",
+                        secure=cookie_secure(scheme))
+
+
+def clear_cookie(response, scheme: str, base: str) -> None:
+    """Remove the cookie under both its current and its old name."""
+    names = {cookie_name(base), base}
+    for name in sorted(names):
+        response.delete_cookie(name, path="/", httponly=True, samesite="lax",
+                               secure=name.startswith(HOST_PREFIX) or cookie_secure(scheme))
+
+
+def legacy_cookies(cookies, bases) -> list[str]:
+    """Old bare-name cookies to replace in production (the browser has the old name but not the new one)."""
+    if not is_production():
+        return []
+    return [b for b in bases if cookies.get(b) and not cookies.get(cookie_name(b))]
+
+
+def session_binding(value: str) -> str:
+    """What a form token is tied to besides the person: a hash of their sign-in session cookie (never the
+    cookie itself, so a token on a page reveals nothing about the session)."""
+    return hashlib.sha256(value.encode()).hexdigest()[:32] if value else ""
+
+
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 
 

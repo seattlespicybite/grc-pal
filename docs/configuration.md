@@ -45,7 +45,7 @@ Every Configuration save is in the audit log and is emailed to all admins (the p
 | `GRCPAL_TRUSTED_PROXY_HOPS` | `0` | How many proxies in front of GRC-pal add to `X-Forwarded-For` (Azure Container Apps ingress: `1`, set by the template; VM with Caddy: `1`, set by `install.sh`). Only the address those proxies added is recorded as the caller's in sign-in events, the audit log and request logs; anything the caller sent is ignored. `0` uses the connection's address |
 | `GRCPAL_WEB_BACKUP_DOWNLOAD` | (off) | `on` brings back **Download** for backup files and the recovery kit on the Backups page in production. Each download is audited and emailed to every admin. Leave it off and use `grcpal backup kit` or `deploy.sh --kit-out` |
 | `GRCPAL_TENANT` | `default` | Instance ID. Prefixes every portal record and evidence path. 1-40 lowercase letters, digits, hyphens |
-| `GRCPAL_SECRET` | random per process | Signs form tokens. Required in production (`openssl rand -hex 32`) |
+| `GRCPAL_SECRET` | random per process | Signs form tokens, which are tied to the person and their sign-in session. Required in production (`openssl rand -hex 32`) |
 | `GRCPAL_PUBLIC_URL` | `http://localhost:8000` | Base for links in emails and for the cross-site request check |
 | `GRCPAL_BASE` | (empty) | Folder with `catalog/`, `registers/`, `policies/`. Empty: published bundle, else the starter kit |
 | `GRCPAL_CONFIG` | `blob` | `off` disables loading the published configuration bundle |
@@ -64,6 +64,8 @@ Every Configuration save is in the audit log and is emailed to all admins (the p
 | `GRCPAL_PROXY_EMAIL_HEADER` | `x-forwarded-email` | proxy mode: header carrying the signed-in email |
 | `GRCPAL_PROXY_NAME_HEADER` | `x-forwarded-preferred-username` | proxy mode: display name header |
 | `GRCPAL_LOGOUT_URL` | `/oauth2/sign_out` | proxy mode: sign-out link |
+| `GRCPAL_PROXY_SESSION_COOKIE` | `_oauth2_proxy` | proxy mode: name (or name prefix) of the proxy's session cookie; form tokens are tied to it so they change at every sign-in |
+| `GRCPAL_ADMIN_IDLE_MINUTES` | `30` | local mode: an admin session unused for this many minutes ends. Other roles keep the 8-hour session limit |
 | `GRCPAL_DEV_PRINCIPAL` | (empty) | dev mode: default user as JSON, e.g. `{"email":"me@example.com"}` |
 
 `proxy` mode reads the signed-in email from a header, which anyone who reaches the app directly could also
