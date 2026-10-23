@@ -401,15 +401,16 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     @app.post("/controls/{control_id}/upload")
     async def control_upload(request: Request, control_id: str, file: UploadFile = File(...), comment: str = Form(""),
-                             csrf: str = Form(""), user: User = Depends(current_user)):
+                             approval_note: str = Form(""), csrf: str = Form(""), user: User = Depends(current_user)):
         check_csrf(request, user.email, csrf)
         data = await file.read(MAX_UPLOAD_BYTES + 1)
         try:
-            p().upload(user, file.filename or "upload", data, comment, control_id=control_id)
+            u = p().upload(user, file.filename or "upload", data, comment, control_id=control_id,
+                             approval_note=approval_note)
         except (Invalid, Forbidden) as exc:
             return back(f"/controls/{control_id}#upload", err=str(exc))
         invalidate()
-        return back(f"/controls/{control_id}#submissions", msg="Evidence uploaded and sent for review")
+        return back(f"/controls/{control_id}#submissions", msg=_uploaded_msg(u))
 
     @app.post("/controls/{control_id}/note")
     def control_note_save(request: Request, control_id: str, text: str = Form(""), csrf: str = Form(""),
@@ -573,15 +574,16 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     @app.post("/assignments/{assignment_id}/upload")
     async def upload(request: Request, assignment_id: str, file: UploadFile = File(...), comment: str = Form(""),
-                     csrf: str = Form(""), user: User = Depends(current_user)):
+                     approval_note: str = Form(""), csrf: str = Form(""), user: User = Depends(current_user)):
         check_csrf(request, user.email, csrf)
         data = await file.read(MAX_UPLOAD_BYTES + 1)
         try:
-            p().upload(user, file.filename or "upload", data, comment, assignment_id=assignment_id)
+            u = p().upload(user, file.filename or "upload", data, comment, assignment_id=assignment_id,
+                             approval_note=approval_note)
         except (Invalid, Forbidden) as exc:
             return back(f"/assignments/{assignment_id}", err=str(exc))
         invalidate()
-        return back(f"/assignments/{assignment_id}", msg="Evidence uploaded and sent for review")
+        return back(f"/assignments/{assignment_id}", msg=_uploaded_msg(u))
 
     @app.post("/assignments/{assignment_id}/remind")
     def assignment_remind(request: Request, assignment_id: str, note: str = Form(""), csrf: str = Form(""),
@@ -965,6 +967,10 @@ def _mappings(portal, ctl: dict, view: str = "all") -> list[tuple]:
         if ids:
             out.append((fw, [(r, fw.requirements.get(r, {}).get("title", "")) for r in ids]))
     return out
+
+
+def _uploaded_msg(u: dict) -> str:
+    return "Evidence uploaded and approved" if u.get("approved_on_upload") else "Evidence uploaded and sent for review"
 
 
 def _remind_msg(r: dict) -> str:

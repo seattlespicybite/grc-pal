@@ -69,14 +69,17 @@
 </form>
 {%- endmacro %}
 
-{% macro upload_form(action, csrf, max_mb) -%}
+{% macro upload_form(action, csrf, max_mb, admin=False) -%}
 <form method="post" action="{{ action }}" enctype="multipart/form-data">
 <input type="hidden" name="csrf" value="{{ csrf }}">
 <div class="drop" data-drop><input type="file" name="file" required accept="{{ accept }}" aria-label="Evidence file">
 <div data-file-label>Drop a file here or choose one · up to {{ max_mb }} MB</div>
 <div class="hint">PDF, screenshots (PNG, JPG), Office files, CSV, text, JSON, email. Stored write-once with a checksum.</div></div>
 <label>What does this file show?<textarea name="comment" placeholder="System, date range, how it was produced"></textarea></label>
-<div class="actions"><button class="btn" type="submit">Upload and send for review</button></div></form>
+{% if admin %}<label>Approval note <span class="sub">(required)</span><textarea name="approval_note" required minlength="10" placeholder="Who approved this and when, for example: Approved by the CEO on 2026-09-30, signed copy"></textarea></label>
+<p class="hint">As an admin you upload evidence that is already approved. It is recorded as approved on upload with this note, and shown to the auditor that way.</p>
+<div class="actions"><button class="btn" type="submit">Upload approved evidence</button></div></form>
+{% else %}<div class="actions"><button class="btn" type="submit">Upload and send for review</button></div></form>{% endif %}
 {%- endmacro %}
 
 {% macro uploads_table(uploads, user, csrf, return_to, review=False) -%}
@@ -84,7 +87,13 @@
 {% for u in uploads %}<tr id="u-{{ u.RowKey }}"><td>{{ file_link(u, user) }}<div class="sub mono">sha256 {{ u.sha256[:16] }}…</div></td>
 <td>{{ u.comment }}</td><td>{{ u.uploaded_by }}<div class="sub">{{ when(u.uploaded_at) }}</div></td>
 <td>{{ pill(u.status) }}{% if u.reviewed_by %}<div class="sub">{{ u.reviewed_by }}{% if u.review_note %}: {{ u.review_note }}{% endif %}</div>{% endif %}
-{% if review and user.is_admin and u.status == 'pending' and u.uploaded_by != user.email %}
+{% if u.approved_on_upload %}<div class="sub">Approved on upload by the program owner</div>{% endif %}
+{% if review and user.is_admin and u.status == 'pending' and u.uploaded_by == user.email %}
+<details class="mt-s"><summary>Approve your upload</summary><form method="post" action="/uploads/{{ u.RowKey }}/review" class="mt-s">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="return_to" value="{{ return_to }}">
+<textarea name="note" required minlength="10" aria-label="Approval note" placeholder="Who approved this and when"></textarea>
+<div class="actions"><button class="btn small" name="decision" value="approve" type="submit">Approve with note</button></div></form></details>
+{% elif review and user.is_admin and u.status == 'pending' %}
 <details class="mt-s"><summary>Review</summary><form method="post" action="/uploads/{{ u.RowKey }}/review" class="mt-s">
 <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="return_to" value="{{ return_to }}">
 <textarea name="note" aria-label="Review note" placeholder="Required when returning: what is missing"></textarea>

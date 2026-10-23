@@ -45,6 +45,8 @@ MIN_JUSTIFICATION = 30
 MAX_OVERRIDE_DAYS = 365
 REMINDER_COOLDOWN_HOURS = 12
 OPEN_STATES = ("open", "returned", "submitted")
+APPROVAL_NOTE_ERROR = ("Add an approval note: who approved this evidence and when, for example "
+                       "'Approved by the CEO on 2026-09-30' (at least 10 characters)")
 CLOSED_STATES = ("approved", "cancelled")
 
 
@@ -554,8 +556,14 @@ class Portal(FeaturesMixin, CalendarMixin, AutomationMixin, VendorsMixin, DocLib
 
     # ================================================================ uploads and review
     def upload(self, actor: User, filename: str, data: bytes, note: str, *, assignment_id: str | None = None,
-               control_id: str | None = None) -> dict:
+               control_id: str | None = None, approval_note: str = "") -> dict:
+        """Store evidence write-once. Admins own the program and upload evidence that is already approved, so
+        their upload is approved on upload and must say who approved it and when; uploads from control owners
+        wait for any admin to review them."""
         a = None
+        approval_note = (approval_note or "").strip()
+        if actor.is_admin and len(approval_note) < 10:
+            raise Invalid(APPROVAL_NOTE_ERROR)
         if assignment_id:
             a = self.assignment(assignment_id)
             if not self.can_upload(actor, a):
@@ -587,13 +595,16 @@ class Portal(FeaturesMixin, CalendarMixin, AutomationMixin, VendorsMixin, DocLib
              "controls": controls, "target_id": a["target_id"] if a else control_id, "filename": name,
              "evidence_run": run.prefix, "sha256": manifest["files"][0]["sha256"], "size": len(data),
              "comment": (note or "").strip()[:2000], "uploaded_by": actor.email, "uploaded_at": _now(),
-             "status": "pending", "reviewed_by": "", "reviewed_at": "", "review_note": ""}
+             "status": "pending", "reviewed_by": "", "reviewed_at": "", "review_note": "",
+             "approved_on_upload": False}
         self.store.insert("uploads", u)
         if a:
             self.store.update("assignments", "a", a["RowKey"], {"status": "submitted", "updated_at": _now()})
         self.audit(actor, "evidence.upload", u["RowKey"], {"controls": controls, "assignment": u["assignment"] or None,
                                                            "file": name, "sha256": u["sha256"], "run": run.prefix,
-                                                           "cycle": cycle})
+                                                           "cycle": cycle, "approved_on_upload": actor.is_admin})
+        if actor.is_admin:
+            return self._record_decision(actor, u, "approved", approval_note, on_upload=True)
         people = set(self.active_emails("admin")) | (self.participants(a) if a else set())
         self._notify("uploaded", people, actor, notify.uploaded(self, u, a, actor), controls)
         return u
@@ -620,9 +631,11 @@ class Portal(FeaturesMixin, CalendarMixin, AutomationMixin, VendorsMixin, DocLib
         return sorted(rows, key=lambda u: u["uploaded_at"], reverse=True)
 
     def reviewable(self, user: User) -> list[dict]:
+        """Pending uploads for admins. An admin's own pending upload (made before uploads by admins were approved
+        on upload) is listed too, so it can be approved with an approval note instead of staying stuck."""
         if not user.is_admin:
             return []
-        return [u for u in self.uploads(status="pending", cycle=None) if u["uploaded_by"] != user.email]
+        return self.uploads(status="pending", cycle=None)
 
     def review(self, actor: User, upload_id: str, decision: str, note: str) -> dict:
         u = self.upload_row(upload_id)
@@ -630,13 +643,22 @@ class Portal(FeaturesMixin, CalendarMixin, AutomationMixin, VendorsMixin, DocLib
             raise Invalid("Decision must be approve or return")
         if not actor.is_admin:
             raise Forbidden("Only admins can review evidence")
-        if u["uploaded_by"] == actor.email:
-            raise Forbidden("You cannot review evidence you uploaded (segregation of duties)")
         if u["status"] != "pending":
             raise Invalid(f"This upload was already {u['status']}")
+        own = u["uploaded_by"] == actor.email
+        if own and decision == "return":
+            raise Forbidden("You uploaded this evidence; upload a corrected file instead of returning it")
+        if own and len((note or "").strip()) < 10:
+            raise Invalid(APPROVAL_NOTE_ERROR)
         if decision == "return" and len((note or "").strip()) < 10:
             raise Invalid("Explain what is missing when returning evidence (at least 10 characters)")
         status = "approved" if decision == "approve" else "returned"
+        return self._record_decision(actor, u, status, (note or "").strip(), on_upload=own)
+
+    def _record_decision(self, actor: User, u: dict, status: str, note: str, *, on_upload: bool) -> dict:
+        """Write the review decision as write-once evidence, update the upload and its request, audit and email.
+        on_upload marks an admin attesting to their own evidence (approved on upload) instead of a second review."""
+        upload_id = u["RowKey"]
         now = _now()
         a = self.assignment(u["assignment"]) if u["assignment"] else None
         run = self.evidence.new_run("portal_review", u["controls"], {"reviewer": actor.email, "upload": upload_id,
@@ -644,17 +666,19 @@ class Portal(FeaturesMixin, CalendarMixin, AutomationMixin, VendorsMixin, DocLib
         run.add("decision", {"upload": upload_id, "evidence_run": u["evidence_run"], "sha256": u["sha256"],
                              "decision": status, "note": note, "reviewer": actor.email, "at": now,
                              "uploaded_by": u["uploaded_by"], "assignment": u["assignment"] or None,
-                             "task": (a or {}).get("task") or None, "cycle": u["cycle"]})
+                             "task": (a or {}).get("task") or None, "cycle": u["cycle"],
+                             "approved_on_upload": on_upload})
         run.finish([])
         u = self.store.update("uploads", "u", upload_id, {"status": status, "reviewed_by": actor.email,
-                                                         "reviewed_at": now, "review_note": (note or "")[:2000]})
+                                                         "reviewed_at": now, "review_note": (note or "")[:2000],
+                                                         "approved_on_upload": on_upload})
         if a and a["status"] not in CLOSED_STATES:
             fields = {"status": status, "updated_at": now}
             if status == "approved":
                 fields["approved_at"] = now
             self.store.update("assignments", "a", a["RowKey"], fields)
         self.audit(actor, f"evidence.{status}", upload_id, {"controls": u["controls"], "note": (note or "")[:500],
-                                                           "file": u["filename"]})
+                                                           "file": u["filename"], "approved_on_upload": on_upload})
         people = {u["uploaded_by"]} | (self.participants(a) if a else set())
         self._notify("reviewed", people, actor, notify.reviewed(self, u, actor), u["controls"])
         return u
@@ -1009,7 +1033,9 @@ class Portal(FeaturesMixin, CalendarMixin, AutomationMixin, VendorsMixin, DocLib
         files["README.txt"] = (
             f"GRC-pal export for {self.org}\nCycle: {cycle['name']} ({cycle['start']} to {cycle['end']}, {cycle['status']})\n"
             f"Exported by {actor.email} at {_now()}\n\n"
-            "uploads_and_reviews.csv is the full population of portal evidence for the cycle with reviewer decisions.\n"
+            "uploads_and_reviews.csv is the full population of portal evidence for the cycle with reviewer decisions;\n"
+            "approved_on_upload=True means an admin (program owner) attested to the file on upload, with the approval\n"
+            "note in review_note, instead of a second person reviewing it.\n"
             "Each upload's sha256 matches the file under evidence/ and the write-once evidence store.\n"
             "calendar_occurrences.csv lists every scheduled activity due in the cycle and what an admin recorded for it;\n"
             "calendar_decisions.csv keeps every decision, including ones later corrected.\n"

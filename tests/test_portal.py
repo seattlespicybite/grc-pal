@@ -317,6 +317,25 @@ def test_full_workflow_with_comments_and_notifications(env):
     assert {r["target"] for r in queued} >= {"assigned", "uploaded", "commented", "reviewed"}
 
 
+def test_admin_web_upload_needs_an_approval_note(env):
+    portal, client = env
+    as_(client, ADMIN)
+    token = csrf(client, "/controls/IAM-04")
+    page = client.get("/controls/IAM-04").text
+    assert 'name="approval_note"' in page and "Upload approved evidence" in page
+    files = {"file": ("policy.pdf", PDF, "application/pdf")}
+    r = client.post("/controls/IAM-04/upload", data={"csrf": token, "comment": "Access policy"}, files=files,
+                    follow_redirects=False)
+    assert "err=" in r.headers["location"] and not portal.uploads(control="IAM-04")
+    r = client.post("/controls/IAM-04/upload", data={"csrf": token, "comment": "Access policy",
+                    "approval_note": "Approved by the CEO on 2026-09-30"}, files=files, follow_redirects=False)
+    assert "approved" in r.headers["location"]
+    page = client.get("/controls/IAM-04").text
+    assert "Approved on upload by the program owner" in page
+    as_(client, HR)
+    assert 'name="approval_note"' not in client.get("/controls/HR-02").text   # control owners send for review
+
+
 def test_owner_direct_upload_on_control(env):
     portal, client = env
     as_(client, HR)
@@ -332,13 +351,60 @@ def test_owner_direct_upload_on_control(env):
     assert portal.upload_row(u["RowKey"])["status"] == "returned"
 
 
-def test_segregation_of_duties(env):
+def test_admin_upload_is_approved_on_upload_with_a_note(env):
+    """Admins own the program: their uploads are already approved and carry who approved them and when."""
     portal, _ = env
-    u = portal.upload(ADMIN, "x.pdf", PDF, "", control_id="IAM-04")
+    with pytest.raises(Invalid, match="approval note"):
+        portal.upload(ADMIN, "x.pdf", PDF, "Policy", control_id="IAM-04")
+    assert not portal.uploads(control="IAM-04")   # refused before anything was stored
+    sent = len(portal.mailer.outbox)
+    u = portal.upload(ADMIN, "x.pdf", PDF, "Policy", control_id="IAM-04",
+                      approval_note="Approved by the CEO on 2026-09-30, signed PDF")
+    assert u["status"] == "approved" and u["approved_on_upload"] is True
+    assert u["reviewed_by"] == ADMIN.email and "CEO" in u["review_note"]
+    assert u["RowKey"] not in {x["RowKey"] for x in portal.reviewable(ADMIN2)}   # nothing for other admins to do
+    assert len(portal.mailer.outbox) == sent                                    # no "please review" emails
+    events = {(e["action"], e["target"]): e for e in portal.log.records()}
+    assert events[("evidence.upload", u["RowKey"])]["detail"]["approved_on_upload"] is True
+    assert events[("evidence.approved", u["RowKey"])]["detail"]["approved_on_upload"] is True
+    assert portal.evidence.list_runs("portal_review")   # the approval is write-once evidence too
+
+
+def test_admin_upload_on_a_request_closes_the_request(env):
+    portal, _ = env
+    a = portal.create_assignment(ADMIN, "control", "HR-02", CONTRIB.email, [], "2026-10-30", "LMS export")
+    before = len(outbox(portal, CONTRIB.email))
+    portal.upload(ADMIN, "lms.csv", b"name,done\npat,yes\n", "LMS export", assignment_id=a["RowKey"],
+                  approval_note="Exported and checked by me on 2026-10-12")
+    assert portal.assignment(a["RowKey"])["status"] == "approved"
+    assert len(outbox(portal, CONTRIB.email)) == before + 1   # the assignee hears it is done, once
+
+
+def test_contributor_upload_waits_for_any_admin(env):
+    portal, _ = env
+    a = portal.create_assignment(ADMIN, "control", "HR-02", CONTRIB.email, [], "2026-10-30", "")
+    u = portal.upload(CONTRIB, "x.pdf", PDF, "", assignment_id=a["RowKey"], approval_note="ignored for contributors")
+    assert u["status"] == "pending" and not u.get("approved_on_upload")
+    for admin in (ADMIN, ADMIN2):
+        assert u["RowKey"] in {x["RowKey"] for x in portal.reviewable(admin)}
+    assert not portal.reviewable(CONTRIB)
     with pytest.raises(Forbidden):
-        portal.review(ADMIN, u["RowKey"], "approve", "")
-    assert u["RowKey"] not in {x["RowKey"] for x in portal.reviewable(ADMIN)}
-    portal.review(ADMIN2, u["RowKey"], "approve", "ok")
+        portal.review(CONTRIB, u["RowKey"], "approve", "looks fine to me")
+
+
+def test_admin_can_approve_own_earlier_pending_upload_with_a_note(env):
+    """Uploads made before this change were left pending with nobody able to approve them."""
+    portal, _ = env
+    row =portal.upload(ADMIN, "x.pdf", PDF, "", control_id="IAM-04", approval_note="Approved by the CEO 2026-09-30")
+    portal.store.update("uploads", "u", row["RowKey"], {"status": "pending", "reviewed_by": "", "review_note": "",
+                                                        "approved_on_upload": False})   # simulate an old upload
+    assert row["RowKey"] in {x["RowKey"] for x in portal.reviewable(ADMIN)}
+    with pytest.raises(Invalid, match="approval note"):
+        portal.review(ADMIN, row["RowKey"], "approve", "ok")
+    with pytest.raises(Forbidden):
+        portal.review(ADMIN, row["RowKey"], "return", "I want to return my own upload")
+    done = portal.review(ADMIN, row["RowKey"], "approve", "Approved by the CEO on 2026-09-30")
+    assert done["status"] == "approved" and done["approved_on_upload"] is True
 
 
 def test_assignment_validation(env):
@@ -467,8 +533,12 @@ def test_tenant_isolation_store_and_evidence(tmp_path, monkeypatch):
     acme = make_portal(tmp_path, "acme", shared)
     globex = make_portal(tmp_path, "globex", shared, people=(User("boss@globex.example", "Boss", "admin"),))
     a = assign(acme)
-    acme.upload(CONTRIB, "secret.pdf", PDF, "", assignment_id=a["RowKey"])
+    secret = acme.upload(CONTRIB, "secret.pdf", PDF, "", assignment_id=a["RowKey"])
     assert globex.assignments(cycle=None) == [] and globex.uploads(cycle=None) == []
+    boss = User("boss@globex.example", "Boss", "admin")
+    assert globex.reviewable(boss) == []                      # another client's pending evidence never shows up
+    with pytest.raises(Invalid):
+        globex.review(boss, secret["RowKey"], "approve", "Approved by me on 2026-10-01")
     assert globex.user_row(ADMIN.email) is None and [u["RowKey"] for u in globex.users()] == ["boss@globex.example"]
     assert all(r["actor"] != CONTRIB.email for r in globex.log.records())
     with pytest.raises(Invalid):
