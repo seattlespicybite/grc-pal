@@ -4,6 +4,7 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+feature/access-review-sources
 ### Added
 - **Access reviews read the accounts themselves** (Access reviews > Applications). Admins list each in-scope application
   once and choose its source: Microsoft Entra ID / Microsoft 365 (users, guests, last sign-in, MFA, admin roles, license),
@@ -22,6 +23,17 @@ All notable changes are listed here. The project follows [semantic versioning](h
 - Custom application tokens are encrypted per organization and application, never shown, logged or audited, and only sent
   to that application's host: no redirects, next-page links must stay on the same host, internal and metadata addresses
   are blocked. `Clients.gh_list(..., complete=True)` raises instead of silently returning a partial list.
+=======
+### Changed
+- **Evidence uploaded by an admin is approved on upload.** Admins own the program and upload evidence that
+  is already approved, so a second review made no sense, and with a single admin the upload stayed
+  "pending" forever with nobody able to approve it. Admin uploads now require an approval note (who
+  approved it and when) and are recorded as approved on upload: the decision is write-once evidence, the
+  audit log and the auditor export (`uploads_and_reviews.csv`) carry `approved_on_upload`, and no review
+  emails are sent. Evidence from Control owners still waits for review by any admin. Admin uploads left
+  pending from before can be approved on **Reviews** or the control page with an approval note.
+  No data model change (the new field is read with a default).
+main
 
 ### Fixed
 - **Program repository knowledge articles and frameworks now reach Azure portals.** `grcpal publish-config`
