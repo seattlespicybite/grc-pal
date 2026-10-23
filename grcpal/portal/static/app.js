@@ -70,6 +70,14 @@
     s.addEventListener('change', function () { s.form.submit(); });
   });
 
+  // "Select all" box: <input data-check-all="GROUP"> ticks or clears every <input data-check-group="GROUP">.
+  document.querySelectorAll('[data-check-all]').forEach(function (all) {
+    var group = all.getAttribute('data-check-all');
+    all.addEventListener('change', function () {
+      document.querySelectorAll('[data-check-group="' + group + '"]').forEach(function (box) { box.checked = all.checked; });
+    });
+  });
+
   // Show fields only when another field has a matching value: data-show-when="KEY=a|b".
   document.querySelectorAll('[data-show-when]').forEach(function (el) {
     var rule = el.getAttribute('data-show-when').split('=');

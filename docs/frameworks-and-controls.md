@@ -138,6 +138,52 @@ Comments columns to fill in and Yes/No/N/A lists. Upload the returned file to th
 days before a vendor's review is due (once) and on every run while it is overdue. The security calendar
 shows a row with each month's vendor reviews.
 
+**Importing many vendors (CSV).** **Vendors > Import from CSV** adds vendors from a spreadsheet saved as CSV
+UTF-8 (download the template on that page; only `name` and `tier` are required). Import only ever **adds**:
+GRC-pal compares each row with the register and shows the difference before anything happens:
+
+| Row | Shown as | What happens |
+| --- | --- | --- |
+| Not in the register | New | Added if you tick it ("Select all new vendors" helps with long lists) |
+| Same name (ignoring Inc, LLC, Ltd...) or a shared domain | Already in the register, with the differences | Nothing. Edit the vendor by hand if the file is right |
+| A name close to one in the register ("Githab" and "GitHub") | Similar | Added only if you tick it as a different vendor |
+| No name, no or unknown tier, bad email, listed twice | Problem, with the reason | Skipped; fix the file and upload it again |
+| In the register but not in the file | Listed for information | Nothing. Use offboarding to end a relationship |
+
+Imported vendors are **Active, never reviewed**: they are already in use, so they skip onboarding. Tick
+**Spread their first reviews over the next 12 months** so 80 reviews do not all fall due at once (critical
+vendors come first, the first one 30 days out). The uploaded file is stored write-once as evidence of where
+the population came from, and the import, the rows picked and each vendor added are in the audit log.
+Applying reads the stored file again and checks the register again, so a vendor added by someone else in the
+meantime is never duplicated. A preview can be applied once, within 7 days.
+
+**Small vendors without SOC 2 or ISO 27001.** SOC 2 does not require every vendor to have an audit report; it
+requires that we assess the risk in proportion to it, act on it, and that someone accountable accepts what is
+left. On each onboarding check and annual review of a vendor that is not low tier, record the **assurance
+level**: Independent audit, Evidence reviewed (our questionnaire with proof, and a call), Self-attested, or None.
+
+- **Two questionnaires.** **Vendors > Security questionnaire** now has the full questionnaire and a short
+  **Small vendor essentials** one (18 questions; most ask for proof such as a screenshot of the MFA setting).
+  Both are edited and versioned the same way; each review records which one and which version was sent.
+- **Baseline controls.** A critical or high vendor without an independent audit gets 13 baseline controls to
+  mark Met, Met another way, Not met or Not applicable (a note is required for anything but Met): MFA, own
+  accounts, encrypted devices, our data kept in our systems, least data, no copies on personal devices,
+  backups, breach notice, no unapproved subcontractors, deletion at the end, data location, sanctions
+  screening, and continuity if the vendor stops working. The strongest control for payroll and HR data is
+  having them work inside accounts we own, so our data never sits in their systems.
+- **Risk acceptance.** If such a vendor is self-attested (or None), or a baseline control is Not met, the
+  business owner accepts the remaining risk in writing: upload their email or signed note as "Risk acceptance",
+  then record who accepted, what and why, and until when (at most 12 months).
+- **Review interval.** Critical and high vendors without an independent audit are reviewed every **6 months**
+  instead of 12, and never later than their risk acceptance's end date.
+
+**Offboarding: sign-in removed.** Add the vendor's Entra ID apps and its email domains on the vendor (Edit
+vendor). During offboarding, **Check now** looks in the latest `entra_apps` and `entra_users` collector runs
+for those apps still enabled and for enabled accounts (guests included) from those domains. GRC-pal does not
+call Entra ID for this; it reads the collected evidence, so run the collectors first (runs older than 7 days are
+flagged). If nothing is left, the checklist item "Sign-in removed" is ticked with the runs named as evidence.
+Accounts in systems outside Entra ID are still checked by hand with a note and a screenshot.
+
 ## Security calendar
 
 **Calendar** (admins only) is one page for the year: activities on the left, January to December on the

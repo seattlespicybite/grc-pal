@@ -48,6 +48,9 @@ the person who defines controls from the people who operate them, which auditors
 | Vendors: edit tier, status, contract and report details, CUECs, exceptions; start offboarding | ✓ (reason required) |  |  |
 | Vendors: edit contacts and support notes | ✓ | own vendors, except who the owner and backup are |  |
 | Vendors: upload files, answer review questions, checklist notes, download the questionnaire for a vendor | ✓ | own vendors |  |
+| Vendors: import from CSV (add only) | ✓ |  |  |
+| Vendors: assurance level and baseline controls on a review; Entra ID sign-in check when offboarding | ✓ | own vendors |  |
+| Vendors: record a business owner's risk acceptance | ✓ |  |  |
 | Vendors: sign off a review, approve or reject a new vendor, close offboarding | ✓, never a review they submitted while another admin is active |  |  |
 | Security questionnaire: view and download | ✓ | ✓ | ✓ (every version) |
 | Security questionnaire: edit and save a new version | ✓ |  |  |

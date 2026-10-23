@@ -1,0 +1,120 @@
+# Starter "Small vendor essentials" questionnaire (our own words). For small vendors without a SOC 2 report
+# or ISO 27001 certificate. Fewer questions than the full questionnaire; most ask for proof, because answers
+# alone from a small company are self-attestation. Copied into the portal the first time it is opened, then
+# edited on Vendors > Security questionnaire. Same format as vendor_questionnaire.yaml.
+title: Security essentials for small vendors
+intro: >
+  Thank you for completing this short questionnaire. We ask every vendor that will handle our data or our
+  clients' data, including payroll and HR information, to show a few essential protections. Where a question
+  asks for proof, attach a screenshot or document when you return this file (remove anything confidential
+  that is not needed). We may also ask for a short video call to see the settings on screen.
+sections:
+  - id: S-01
+    title: About your company
+    questions:
+      - id: Q-001
+        text: Your company's legal name, country of registration, and the names of its owners and directors.
+        type: text
+        guidance: We use this for standard sanctions screening.
+        criteria: [CC9.2]
+      - id: Q-002
+        text: How many people, including contractors and freelancers, will work on our account or see our data? Give their names and roles.
+        type: text
+        guidance: Tell us before anyone else is added.
+        criteria: [CC9.2, CC6.2]
+      - id: Q-003
+        text: In which countries will our data be stored, and from which countries will people access it?
+        type: text
+        guidance: Include backups and the countries your team works from.
+        criteria: [CC9.2, C1.1]
+      - id: Q-004
+        text: Who is our security contact at your company, and how do we reach them urgently?
+        type: text
+        guidance: Name, email and phone.
+        criteria: [CC2.3, CC9.2]
+
+  - id: S-02
+    title: Accounts and devices
+    questions:
+      - id: Q-005
+        text: Is multi-factor sign-in (a code or app prompt in addition to the password) turned on for your email and for every system that will hold our data?
+        type: yesno
+        guidance: "Proof: a screenshot of the multi-factor setting in your Google Workspace or Microsoft 365 admin, or of each system's security settings."
+        criteria: [CC6.1]
+      - id: Q-006
+        text: Does each person have their own account, with no shared logins?
+        type: yesno
+        guidance: ""
+        criteria: [CC6.1, CC6.2]
+      - id: Q-007
+        text: Are the laptops and phones used for our work encrypted, protected by a screen lock, and set to install updates automatically?
+        type: yesno
+        guidance: "Proof: a screenshot of BitLocker (Windows) or FileVault (Mac) turned on, and of the update settings."
+        criteria: [CC6.8, CC6.1]
+      - id: Q-008
+        text: Do those devices have antivirus or endpoint protection running?
+        type: yesno
+        guidance: "Proof: a screenshot showing it is on and up to date."
+        criteria: [CC6.8]
+
+  - id: S-03
+    title: Where our data lives
+    questions:
+      - id: Q-009
+        text: List the tools and services where our data will be stored or processed (for example Google Workspace, Microsoft 365, Dropbox, a payroll system).
+        type: text
+        guidance: "For each, add a link to its security or trust page. Many of these providers have a SOC 2 report; that helps us."
+        criteria: [CC9.2]
+      - id: Q-010
+        text: Can you work inside our systems, using accounts we create for you, instead of keeping copies of our data in yours?
+        type: yesno
+        guidance: This is our preferred way of working for payroll and HR data.
+        criteria: [CC6.1, CC9.2]
+      - id: Q-011
+        text: Will you keep our data off personal devices, USB drives and personal email accounts?
+        type: yesno
+        guidance: ""
+        criteria: [CC6.7, C1.1]
+      - id: Q-012
+        text: Will you only use subcontractors or freelancers on our data after we approve them in writing?
+        type: yesno
+        guidance: ""
+        criteria: [CC9.2]
+
+  - id: S-04
+    title: Backups and continuity
+    questions:
+      - id: Q-013
+        text: Are the systems that hold our data backed up, and when did you last restore something from a backup successfully?
+        type: text
+        guidance: Give the date.
+        criteria: [A1.2]
+      - id: Q-014
+        text: If you were suddenly unable to work (illness, closure), how would we get our data back and who could continue the service?
+        type: text
+        guidance: ""
+        criteria: [CC9.1, A1.2]
+
+  - id: S-05
+    title: Incidents and the end of the contract
+    questions:
+      - id: Q-015
+        text: Will you tell us within 72 hours if our data may have been lost, stolen or seen by someone who should not see it?
+        type: yesno
+        guidance: Tell us who will contact us and how.
+        criteria: [CC2.3, CC7.4, CC9.2]
+      - id: Q-016
+        text: Have you had a security incident, account takeover or data loss in the last 3 years?
+        type: yesno
+        guidance: If yes, what happened and what did you change afterwards?
+        criteria: [CC7.4]
+      - id: Q-017
+        text: When the contract ends, will you return or delete all our data, including backups, and confirm it in writing within 30 days?
+        type: yesno
+        guidance: ""
+        criteria: [C1.2, CC9.2]
+      - id: Q-018
+        text: Will you sign our data processing agreement or confidentiality agreement?
+        type: yesno
+        guidance: Do you have cyber insurance? If yes, give the coverage amount.
+        criteria: [CC9.2, C1.1]

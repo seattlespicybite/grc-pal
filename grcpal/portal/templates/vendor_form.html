@@ -18,6 +18,12 @@
 <fieldset class="v-fieldset"><legend>What data or systems can they reach?</legend><div class="v-checks">
 {% for d in data_access %}<label class="inline-check"><input type="checkbox" name="data_access" value="{{ d }}"{% if d in (v.data_access or []) %} checked{% endif %}> {{ d }}</label>{% endfor %}</div></fieldset>
 {% if user.is_admin %}
+<div class="form-row">
+<div><label for="domains">Website or email domains</label><input id="domains" name="domains" maxlength="400" value="{{ v.domains if v.domains is string else (v.domains or [])|join('; ') }}" placeholder="contoso.com; contoso-mail.com">
+<div class="hint">Used to spot duplicates on import and to find this vendor's accounts in Entra ID when offboarding.</div></div>
+<div><label for="entra_apps">Entra ID apps used for this vendor</label><input id="entra_apps" name="entra_apps" maxlength="1300" value="{{ v.entra_apps if v.entra_apps is string else (v.entra_apps or [])|join('; ') }}" placeholder="App name or application ID; separate with ;">
+<div class="hint">The offboarding check confirms these are removed or disabled.</div></div>
+</div>
 <h2 class="mt-l">Contract and assurance</h2>
 <div class="form-row">
 <div><label for="subservice">Subservice organization for our SOC 2?</label><select id="subservice" name="subservice">{% for k, label in subservice.items() %}<option value="{{ k }}"{% if v.subservice == k %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
@@ -32,7 +38,7 @@
 <div><label for="opinion">Report result</label><select id="opinion" name="opinion">{% for k, label in opinions.items() %}<option value="{{ k }}"{% if (v.opinion or '') == k %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
 </div>
 {% if not new %}<div class="form-row">
-<div><label for="next_review_override">Move the next review to</label><input id="next_review_override" name="next_review_override" type="date" value="{{ v.next_review_override or '' }}"><div class="hint">Leave empty to use 12 months after the last review.</div></div>
+<div><label for="next_review_override">Move the next review to</label><input id="next_review_override" name="next_review_override" type="date" value="{{ v.next_review_override or '' }}"><div class="hint">Leave empty to use the review interval (12 months, or 6 for a critical or high vendor without an independent audit).</div></div>
 </div>{% endif %}
 {% endif %}
 <label for="notes">{{ 'Notes' if user.is_admin else 'Why do we need this vendor, and what will we share?' }}</label>
