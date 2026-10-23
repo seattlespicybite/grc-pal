@@ -4,6 +4,16 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Changed
+- **Evidence uploaded by an admin is approved on upload.** Admins own the program and upload evidence that
+  is already approved, so a second review made no sense, and with a single admin the upload stayed
+  "pending" forever with nobody able to approve it. Admin uploads now require an approval note (who
+  approved it and when) and are recorded as approved on upload: the decision is write-once evidence, the
+  audit log and the auditor export (`uploads_and_reviews.csv`) carry `approved_on_upload`, and no review
+  emails are sent. Evidence from Control owners still waits for review by any admin. Admin uploads left
+  pending from before can be approved on **Reviews** or the control page with an approval note.
+  No data model change (the new field is read with a default).
+
 ### Fixed
 - **Program repository knowledge articles and frameworks now reach Azure portals.** `grcpal publish-config`
   sent only `catalog/`, `registers/` and `policies/`, so your own `kb/` articles and `frameworks/` files worked

@@ -41,7 +41,7 @@
 {% for h in note_history %}<div class="mt-s"><div class="sub">Version {{ h.version }} · {{ h.by }} · {{ h.at[:16]|replace('T', ' ') }}</div><div class="note">{{ h.text or '(cleared)' }}</div></div>{% endfor %}</details>{% endif %}</section>
 
 <section class="card" id="upload"><h2>Upload evidence</h2>
-{% if can_upload %}{{ upload_form('/controls/' ~ ctl.id ~ '/upload', csrf, max_mb) }}
+{% if can_upload %}{{ upload_form('/controls/' ~ ctl.id ~ '/upload', csrf, max_mb, admin=user.is_admin) }}
 {% else %}<div class="empty">{% if user.is_auditor %}Auditors have read-only access.{% else %}You are not assigned to this control.{% endif %}</div>{% endif %}
 </section>
 </div>

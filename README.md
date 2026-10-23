@@ -33,8 +33,8 @@ License: [AGPL-3.0-or-later](LICENSE).
   leavers export.
 - **Evidence an auditor trusts:** write-once storage with SHA-256 manifests, full populations as
   CSV, a hash-chained audit log you can verify, and a one-click export per audit cycle.
-- **Work for people without GitHub:** evidence requests with due dates, uploads, review with
-  segregation of duties (nobody approves their own upload), comments, email reminders, policy
+- **Work for people without GitHub:** evidence requests with due dates, uploads, review by an admin
+  (admins' own uploads are approved on upload with an approval note), comments, email reminders, policy
   acknowledgments and audit cycles that carry work into year two.
 - **Control library owner:** one admin alone can change what a control is (owners, wording,
   evidence wanted, mappings). Every change needs a reason and is kept as a version for auditors.
@@ -106,7 +106,7 @@ flowchart LR
 
 | Role | Can do |
 | --- | --- |
-| **Admin** | Runs the program: assign and change requests, review evidence (never their own upload), override a control with justification and expiry, send reminders, manage users, cycles, frameworks in use and connections |
+| **Admin** | Runs the program: assign and change requests, review evidence from Control owners, upload already-approved evidence with an approval note, override a control with justification and expiry, send reminders, manage users, cycles, frameworks in use and connections |
 | **Control library owner** | One admin (can be the same person) who alone changes control definitions: owners, title, description, evidence wanted, framework mappings, custom controls and custom frameworks |
 | **Control owner** | Sees only the controls assigned to them or owned by them; uploads evidence, comments, acknowledges policies |
 | **Auditor** | Read-only: controls, evidence, comments, overrides, control history, audit log, exports; access ends on a set date |
