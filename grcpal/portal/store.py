@@ -26,7 +26,8 @@ TABLES = ("users", "cycles", "assignments", "uploads", "comments", "overrides", 
           "reminders", "acks", "config", "events", "jobs", "customcontrols", "checks", "frameworks",
           "aireviews", "aiaudits", "controledits", "controlhistory", "controlnotes", "calendardecisions",
           "calendaractivities", "calendarversions", "vendors", "vendorversions", "vendorreviews", "vendorfiles",
-          "questionnaires", "docs", "docversions", "arcampaigns", "arentries", "arapps", "sessions", "account_links", "meta")
+          "questionnaires", "docs", "docversions", "arcampaigns", "arentries", "arapps", "matriximports", "sessions",
+          "account_links", "meta")
 # Sign-in sessions and one-time setup/reset links are never backed up: restoring them would revive old
 # sign-ins and used or expired links. After a restore everyone signs in again. "meta" (instance-wide data
 # model version, see grcpal/migrations.py) is recorded in the backup manifest and set again by restore.

@@ -18,6 +18,11 @@
     });
   });
 
+  // Control matrix report: print button (the browser's Print dialog also saves as PDF).
+  document.querySelectorAll('[data-print]').forEach(function (b) {
+    b.addEventListener('click', function () { window.print(); });
+  });
+
   // Back button: same as the browser's Back, so the previous page opens where you left it (the browser
   // restores the scroll position). Shown only when the previous page was a page of this portal.
   var back = document.querySelector('[data-back]');

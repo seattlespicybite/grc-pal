@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% block title %}Control matrix report{% endblock %}
+{% block content %}
+<div class="report-doc">
+<div class="page-head no-print"><div><h1>Control matrix report</h1><div class="sub">Use your browser's Print and choose Save as PDF. Menus and buttons are left out of the printout.</div></div>
+<div class="actions"><button type="button" class="btn small" data-print>Print or save as PDF</button> <a class="btn ghost small" href="/matrix/report.docx">Download Word</a> <a class="btn ghost small" href="/matrix">Back</a></div></div>
+
+<section class="report-cover">
+<h1>Control matrix</h1>
+<p class="report-org">{{ r.org }}</p>
+<p class="sub">Generated {{ r.generated[:16]|replace('T', ' ') }} UTC by {{ r.generated_by }} · {{ r.controls|length }} controls · {{ r.frameworks.values()|map(attribute='name')|join(', ') }}</p>
+<table class="report-table"><thead><tr><th>Framework</th><th>Requirements in scope</th><th>With no control</th></tr></thead>
+<tbody>{% for x in r.xref %}<tr><td>{{ x.name }}</td><td>{{ x.requirements|length }}</td><td>{{ x.uncovered }}</td></tr>{% endfor %}</tbody></table>
+<h2>Contents</h2>
+<ol class="report-toc"><li><a href="#controls">Controls</a></li>{% for x in r.xref %}<li><a href="#xref-{{ x.id }}">Cross-reference: {{ x.name }}</a></li>{% endfor %}</ol>
+</section>
+
+<section id="controls" class="report-section page-break"><h2>Controls</h2>
+{% for c in r.controls %}<article class="report-control" id="c-{{ c.id }}">
+<h3>{{ c.id }} · {{ c.title }}</h3>
+<p>{{ c.description or 'No description.' }}</p>
+<table class="report-table kv"><tbody>
+<tr><th>Owner</th><td>{{ r.role_names.get(c.owner, c.owner) }}{% if c.owner_emails %}{{ ', ' if c.owner }}{{ c.owner_emails|join(', ') }}{% endif %}</td></tr>
+<tr><th>Frequency · type</th><td>{{ c.frequency }} · {{ c.type }} · {{ 'Custom' if c.custom else 'Built-in' }}</td></tr>
+{% for fid, fw in r.frameworks.items() %}<tr><th>{{ fw.name.split(' (')[0] }}</th><td>{{ c.mappings.get(fid, [])|join(', ') or '—' }}</td></tr>{% endfor %}
+{% if c.pof %}<tr><th>Points of focus</th><td>{% for i, t in c.pof %}<div><span class="mono">{{ i }}</span> {{ t }}</div>{% endfor %}</td></tr>{% endif %}
+{% if c.evidence %}<tr><th>Evidence</th><td>{% for e in c.evidence %}<div>{{ e }}</div>{% endfor %}</td></tr>{% endif %}
+</tbody></table></article>{% endfor %}
+</section>
+
+{% for x in r.xref %}<section id="xref-{{ x.id }}" class="report-section page-break"><h2>Cross-reference: {{ x.name }}</h2>
+<table class="report-table"><thead><tr><th class="w-id">Requirement</th><th>Title</th><th class="w-ctl">Controls</th></tr></thead>
+<tbody>{% for q in x.requirements %}<tr><td class="nowrap mono">{{ q.id }}</td><td>{{ q.title }}</td><td>{% if q.controls %}{{ q.controls|join(', ') }}{% else %}<span class="pill gap">No control</span>{% endif %}</td></tr>{% endfor %}</tbody></table>
+</section>{% endfor %}
+</div>
+{% endblock %}

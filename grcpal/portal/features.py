@@ -125,9 +125,10 @@ class FeaturesMixin:
                 out.append(crit)
         return out
 
-    def save_control_definition(self, actor, control_id: str, form: dict) -> dict:
+    def save_control_definition(self, actor, control_id: str, form: dict, dry_run: bool = False) -> dict:
         """Change a built-in control's owners, wording, evidence wanted and framework mappings.
-        Library owner only; a reason is required; every version is kept for auditors."""
+        Library owner only; a reason is required; every version is kept for auditors.
+        dry_run=True runs every check and returns the new definition without saving (matrix import preview)."""
         self._library(actor)
         before = self.control_definition(control_id)
         reason = (form.get("reason") or "").strip()
@@ -161,8 +162,8 @@ class FeaturesMixin:
         after = {"title": title[:200], "description": (form.get("description") or "").strip()[:4000], "owner": owner,
                  "owner_emails": emails, "mappings": maps,
                  "extra_evidence": [x.strip()[:300] for x in (form.get("extra_evidence") or "").splitlines() if x.strip()][:30]}
-        if after == before:
-            return before
+        if after == before or dry_run:
+            return after
         for x in emails:
             self._ensure_contributor(actor, x)
         current = self.store.get("controledits", "c", control_id) or {}
@@ -420,7 +421,8 @@ class FeaturesMixin:
                 "frequency": r.get("frequency", "annual"), "type": r.get("type", "manual"), "evidence": evidence,
                 "links": r.get("links") or [], "custom": True}
 
-    def save_custom_control(self, actor, form: dict, existing_id: str | None = None) -> dict:
+    def save_custom_control(self, actor, form: dict, existing_id: str | None = None, dry_run: bool = False) -> dict:
+        """Create or change a custom control. dry_run=True runs every check and returns the row without saving."""
         self._library(actor)
         cid = (existing_id or form.get("id") or "").strip().upper()
         if not CONTROL_ID.match(cid):
@@ -471,6 +473,8 @@ class FeaturesMixin:
                "evidence": evidence, "links": links, "status": "active",
                "created_by": (current or {}).get("created_by", actor.email),
                "created_at": (current or {}).get("created_at", _now()), "updated_by": actor.email, "updated_at": _now()}
+        if dry_run:
+            return row
         self.store.upsert("customcontrols", row)
         for e in owner_emails:
             self._ensure_contributor(actor, e)

@@ -93,6 +93,7 @@ flowchart LR
 | You need | GRC-pal gives you |
 | --- | --- |
 | A control library mapped to SOC 2 | 77 controls with coverage by criterion and point of focus, editable in the portal by the control library owner |
+| Bulk edits and a readable matrix | Control matrix: export to Excel, edit many controls, import back with a preview of every change; a report for leadership and auditors as PDF or Word |
 | Continuous monitoring | Daily collectors and a control health dashboard (operating, findings, needs attention, not started) |
 | Evidence an auditor trusts | Write-once storage, SHA-256 manifests, full populations, code version per run |
 | Work for people without GitHub | Requests with due dates, uploads (screenshots, PDFs, exports), review and comments; admins can change people and due dates at any time |
