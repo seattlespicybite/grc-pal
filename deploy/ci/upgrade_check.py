@@ -98,6 +98,7 @@ def check(folder: Path) -> int:
                         f"(before {before['audit']['records']}): {chain['problems'][:3]}")
 
     os.environ.setdefault("GRCPAL_AUTH_MODE", "dev")
+    os.environ.setdefault("GRCPAL_ENV", "dev")      # dev sign-in fails closed without it (this script is CI only)
     from fastapi.testclient import TestClient
 
     from grcpal.portal.app import create_app
