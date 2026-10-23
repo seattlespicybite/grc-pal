@@ -5,6 +5,12 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Added
+- **Security scanning in CI** (`.github/workflows/security-scan.yml`, on every pull request, nightly and on demand):
+  bandit (medium and high, with a reviewed baseline of false positives), pip-audit on everything the image ships,
+  a Trivy scan of the built image that fails on high or critical vulnerabilities with a fix, a CycloneDX SBOM kept
+  as a build artifact, and nightly a ZAP baseline scan of a demo container signed in as the demo admin (fails on
+  any High alert). Scanners are pinned by version and SHA-256 and run with read-only permissions. See
+  [docs/security.md](docs/security.md#security-scanning-in-ci).
 - **Vendors: import from CSV, add only.** Upload a CSV (template on the page); GRC-pal shows every row compared
   with the register (new, already there with the differences, similar name, problem) and adds only the rows
   you tick. Nothing in the register is changed or deleted. Imported vendors are Active and never reviewed;

@@ -1,0 +1,66 @@
+{
+  "errors": [],
+  "generated_at": "2026-10-23T00:00:00Z",
+  "results": [
+    {
+      "code": "20     \"\"\"Parse YAML with a safe loader (str or open file). Empty documents return {}.\"\"\"\n21     return yaml.load(text, Loader=_SAFE_LOADER) or {}  # noqa: S506 - safe loader only\n22 \n",
+      "col_offset": 11,
+      "end_col_offset": 47,
+      "filename": "grcpal/catalog.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 20,
+        "link": "https://cwe.mitre.org/data/definitions/20.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Use of unsafe yaml load. Allows instantiation of arbitrary objects. Consider yaml.safe_load().",
+      "line_number": 21,
+      "line_range": [
+        21
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b506_yaml_load.html",
+      "test_id": "B506",
+      "test_name": "yaml_load"
+    },
+    {
+      "code": "83         return None\n84     return extract(data, dest or Path(os.getenv(\"GRCPAL_CONFIG_DIR\", \"/tmp/grcpal-config\")))\n",
+      "col_offset": 69,
+      "end_col_offset": 89,
+      "filename": "grcpal/configbundle.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 84,
+      "line_range": [
+        84
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "191     try:\n192         return ET.fromstring(raw)\n193     except ET.ParseError as exc:\n",
+      "col_offset": 15,
+      "end_col_offset": 33,
+      "filename": "grcpal/xlsx.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 20,
+        "link": "https://cwe.mitre.org/data/definitions/20.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Using xml.etree.ElementTree.fromstring to parse untrusted XML data is known to be vulnerable to XML attacks. Replace xml.etree.ElementTree.fromstring with its defusedxml equivalent function or make sure defusedxml.defuse_stdlib() is called",
+      "line_number": 192,
+      "line_range": [
+        192
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_calls.html#b313-b320-xml-bad-elementtree",
+      "test_id": "B314",
+      "test_name": "blacklist"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+# Trivy suppressions for the image scan (.github/workflows/security-scan.yml).
+# Every entry needs a statement (why it does not apply or why it can wait) and expired_at (the review
+# date). After that date Trivy reports the finding again, so a suppression can never be forgotten.
+#   vulnerabilities:
+#     - id: CVE-2026-00000
+#       paths: ["usr/lib/x86_64-linux-gnu/libexample.so.1"]   # optional: limit to one package path
+#       statement: "Only reachable through X, which GRC-pal never calls. Owner: <name>."
+#       expired_at: 2027-01-31
+vulnerabilities: []
