@@ -68,13 +68,8 @@ def _rk() -> str:
     return f"{utcnow():%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:10]}"
 
 
- feature/control-matrix-import-export
-class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, VendorsMixin, DocLibMixin, AccessReviewMixin, AccountsMixin,
-             BackupsMixin, UpdatesMixin):
-=======
-class Portal(FeaturesMixin, CalendarMixin, AutomationMixin, VendorsMixin, DocLibMixin, AccessReviewMixin, AccessAppsMixin,
-             AccountsMixin, BackupsMixin, UpdatesMixin):
- main
+class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, VendorsMixin, DocLibMixin, AccessReviewMixin,
+             AccessAppsMixin, AccountsMixin, BackupsMixin, UpdatesMixin):
     def __init__(self, catalog, store, evidence: EvidenceStore, mailer: Mailer | None = None,
                  today: dt.date | None = None, public_url: str | None = None, jobs_sync: bool | None = None) -> None:
         self.base_catalog, self.store, self.evidence = catalog, store, evidence
