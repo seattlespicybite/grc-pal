@@ -1,0 +1,79 @@
+{% extends "base.html" %}{% from "_macros.html" import when %}{% block title %}Import vendors{% endblock %}
+{% block content %}
+<div class="mb"><a href="/vendors">‹ Vendors</a></div>
+<div class="page-head"><div><h1>Import vendors from a CSV file</h1>
+<div class="sub">Adds new vendors only. Nothing already in the register is changed or deleted: you see the differences and pick the rows to add.</div></div>
+<div class="head-actions"><a class="btn ghost" href="/vendors/import/template.csv">Download the template (.csv)</a></div></div>
+
+{% if not rec %}
+<section class="card"><h2>1. Upload the file</h2>
+<form method="post" action="/vendors/import/upload" enctype="multipart/form-data"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="drop" data-drop><input type="file" name="file" required accept=".csv,text/csv" aria-label="Vendor CSV file"><div data-file-label>Drop the CSV here or choose it · up to {{ max_rows }} vendors, 1 MB</div>
+<div class="hint">In Excel: File &gt; Save As &gt; “CSV UTF-8 (Comma delimited)”. The file is kept write-once as evidence of where the vendor list came from.</div></div>
+<div class="actions"><button class="btn" type="submit">Upload and compare</button></div></form>
+<p class="hint mt">Nothing is added at this step. The next page shows every row compared with the register.</p></section>
+
+<section class="card"><h2>Columns</h2><p class="sub">Only <b>name</b> and <b>tier</b> are required. Column names are not case-sensitive; unknown columns are ignored.</p>
+<div class="table-wrap"><table><thead><tr><th>Column</th><th>What to put in it</th></tr></thead><tbody>
+{% for col, help in columns %}<tr><td class="mono">{{ col }}</td><td>{{ help }}</td></tr>{% endfor %}</tbody></table></div></section>
+
+{% if imports %}<section class="card"><h2>Recent imports</h2><div class="table-wrap"><table><thead><tr><th>File</th><th>By</th><th>Result</th></tr></thead><tbody>
+{% for i in imports %}<tr><td>{% if i.status == 'preview' %}<a href="/vendors/import/{{ i.RowKey }}">{{ i.filename }}</a>{% else %}{{ i.filename }}{% endif %}<div class="sub mono">sha256 {{ i.sha256[:16] }}…</div></td>
+<td>{{ i.by }}<div class="sub">{{ when(i.at) }}</div></td>
+<td>{{ {'preview': 'Waiting for your choice', 'applied': 'Added ' ~ (i.added_ids or [])|length, 'discarded': 'Discarded'}.get(i.status, i.status) }}</td></tr>{% endfor %}
+</tbody></table></div></section>{% endif %}
+
+{% elif delta is none %}
+<section class="card"><p>This import was {{ rec.status }}{% if rec.status == 'applied' %}: {{ (rec.added_ids or [])|length }} vendors added{% endif %}. <a href="/vendors/import">Start a new import</a>.</p></section>
+
+{% else %}
+{% set c = delta.counts %}
+<div class="grid v-stats mb">
+<div class="stat"><div class="n">{{ c.new }}</div><div class="l">New vendors</div></div>
+<div class="stat"><div class="n">{{ c.similar }}</div><div class="l">Similar to one in the register</div></div>
+<div class="stat"><div class="n">{{ c.existing }}</div><div class="l">Already in the register (not changed)</div></div>
+<div class="stat"><div class="n{{ ' bad-text' if c.problem }}">{{ c.problem }}</div><div class="l">Rows with a problem (skipped)</div></div>
+</div>
+<p class="sub">File <b>{{ rec.filename }}</b>, uploaded by {{ rec.by }} {{ when(rec.at) }} · <span class="mono">sha256 {{ rec.sha256[:16] }}…</span>{% if delta.ignored %} · ignored columns: {{ delta.ignored|join(', ') }}{% endif %}</p>
+
+<form method="post" action="/vendors/import/{{ rec.RowKey }}/apply"><input type="hidden" name="csrf" value="{{ csrf }}">
+<section class="card"><div class="row-between"><h2>2. Pick the vendors to add</h2>
+{% if c.new %}<label class="inline-check"><input type="checkbox" data-check-all="pick-new"> Select all new vendors</label>{% endif %}</div>
+<div class="table-wrap"><table><thead><tr><th>Add</th><th>Row</th><th>Vendor</th><th>Tier</th><th>Internal owner</th><th>Notes</th></tr></thead><tbody>
+{% for i in delta.rows if i.status in ('new', 'similar') %}<tr>
+<td><input type="checkbox" name="row" value="{{ i.row }}" aria-label="Add {{ i.name }}"{% if i.status == 'new' %} data-check-group="pick-new"{% endif %}></td>
+<td class="mono">{{ i.row }}</td><td><b>{{ i.vendor.name }}</b><div class="sub">{{ i.vendor.service }}</div>
+<div class="tags">{% for d in i.vendor.data_access %}<span>{{ d }}</span>{% endfor %}</div></td>
+<td><span class="v-tier v-{{ i.vendor.tier }}">{{ tiers[i.vendor.tier] }}</span></td>
+<td>{{ i.vendor.owner_name or i.vendor.owner_email or '—' }}<div class="sub">{{ i.vendor.owner_title }}</div></td>
+<td>{% if i.status == 'similar' %}<div class="hint-box">Looks like <a href="/vendors/{{ i.match }}">{{ i.match_name }}</a>, already in the register. Tick only if it is a different vendor.</div>{% endif %}
+{% for w in i.warnings %}<div class="sub">{{ w }}</div>{% endfor %}</td></tr>
+{% else %}<tr><td colspan="6"><div class="empty">No new vendors in this file.</div></td></tr>{% endfor %}
+</tbody></table></div>
+<fieldset class="v-fieldset"><legend>Status and first reviews</legend>
+<p class="sub m0">Added vendors are <b>Active, never reviewed</b>: they are already in use, so they skip onboarding.</p>
+<label class="check mt"><input type="checkbox" name="spread" value="1" checked> Spread their first reviews over the next 12 months, critical vendors first (otherwise every review is due today)</label></fieldset>
+<div class="actions mt"><button class="btn" type="submit">Add the ticked vendors</button></div>
+</section></form>
+
+{% set existing = delta.rows|selectattr('status', 'equalto', 'existing')|list %}
+{% if existing %}<section class="card"><h2>Already in the register: not changed</h2>
+<p class="sub">These rows match a vendor by name or domain. The import never overwrites them. If the file is right, edit the vendor by hand.</p>
+<div class="table-wrap"><table><thead><tr><th>Row</th><th>In the file</th><th>In the register</th><th>Differences (file → register)</th></tr></thead><tbody>
+{% for i in existing %}<tr><td class="mono">{{ i.row }}</td><td>{{ i.name }}</td><td><a href="/vendors/{{ i.match }}">{{ i.match_name }}</a></td>
+<td>{% for d in i.diffs %}<div><span class="mono">{{ d.field }}</span>: {{ d.file|join('; ') if d.file is not string else d.file }} → {{ (d.register|join('; ') if d.register is not string else d.register) or '(empty)' }}</div>{% else %}<span class="sub">Same</span>{% endfor %}</td></tr>{% endfor %}
+</tbody></table></div></section>{% endif %}
+
+{% set problems = delta.rows|selectattr('status', 'equalto', 'problem')|list %}
+{% if problems %}<section class="card"><h2>Rows with a problem: skipped</h2><p class="sub">Fix these in the file and upload it again to add them.</p>
+<div class="table-wrap"><table><thead><tr><th>Row</th><th>Vendor</th><th>Problem</th></tr></thead><tbody>
+{% for i in problems %}<tr><td class="mono">{{ i.row }}</td><td>{{ i.name or '—' }}</td><td class="bad-text">{{ i.reason }}</td></tr>{% endfor %}
+</tbody></table></div></section>{% endif %}
+
+{% if delta.missing %}<section class="card"><h2>In the register but not in this file</h2>
+<p class="sub">For information only. These vendors are kept; to end a relationship, use offboarding on the vendor's page.</p>
+<div class="tags">{% for m in delta.missing %}<span><a href="/vendors/{{ m.RowKey }}">{{ m.name }}</a></span>{% endfor %}</div></section>{% endif %}
+
+<form method="post" action="/vendors/import/{{ rec.RowKey }}/discard"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ghost" type="submit">Discard this import</button></form>
+{% endif %}
+{% endblock %}

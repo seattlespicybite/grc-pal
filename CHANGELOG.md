@@ -5,6 +5,21 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Added
+- **Vendors: import from CSV, add only.** Upload a CSV (template on the page); GRC-pal shows every row compared
+  with the register (new, already there with the differences, similar name, problem) and adds only the rows
+  you tick. Nothing in the register is changed or deleted. Imported vendors are Active and never reviewed;
+  their first reviews can be spread over 12 months, critical first. The file is kept write-once as evidence;
+  the import, the rows picked and every vendor added are audited.
+- **Vendors without SOC 2 or ISO 27001.** Each onboarding check and annual review records an assurance level
+  (independent audit, evidence reviewed, self-attested, none). Critical and high vendors without an audit get
+  13 baseline controls to assess with proof, a written risk acceptance by the business owner (with an end date,
+  at most 12 months) when self-attested or a control is not met, and a 6-month review interval. A second
+  questionnaire, **Small vendor essentials** (18 questions asking for proof), sits next to the full one.
+- **Offboarding: Entra ID sign-in check.** Vendors can list their Entra ID apps and email domains. During
+  offboarding, **Check now** reads the latest `entra_apps` and `entra_users` runs for apps still enabled and
+  enabled accounts (guests included) from those domains, and ticks "Sign-in removed" when nothing is left.
+- Auditor export: `vendor_baseline.csv`, `vendor_risk_acceptances.csv`, `vendor_imports.csv`, and assurance,
+  questionnaire and sign-in check columns in `vendor_reviews.csv`.
 - **Access reviews read the accounts themselves** (Access reviews > Applications). Admins list each in-scope application
   once and choose its source: Microsoft Entra ID / Microsoft 365 (users, guests, last sign-in, MFA, admin roles, license),
   an Entra enterprise (SSO) application (assigned users, groups expanded; refused when “assignment required” is off), Azure
@@ -52,7 +67,7 @@ All notable changes are listed here. The project follows [semantic versioning](h
   standard library only and refuses large or zip-bomb files, DOCTYPE and entities, formulas and password-protected
   files; it opens only the workbook, shared text and worksheet parts.
 
-New tables `arapps` and `matriximports` (no migration needed). No other data model change.
+New tables `arapps`, `matriximports` and `vendorimports` (no migration needed). No other data model change.
 
 ### Fixed
 - **Program repository knowledge articles and frameworks now reach Azure portals.** `grcpal publish-config`

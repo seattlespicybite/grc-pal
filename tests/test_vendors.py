@@ -2,6 +2,7 @@
 contacts hidden from auditors, onboarding, annual review with segregation of duties, CUECs, offboarding,
 the security questionnaire (editing, versions, Excel file), reminders, the calendar row and the auditor export."""
 import csv
+import datetime as dt
 import io
 import re
 import zipfile
@@ -10,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from grcpal import xlsx
+from grcpal.portal import vendors as vmod
 from grcpal.portal.app import create_app
 from grcpal.portal.service import Forbidden, Invalid
 from grcpal.portal.store import SqliteStore
@@ -49,6 +51,7 @@ def onboard(portal, vid, by=HR, approver=ADMIN2):
     portal.add_vendor_file(by, vid, "soc2.pdf", PDF, "report", "SOC 2 Type 2")
     for key in ("risk", "assurance", "contract"):
         portal.update_checklist(by, vid, key, True, "Checked")
+    portal.save_assurance(by, vid, "independent", {})
     return portal.decide_review(approver, vid, "approve", "")
 
 
@@ -201,6 +204,9 @@ def test_onboarding_needs_checklist_and_another_admin(portal):
         portal.update_checklist(HR, vid, "risk", True, "")
     for key in ("risk", "assurance", "contract"):
         portal.update_checklist(HR, vid, key, True, "Checked")
+    with pytest.raises(Invalid, match="open items"):  # the assurance level is not chosen yet
+        portal.decide_review(ADMIN2, vid, "approve", "")
+    portal.save_assurance(HR, vid, "independent", {})
     with pytest.raises(Forbidden, match="segregation"):
         portal.decide_review(ADMIN, vid, "approve", "")  # ADMIN opened it and ADMIN2 is active
     portal.decide_review(ADMIN2, vid, "approve", "")
@@ -238,7 +244,7 @@ def test_annual_review_owner_submits_admin_returns_and_signs_off(portal):
     vid = v["RowKey"]
     onboard(portal, vid)
     portal.store.update("vendors", "v", vid, {"last_review": "2025-10-01"})
-    assert portal.vendor(HR, vid)["health"] == ("bad", "Annual review overdue")
+    assert portal.vendor(HR, vid)["health"] == ("bad", "Review overdue")
     with pytest.raises(Invalid):
         portal.start_annual_review(CONTRIB, vid)
     portal.start_annual_review(HR, vid)
@@ -527,3 +533,339 @@ def test_report_result_replaces_auditors_opinion_and_start_date_is_gone(portal, 
     assert "With exceptions" in form and "started sharing" not in form
     page = client.get(f"/vendors/{v['RowKey']}").text
     assert "result: With exceptions" in page and "Sharing data since" not in page
+
+
+# ================================================================ bulk import from CSV (add only)
+IMPORT_CSV = ("name,tier,service,data_access,domains,owner_email,assurance,ext_email\n"
+              "Contoso Payroll,critical,Payroll,Employee data;Financial data;Bogus,contoso-payroll.example,"
+              "hr@example.com,,payroll@contoso-payroll.example\n"
+              "GitHub Inc,low,Code,,github.com,,soc2_type2,\n"
+              "Githab,low,Typo vendor,,,,,\n"
+              "No Tier Co,,x,,,,,\n"
+              "Fabrikam,moderate,CRM,Customer data,fabrikam.example,,iso27001,\n"
+              "Fabrikam LLC,moderate,Listed again,,,,,\n"
+              "Bad Mail,high,x,,,not-an-email,,\n")
+
+
+def upload(portal, text=IMPORT_CSV, name="vendors.csv"):
+    return portal.vendor_import_upload(ADMIN, name, text.encode())
+
+
+def test_import_preview_shows_the_delta_and_changes_nothing(portal):
+    portal.import_vendors(ADMIN)
+    before = {v["RowKey"]: v for v in portal.store.list("vendors", "v")}
+    rec = upload(portal)
+    _rec, delta = portal.vendor_import(ADMIN, rec["RowKey"])
+    by = {i["row"]: i for i in delta["rows"]}
+    assert by[2]["status"] == "new" and by[2]["vendor"]["data_access"] == ["Employee data", "Financial data"]
+    assert any("Bogus" in w for w in by[2]["warnings"]) and any("GRC-pal user" in w for w in by[2]["warnings"])
+    assert by[3]["status"] == "existing" and by[3]["match"] == "github"
+    assert {d["field"] for d in by[3]["diffs"]} >= {"tier", "service"}
+    assert by[4]["status"] == "similar" and by[4]["match_name"] == "GitHub"
+    assert by[5]["status"] == "problem" and "tier" in by[5]["reason"]
+    assert by[7]["status"] == "problem" and "row 6" in by[7]["reason"]
+    assert by[8]["status"] == "problem" and "email" in by[8]["reason"]
+    assert [m["RowKey"] for m in delta["missing"]] == ["microsoft"]  # listed, never touched
+    assert {v["RowKey"]: v for v in portal.store.list("vendors", "v")} == before
+    entry = [r for r in portal.log.records() if r["action"] == "vendor.import.preview"][-1]
+    assert entry["detail"]["sha256"] == rec["sha256"] and entry["detail"]["new"] == 2
+
+
+def test_import_adds_only_ticked_new_rows_as_active_and_never_overwrites(portal):
+    portal.import_vendors(ADMIN)
+    github_before = portal.vendor(ADMIN, "github")
+    rec = upload(portal)
+    added = portal.vendor_import_apply(ADMIN, rec["RowKey"], [2, 3, 5, 6, 999], spread=True)  # 3 exists, 5 bad
+    assert [v["name"] for v in added] == ["Contoso Payroll", "Fabrikam"]  # critical first
+    payroll = portal.vendor(ADMIN, "contoso-payroll")
+    assert payroll["status"] == "active" and payroll["last_review"] == "" and portal.open_review("contoso-payroll") is None
+    assert payroll["domains"] == ["contoso-payroll.example"] and payroll["imported_from"].startswith("vendors.csv")
+    assert payroll["next_review"] == "2026-11-11" and portal.vendor(ADMIN, "fabrikam")["next_review"] == "2027-10-12"
+    assert payroll["health"] == ("warn", "Never reviewed") or payroll["health"][0] == "info"
+    after = portal.vendor(ADMIN, "github")
+    assert after["tier"] == github_before["tier"] and after["version"] == github_before["version"]
+    assert not any(v["name"] == "Githab" for v in portal.store.list("vendors", "v"))  # similar, not ticked
+    with pytest.raises(Invalid, match="already applied"):
+        portal.vendor_import_apply(ADMIN, rec["RowKey"], [4], spread=False)
+    log = [r for r in portal.log.records() if r["action"] in ("vendor.create", "vendor.import.apply")]
+    assert log[-1]["detail"]["added"] == 2 and log[-1]["detail"]["rows"] == [2, 6]
+    assert all(r["detail"].get("import") == rec["RowKey"] for r in log[-3:-1])
+
+
+def test_import_without_spread_makes_reviews_due_now_and_rechecks_the_register(portal):
+    rec = upload(portal, "name,tier\nAlpha,high\nBeta,low\n")
+    vendor(portal, name="Beta")  # added by someone else after the preview
+    added = portal.vendor_import_apply(ADMIN, rec["RowKey"], [2, 3], spread=False)
+    assert [v["name"] for v in added] == ["Alpha"]
+    assert portal.vendor(ADMIN, "alpha")["next_review"] == "2026-10-12"
+    assert len([v for v in portal.store.list("vendors", "v") if v["name"] == "Beta"]) == 1
+
+
+@pytest.mark.parametrize("data,message", [
+    (b"", "empty"), (b"vendor_id,tier\nx,low\n", "name"), (b"name,service\nx,y\n", "tier"),
+    (b"name,tier\n", "no vendors"), ("name,tier\nCafé,low\n".encode("cp1252"), "UTF-8"),
+    (b"name,tier\n" + b"x,low\n" * 501, "more than 500"), (b"name,tier\x00\n", "not a text file"),
+])
+def test_import_rejects_unusable_files(portal, data, message):
+    with pytest.raises(Invalid, match=message):
+        portal.vendor_import_upload(ADMIN, "v.csv", data)
+    assert portal.vendor_imports() == []
+
+
+def test_import_handles_excel_csv_variants_and_formula_text(portal):
+    text = "﻿Vendor Name;Risk Tier;Website\n=HYPERLINK(\"x\");High;https://www.Example-One.com/about\n"
+    rec = portal.vendor_import_upload(ADMIN, "v.csv", text.encode("utf-8"))
+    [row] = portal.vendor_import(ADMIN, rec["RowKey"])[1]["rows"]
+    assert row["status"] == "new" and row["vendor"]["tier"] == "high" and row["vendor"]["domains"] == ["example-one.com"]
+    portal.vendor_import_apply(ADMIN, rec["RowKey"], [2], spread=False)
+    blob = portal.export_cycle(AUDITOR, portal.active_cycle()["RowKey"])
+    vend = list(csv.DictReader(io.StringIO(zipfile.ZipFile(io.BytesIO(blob)).read("vendors.csv").decode())))
+    assert vend[0]["name"].startswith("'=")
+
+
+def test_import_is_admin_only_and_stored_as_evidence(portal, client):
+    for who in (HR, CONTRIB, AUDITOR):
+        with pytest.raises(Forbidden):
+            portal.vendor_import_upload(who, "v.csv", b"name,tier\nx,low\n")
+    rec = upload(portal)
+    source, run = rec["evidence_run"].split("/", 1)
+    assert source == "vendor_import" and portal.evidence.read(source, run, "vendors.csv") == IMPORT_CSV.encode()
+    with pytest.raises(Forbidden):
+        portal.vendor_import(HR, rec["RowKey"])
+    as_(client, HR)
+    assert client.get(f"/vendors/import/{rec['RowKey']}").status_code == 403
+    assert client.get("/vendors/import").status_code == 403
+    as_(client, ADMIN)
+    token = csrf(client)
+    page = client.get(f"/vendors/import/{rec['RowKey']}").text
+    assert "Contoso Payroll" in page and "Rows with a problem" in page
+    assert 'style="' not in page and "<script>" not in page
+    r = client.post(f"/vendors/import/{rec['RowKey']}/apply", data={"csrf": token, "row": ["2", "6"], "spread": "1"},
+                    follow_redirects=False)
+    assert r.status_code == 303 and "Added+2" in r.headers["location"]
+    r = client.get("/vendors/import/template.csv")
+    assert r.status_code == 200 and r.content.startswith("﻿name,service,tier".encode())
+
+
+def test_import_previews_expire_and_can_be_discarded(portal):
+    rec = upload(portal)
+    portal.vendor_import_discard(ADMIN, rec["RowKey"])
+    assert portal.vendor_import(ADMIN, rec["RowKey"])[1] is None
+    rec2 = upload(portal)
+    portal.store.update("vendorimports", "i", rec2["RowKey"], {"at": "2026-09-01T00:00:00+00:00"})
+    with pytest.raises(Invalid, match="older than 7 days"):
+        portal.vendor_import(ADMIN, rec2["RowKey"])
+
+
+def test_import_tenants_are_separate(tmp_path):
+    shared = SqliteStore()
+    acme, beta = make_portal(tmp_path, "acme", shared), make_portal(tmp_path, "beta", shared)
+    rec = upload(acme)
+    with pytest.raises(Invalid, match="not found"):
+        beta.vendor_import(ADMIN, rec["RowKey"])
+    assert beta.vendor_imports() == []
+
+
+# ================================================================ small vendors without an audit
+def small_vendor(portal):
+    v = vendor(portal, name="Tamarind Payroll", tier="critical", assurance="questionnaire", period_start="",
+               period_end="", data_access=["Employee data", "Financial data"])
+    vid = v["RowKey"]
+    portal.add_vendor_file(HR, vid, "essentials.xlsx", portal.send_questionnaire(HR, vid, "essentials")[1],
+                           "questionnaire", "Returned essentials questionnaire")
+    for key in ("risk", "assurance", "contract"):
+        portal.update_checklist(HR, vid, key, True, "Checked")
+    return vid
+
+
+def all_met(**changes):
+    items = {k: {"status": "met", "note": ""} for k in vmod.BASELINE_KEYS}
+    items.update(changes)
+    return items
+
+
+def test_unaudited_critical_vendor_needs_baseline_proof_and_gets_six_month_reviews(portal):
+    vid = small_vendor(portal)
+    portal.save_assurance(HR, vid, "evidence", {})
+    gaps = portal.review_gaps(portal._vendor_row(vid), portal.open_review(vid))
+    assert any("Baseline controls not assessed: 13 of 13" in g for g in gaps)
+    assert any("no proof" in g for g in gaps) and not any("SOC 2 report" in g for g in gaps)
+    with pytest.raises(Invalid, match="Add a note"):
+        portal.save_assurance(HR, vid, "evidence", all_met(location={"status": "compensated", "note": ""}))
+    portal.save_assurance(HR, vid, "evidence", all_met(our_systems={"status": "compensated",
+                                                                   "note": "Works only in our M365 tenant"}))
+    portal.add_vendor_file(HR, vid, "mfa.png", b"\x89PNG\r\n\x1a\n" + b"0" * 20, "proof", "MFA screenshot")
+    assert portal.review_gaps(portal._vendor_row(vid), portal.open_review(vid)) == []
+    portal.decide_review(ADMIN2, vid, "approve", "")
+    row = portal.vendor(ADMIN, vid)
+    assert row["assurance_level"] == "evidence" and row["review_months"] == 6 and row["next_review"] == "2027-04-12"
+    entry = [r for r in portal.log.records() if r["action"] == "vendor.review.assurance"][-1]
+    assert entry["detail"]["baseline"]["our_systems"] == "compensated" and "note" not in str(entry["detail"])
+
+
+def test_self_attested_or_failed_control_needs_written_risk_acceptance(portal):
+    vid = small_vendor(portal)
+    portal.save_assurance(HR, vid, "evidence", all_met(backups={"status": "not_met", "note": "No restore test yet"}))
+    assert portal.needs_acceptance(portal._vendor_row(vid), portal.open_review(vid))
+    gaps = portal.review_gaps(portal._vendor_row(vid), portal.open_review(vid))
+    assert any("Risk acceptance needed" in g for g in gaps)
+    form = {"owner_name": "Dana Ruiz", "owner_title": "Controller", "reason": "No restore test; we keep our own export",
+            "expires": "2027-04-30"}
+    with pytest.raises(Invalid, match="upload the business owner"):
+        portal.record_acceptance(ADMIN, vid, form)
+    portal.add_vendor_file(ADMIN, vid, "acceptance.eml", b"From: dana@example.com\n\nI accept.\n", "acceptance", "")
+    with pytest.raises(Invalid, match="no later than"):
+        portal.record_acceptance(ADMIN, vid, {**form, "expires": "2028-01-01"})
+    with pytest.raises(Forbidden):
+        portal.record_acceptance(HR, vid, form)
+    portal.record_acceptance(ADMIN, vid, form)
+    portal.add_vendor_file(HR, vid, "proof.pdf", PDF, "proof", "")
+    portal.decide_review(ADMIN2, vid, "approve", "")
+    row = portal.vendor(ADMIN, vid)
+    assert row["acceptance_expires"] == "2027-04-30" and row["next_review"] == "2027-04-12"  # 6 months comes first
+    tables, _ = portal.vendor_export("2000-01-01", "2100-01-01")
+    [acc] = tables["vendor_risk_acceptances"]
+    assert acc["accepted_by"] == "Dana Ruiz" and acc["expires"] == "2027-04-30" and acc["evidence_file"]
+    base = [b for b in tables["vendor_baseline"] if b["control"] == "backups"]
+    assert base[0]["result"] == "Not met" and base[0]["note"] == "No restore test yet"
+    assert tables["vendor_reviews"][0]["assurance_level"] == "evidence"
+
+
+def test_acceptance_expiring_before_the_interval_brings_the_review_forward(portal):
+    vid = small_vendor(portal)
+    portal.save_assurance(HR, vid, "self", all_met())
+    portal.add_vendor_file(ADMIN, vid, "ok.eml", b"From: a@example.com\n\nok\n", "acceptance", "")
+    portal.record_acceptance(ADMIN, vid, {"owner_name": "A", "reason": "Self-attested", "expires": "2027-01-31"})
+    portal.decide_review(ADMIN2, vid, "approve", "")
+    assert portal.vendor(ADMIN, vid)["next_review"] == "2027-01-31"
+
+
+def test_independent_audit_keeps_twelve_months_and_skips_the_baseline(portal):
+    v = vendor(portal)
+    onboard(portal, v["RowKey"])
+    row = portal.vendor(ADMIN, v["RowKey"])
+    assert row["review_months"] == 12 and row["next_review"] == "2027-10-12"
+    portal.start_annual_review(HR, v["RowKey"])
+    r = portal.open_review(v["RowKey"])
+    assert r["assurance_level"] == "independent" and not portal.needs_baseline(portal._vendor_row(v["RowKey"]), r)
+
+
+def test_essentials_questionnaire_is_separate_and_versioned(portal):
+    full, ess = portal.questionnaire_version(), portal.questionnaire_version(0, "essentials")
+    assert ess["version"] == 1 and sum(len(s["questions"]) for s in ess["sections"]) == 18
+    assert all(c in portal.catalog.criteria for s in ess["sections"] for q in s["questions"] for c in q["criteria"])
+    portal.edit_questionnaire(ADMIN, "add_section", {"title": "Payroll specifics"}, "essentials")
+    portal.publish_questionnaire(ADMIN, "Added payroll section", "essentials")
+    assert portal.questionnaire_version(0, "essentials")["version"] == 2 and portal.questionnaire_version()["version"] == 1
+    assert len(portal.questionnaire_draft(ADMIN)["sections"]) == len(full["sections"])  # the full one is untouched
+    v = vendor(portal)
+    name, data = portal.send_questionnaire(HR, v["RowKey"], "essentials")
+    assert "essentials" in name and zipfile.ZipFile(io.BytesIO(data)).testzip() is None
+    r = portal.open_review(v["RowKey"])
+    assert r["questionnaire_id"] == "essentials" and r["questionnaire_version"] == 2
+    with pytest.raises(Invalid, match="Unknown questionnaire"):
+        portal.send_questionnaire(HR, v["RowKey"], "../full")
+    tables, _ = portal.vendor_export("2000-01-01", "2100-01-01")
+    assert {r["questionnaire"] for r in tables["questionnaire_versions"]} == {"Full security questionnaire",
+                                                                            "Small vendor essentials"}
+
+
+# ================================================================ offboarding: sign-in removed in Entra ID
+def entra_runs(portal, apps, users):
+    for source, name, rows in (("entra_apps", "enterprise_apps", apps), ("entra_users", "users", users)):
+        run = portal.evidence.new_run(source, ["IAM-01"], {})
+        run.add(name, rows)
+        run.finish([])
+
+
+def offboarding(portal):
+    v = vendor(portal, domains="contoso-payroll.example", entra_apps="Contoso Payroll SSO")
+    onboard(portal, v["RowKey"])
+    portal.start_offboarding(ADMIN, v["RowKey"], "Contract ended")
+    return v["RowKey"]
+
+
+def test_signin_check_finds_apps_and_guest_accounts_left(portal):
+    vid = offboarding(portal)
+    entra_runs(portal, [{"name": "Contoso Payroll SSO", "app_id": "a1", "enabled": True},
+                        {"name": "Other app", "app_id": "a2", "enabled": True}],
+               [{"upn": "jo_contoso-payroll.example#EXT#@ourco.onmicrosoft.com", "enabled": True, "type": "Guest"},
+                {"upn": "old_contoso-payroll.example#EXT#@ourco.onmicrosoft.com", "enabled": False, "type": "Guest"},
+                {"upn": "sam@sub.contoso-payroll.example", "enabled": True, "type": "Member"},
+                {"upn": "pat@example.com", "enabled": True, "type": "Member"}])
+    result = portal.vendor_signin_check(HR, vid)
+    assert not result["ok"] and result["remaining_apps"] == ["Contoso Payroll SSO"]
+    assert result["remaining_accounts"] == ["jo_contoso-payroll.example#EXT#@ourco.onmicrosoft.com",
+                                            "sam@sub.contoso-payroll.example"]
+    item = next(i for i in portal.open_review(vid)["checklist"] if i["key"] == "access")
+    assert not item["done"]
+    entry = [r for r in portal.log.records() if r["action"] == "vendor.signin.check"][-1]
+    assert entry["detail"]["remaining_accounts"] == 2 and "jo_" not in str(entry["detail"])
+
+
+def test_signin_check_ticks_the_checklist_when_nothing_is_left(portal):
+    vid = offboarding(portal)
+    entra_runs(portal, [{"name": "Contoso Payroll SSO", "app_id": "a1", "enabled": False}],
+               [{"upn": "jo_contoso-payroll.example#EXT#@ourco.onmicrosoft.com", "enabled": False, "type": "Guest"}])
+    result = portal.vendor_signin_check(ADMIN, vid)
+    assert result["ok"] and set(result["runs"]) == {"entra_apps", "entra_users"}
+    item = next(i for i in portal.open_review(vid)["checklist"] if i["key"] == "access")
+    assert item["done"] and "entra_apps/" in item["note"]
+
+
+def test_signin_check_needs_recent_runs_and_something_to_look_for(portal):
+    vid = offboarding(portal)
+    result = portal.vendor_signin_check(ADMIN, vid)
+    assert not result["ok"] and any("No entra_apps collection" in n for n in result["notes"])
+    plain = vendor(portal, name="No Links Co")
+    onboard(portal, plain["RowKey"])
+    portal.start_offboarding(ADMIN, plain["RowKey"], "Done")
+    with pytest.raises(Invalid, match="apps or its email domains"):
+        portal.vendor_signin_check(ADMIN, plain["RowKey"])
+    active = vendor(portal, name="Still Active", domains="x.example")
+    onboard(portal, active["RowKey"])
+    portal.start_annual_review(ADMIN, active["RowKey"])
+    with pytest.raises(Invalid, match="part of offboarding"):
+        portal.vendor_signin_check(ADMIN, active["RowKey"])
+    with pytest.raises(Invalid):
+        portal.vendor_signin_check(CONTRIB, vid)  # not their vendor: looks like it does not exist
+    entra_runs(portal, [], [])
+    portal._today = portal.today + dt.timedelta(days=30)  # the runs are now a month old
+    result = portal.vendor_signin_check(ADMIN, vid)
+    assert not result["ok"] and any("run it again" in n for n in result["notes"])
+
+
+def test_vendor_links_to_entra_apps_and_domains_are_validated(portal):
+    with pytest.raises(Invalid, match="Not a domain"):
+        vendor(portal, name="Bad Domain", domains="not a domain!")
+    with pytest.raises(Invalid, match="up to 10"):
+        vendor(portal, name="Many Apps", entra_apps=";".join(f"app{i}" for i in range(11)))
+    v = vendor(portal, name="Good", domains="https://www.Good.example/x; mail@good-mail.example", entra_apps="App A; App B")
+    assert v["domains"] == ["good.example", "good-mail.example"] and v["entra_apps"] == ["App A", "App B"]
+
+
+@pytest.mark.parametrize("who", [ADMIN, HR, AUDITOR])
+def test_new_pages_render_with_strict_csp(portal, client, who):
+    vid = small_vendor(portal)
+    portal.save_assurance(HR, vid, "self", all_met(backups={"status": "not_met", "note": "none"}))
+    off = offboarding(portal)
+    entra_runs(portal, [], [])
+    portal.vendor_signin_check(ADMIN, off)
+    as_(client, who)
+    for path in (f"/vendors/{vid}?tab=review", f"/vendors/{vid}", f"/vendors/{off}?tab=review",
+                 "/vendors/questionnaire?q=essentials", "/vendors/questionnaire?q=essentials&version=1",
+                 "/vendors/questionnaire?q=nope"):
+        r = client.get(path)
+        assert r.status_code == 200, (who.email, path, r.status_code, r.text[:300])
+        assert 'style="' not in r.text and "<script>" not in r.text and "onclick" not in r.text
+    if who is ADMIN:
+        page = client.get(f"/vendors/{vid}?tab=review").text
+        assert "Risk acceptance" in page and "How to check:" in page
+        token = csrf(client)
+        r = client.post(f"/vendors/{vid}/review/assurance", data={"csrf": token, "level": "evidence",
+                                                                  **{f"b_{k}": "met" for k in vmod.BASELINE_KEYS}},
+                        follow_redirects=False)
+        assert r.status_code == 303 and "msg=" in r.headers["location"]
+        assert portal.open_review(vid)["assurance_level"] == "evidence"
+        r = client.post(f"/vendors/{off}/signin-check", data={"csrf": token}, follow_redirects=False)
+        assert r.status_code == 303

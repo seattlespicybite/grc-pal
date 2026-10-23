@@ -155,6 +155,7 @@ def _vendors(portal) -> None:
                                          "status": "met"})
     portal.save_cuec(ADMIN, vid, "new", {"text": "Customers restrict who can delete backup sets.", "controls": [],
                                          "how": "", "status": "not_mapped"})
+    portal.save_assurance(IT, vid, "independent", {})
     portal.decide_review(ADMIN2, vid, "approve", "Qualified opinion (restore testing) accepted: we run our own test.")
     portal.store.update("vendors", "v", vid, {"last_review": (today - dt.timedelta(days=345)).isoformat()})
     payroll = portal.create_vendor(ADMIN, {"name": "Northwind Payroll", "service": "Payroll and benefits", "tier": "high",
@@ -164,6 +165,7 @@ def _vendors(portal) -> None:
     portal.add_vendor_file(ADMIN, payroll["RowKey"], "northwind-soc2.pdf", _pdf("Northwind SOC 2"), "report", "")
     for key in ("risk", "assurance", "contract"):
         portal.update_checklist(ADMIN, payroll["RowKey"], key, True, "Checked")
+    portal.save_assurance(ADMIN, payroll["RowKey"], "independent", {})
     portal.decide_review(ADMIN2, payroll["RowKey"], "approve", "")
     portal.store.update("vendors", "v", payroll["RowKey"], {"last_review": (today - dt.timedelta(days=380)).isoformat()})
     portal.start_annual_review(HR, payroll["RowKey"])
@@ -178,7 +180,38 @@ def _vendors(portal) -> None:
         portal.update_checklist(ADMIN, old["RowKey"], key, True, "Checked")
     portal.add_vendor_file(ADMIN, old["RowKey"], "litware-questionnaire.xlsx",
                            portal.questionnaire_xlsx(portal.questionnaire_version(), old), "questionnaire", "")
+    portal.save_assurance(ADMIN, old["RowKey"], "self", {})
     portal.decide_review(ADMIN2, old["RowKey"], "approve", "Contract terms checked by Legal.")
     portal.start_offboarding(ADMIN, old["RowKey"], "Moved translation in-house")
     portal.update_checklist(ADMIN, old["RowKey"], "access", True, "SSO app removed in Entra ID")
+    # A two-person payroll contractor without SOC 2 or ISO: essentials questionnaire with proof, baseline controls,
+    # one control not met, and the business owner's written risk acceptance until the next review.
+    small = portal.create_vendor(ADMIN, {
+        "name": "Tamarind Payroll Services", "service": "Payroll processing for two client entities", "tier": "critical",
+        "data_access": ["Employee data", "Financial data"], "domains": "tamarind-payroll.example",
+        "contract_terms": "yes", "dpa": "yes", "assurance": "questionnaire",
+        "owner_name": "Harper HR", "owner_title": "HR lead", "owner_email": HR.email,
+        "ext_name": "Ade Okafor", "ext_title": "Founder", "ext_email": "ade@tamarind-payroll.example",
+        "docs_text": "No SOC 2 or ISO. Send our essentials questionnaire to Ade; he answers within a week."})
+    sid = small["RowKey"]
+    portal.add_vendor_file(HR, sid, "tamarind-essentials.xlsx", portal.send_questionnaire(HR, sid, "essentials")[1],
+                           "questionnaire", "Returned essentials questionnaire")
+    portal.add_vendor_file(HR, sid, "tamarind-mfa.png", _png(), "proof", "Google Workspace 2-step verification enforced")
+    for key in ("risk", "assurance", "contract"):
+        portal.update_checklist(HR, sid, key, True, "Checked")
+    base = {k: {"status": "met", "note": ""} for k in ("mfa", "accounts", "devices", "least_data", "no_copies",
+                                                        "breach_notice", "subcontractors", "deletion", "location",
+                                                        "sanctions")}
+    base.update(our_systems={"status": "compensated", "note": "They work only in our M365 tenant with accounts we own"},
+                backups={"status": "na", "note": "No data kept on their side"},
+                continuity={"status": "not_met", "note": "Two people; no backup provider named yet"})
+    portal.save_assurance(HR, sid, "evidence", base)
+    portal.add_vendor_file(ADMIN, sid, "acceptance-harper.eml",
+                           b"From: harper.hr@example.com\nSubject: Tamarind risk\n\nI accept the continuity risk until "
+                           b"the next review. We keep the payroll data in our tenant.\n", "acceptance", "")
+    portal.record_acceptance(ADMIN, sid, {"owner_name": "Harper HR", "owner_title": "HR lead",
+                                          "reason": "Key-person risk (two-person company). Payroll data stays in our "
+                                                    "tenant, so we can switch provider.",
+                                          "expires": (today + dt.timedelta(days=170)).isoformat()})
+    portal.decide_review(ADMIN2, sid, "approve", "")
     portal.mailer = real_mailer

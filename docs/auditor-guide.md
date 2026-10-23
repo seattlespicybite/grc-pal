@@ -27,7 +27,10 @@ program repository for the audit period.
 | `vendor_files.csv`, `vendor_files/` | Vendor reports, returned questionnaires and offboarding evidence uploaded in the cycle, with SHA-256 (these may be under NDA with the vendor) |
 | `vendor_register_history.csv` | Every version of every vendor record with author and reason |
 | `subservice_organizations.csv` | Vendors flagged as subservice organizations (carved out or inclusive), for the system description |
-| `questionnaire_versions.csv` | Every version of the vendor security questionnaire, one row per question, with the SOC 2 criteria each question supports |
+| `questionnaire_versions.csv` | Every version of both vendor questionnaires (full and small vendor essentials), one row per question, with the SOC 2 criteria each question supports |
+| `vendor_baseline.csv` | For critical and high vendors without an independent audit: each baseline control per review, with the result (Met, Met another way, Not met, Not applicable) and the note |
+| `vendor_risk_acceptances.csv` | Business owners' written acceptances of remaining vendor risk: who, what and why, until when, the evidence file and who recorded it |
+| `vendor_imports.csv` | CSV imports of vendors: file name, SHA-256, who uploaded and applied it, and which vendors were added (the files are in the evidence store under `vendor_import/`) |
 | `implementation_notes.csv` | Every version of each control's "How we meet this control" notes, with author and time; each save is also in the audit log with the SHA-256 of the text |
 | `audit_chain_verification.json` | Result of recomputing the chain at export time |
 | `control_status.json` | Control health at export time, including the computed status behind any override |
@@ -68,7 +71,8 @@ program repository for the audit period.
 | Control library changes | **Control matrix** report and data file + `controlhistory` (Definition history) + `control_matrix_import/*/upload-*.xlsx` and `control_matrix_apply/*/result-*.json` + audit log `control.matrix.import` | For a bulk import, confirm the applied file's SHA-256 matches the import record, a reason was given, the importer is the control library owner, and each changed control has a matching history version |
 | VEN-01 new vendors | `vendors.csv` (onboarding approved in the period) + `vendor_reviews.csv` (kind onboarding) | Sample new vendors; confirm the onboarding check was approved before `start_date` (`data_shared_before_approval` is false) |
 | VEN-02 vendor reviews | `vendors.csv` (critical and high, active) + `vendor_reviews.csv` (kind annual) + `vendor_files/` | Sample vendors; inspect the report (period within 12 months), our questionnaire, exceptions with responses and the CUEC mapping; confirm sign-off by someone other than the submitter |
-| VEN-05 vendor offboarding | `vendors.csv` (status offboarded, `end_date` in the period) + `vendor_reviews.csv` (kind offboarding) | Confirm each checklist item has a note and evidence under `vendor_files/` |
+| VEN-05 vendor offboarding | `vendors.csv` (status offboarded, `end_date` in the period) + `vendor_reviews.csv` (kind offboarding) | Confirm each checklist item has a note and evidence under `vendor_files/`; where `signin_check_ok` is true, inspect the named `entra_apps` and `entra_users` runs |
+| VEN-02 vendors without an audit report | `vendor_reviews.csv` (`assurance_level` evidence, self or none) + `vendor_baseline.csv` + `vendor_risk_acceptances.csv` | Confirm the baseline was assessed with proof, Not met items are covered by a current, written risk acceptance, and these vendors are reviewed every 6 months |
 
 Vendor contact details (names, emails, phone numbers, support links) are deliberately left out of the
 export and of the auditor's view of the portal; the internal owner is shown by title only.

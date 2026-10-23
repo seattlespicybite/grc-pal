@@ -482,6 +482,13 @@ a.stat:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .todo li { display: flex; gap: 12px; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--border); }
 .todo li:last-child { border-bottom: 0; } .todo li > div { flex: 1; } .todo-box { font-size: 18px; color: var(--muted); }
 .ver-table td:first-child { min-width: 170px; } .ver-table .pill { white-space: nowrap; }
+.v-baseline { list-style: none; padding: 0; margin: 10px 0; }
+.v-baseline li { display: flex; flex-direction: column; gap: 6px; padding: 10px 0 10px 12px; border-bottom: 1px solid var(--border);
+  border-left: 3px solid var(--border); }
+.v-baseline li.v-b-met, .v-baseline li.v-b-compensated { border-left-color: var(--ok); }
+.v-baseline li.v-b-not_met { border-left-color: var(--bad); } .v-baseline li.v-b-na { border-left-color: var(--idle); }
+.v-b-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.v-b-row select { flex: 0 0 170px; } .v-b-row input { flex: 1 1 260px; min-width: 0; }
 
 /* Control matrix: page, import preview, report (print to PDF) */
 .matrix-cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }

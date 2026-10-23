@@ -39,8 +39,13 @@
 <dt>Contract security terms</dt><dd>{{ contract.get(v.contract_terms) or '—' }}{% if v.contract_note %} · {{ v.contract_note }}{% endif %}</dd>
 <dt>Data processing agreement</dt><dd>{{ contract.get(v.dpa) or '—' }}</dd>
 <dt>Assurance report</dt><dd>{{ assurance.get(v.assurance or '', '') }}{% if v.period_end %} · period {{ v.period_start or '?' }} to {{ v.period_end }}{% endif %}{% if v.opinion %} · result: {{ opinions.get(v.opinion, '') }}{% endif %}</dd>
+<dt>Assurance level</dt><dd>{{ levels.get(v.assurance_level, 'Not assessed yet') if v.assurance_level else 'Not assessed yet' }}</dd>
+{% if v.acceptance_expires %}<dt>Risk acceptance</dt><dd>Until {{ v.acceptance_expires }} <span class="sub">(see the last review)</span></dd>{% endif %}
 <dt>Last review</dt><dd>{{ v.last_review or 'Never' }}</dd>
-<dt>Next review</dt><dd>{{ v.next_review or '—' }}{% if v.next_review_override %} <span class="sub">(moved by an admin)</span>{% endif %}</dd>
+<dt>Next review</dt><dd>{{ v.next_review or '—' }}{% if v.next_review_override %} <span class="sub">({{ 'first review, planned at import' if not v.last_review and v.imported_from else 'moved by an admin' }})</span>{% elif v.review_months == 6 %} <span class="sub">(6-month interval: no independent audit)</span>{% endif %}</dd>
+{% if v.domains %}<dt>Domains</dt><dd>{{ v.domains|join(', ') }}</dd>{% endif %}
+{% if v.entra_apps %}<dt>Entra ID apps</dt><dd>{{ v.entra_apps|join(', ') }}</dd>{% endif %}
+{% if v.imported_from %}<dt>Imported from</dt><dd class="sub">{{ v.imported_from }}</dd>{% endif %}
 {% if v.notes %}<dt>Notes</dt><dd class="v-pre">{{ v.notes }}</dd>{% endif %}
 <dt>Controls</dt><dd>{% for c in ['VEN-01', 'VEN-02', 'VEN-03', 'VEN-05'] %}<a class="mono" href="/controls/{{ c }}">{{ c }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</dd>
 </dl>
@@ -90,9 +95,9 @@
 <div class="form-row"><div><label for="kind">What is this file?</label><select id="kind" name="kind">{% for k, label in file_kinds.items() %}{% if r.kind == 'offboarding' or k != 'offboarding' %}<option value="{{ k }}"{% if (r.kind == 'offboarding' and k == 'offboarding') %} selected{% endif %}>{{ label }}</option>{% endif %}{% endfor %}</select></div>
 <div><label for="fcomment">Note (optional)</label><input id="fcomment" name="comment" maxlength="2000" placeholder="For example: SOC 2 Type 2, Jul 2025 to Jun 2026"></div></div>
 <div class="actions"><button class="btn" type="submit">Upload</button></div></form>{% endif %}
-{% if can_work and r.kind != 'offboarding' %}<form method="post" action="/vendors/{{ v.RowKey }}/questionnaire" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
-<button class="btn ghost small" type="submit">Download our questionnaire for {{ v.name }} (.xlsx, v{{ latest_q.version }})</button>
-<span class="hint">Send it to {{ v.ext_name or 'the vendor contact' }}, then upload the returned file here.</span></form>{% endif %}
+{% if can_work and r.kind != 'offboarding' %}<div class="actions mt">{% for qid, info in questionnaires.items() %}<form method="post" action="/vendors/{{ v.RowKey }}/questionnaire" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="q" value="{{ qid }}">
+<button class="btn ghost small" type="submit" title="{{ info[2] }}">Download {{ info[0]|lower }} (.xlsx, v{{ latest_q[qid].version }})</button></form>{% endfor %}</div>
+<p class="hint">Small vendor without a SOC 2 report or ISO certificate? Send the essentials questionnaire: every answer asks for proof. Send it to {{ v.ext_name or 'the vendor contact' }}, then upload the returned file and the proof here.</p>{% endif %}
 </section>
 
 {% if r.kind == 'annual' %}<section class="card"><h2>Owner's questions</h2>
@@ -112,6 +117,50 @@
 <label for="ck-{{ i.key }}">How was it done?</label><input id="ck-{{ i.key }}" name="note" maxlength="1000" value="{{ i.note }}" placeholder="What, when, and where the evidence is">
 <div class="actions"><button class="btn small" name="done" value="1" type="submit">Mark done</button>{% if i.done %}<button class="btn ghost small" name="done" value="0" type="submit">Mark not done</button>{% endif %}</div></form></details>{% endif %}
 </div></li>{% endfor %}</ul></section>{% endif %}
+
+{% if r.kind in ('onboarding', 'annual') and v.tier != 'low' %}
+<section class="card" id="assurance"><h2>How much can we rely on this vendor?</h2>
+{% set locked_a = not can_work or (r.status == 'submitted' and not user.is_admin) %}
+<form method="post" action="/vendors/{{ v.RowKey }}/review/assurance"><input type="hidden" name="csrf" value="{{ csrf }}">
+<fieldset class="v-q"><legend>Assurance level</legend>
+{% for k, label in levels.items() %}<label class="check"><input type="radio" name="level" value="{{ k }}"{% if r.assurance_level == k %} checked{% endif %}{% if locked_a %} disabled{% endif %}> {{ label }}</label>{% endfor %}</fieldset>
+{% if v.tier in ('critical', 'high') %}
+<p class="sub mt">Without an independent audit, check these baseline controls. Ask for proof (screenshots, a short screen-share) rather than taking answers on trust. The strongest control is keeping our data in our own systems.</p>
+<ul class="v-baseline">
+{% for key, label, how in baseline %}{% set b = (r.baseline or {}).get(key) or {} %}<li class="v-b-{{ b.status or 'none' }}"><div><b>{{ label }}</b><div class="sub">How to check: {{ how }}</div></div>
+<div class="v-b-row"><select name="b_{{ key }}" aria-label="Result: {{ label }}"{% if locked_a %} disabled{% endif %}>{% for sk, sl in baseline_status.items() %}<option value="{{ sk }}"{% if b.status == sk %} selected{% endif %}>{{ sl }}</option>{% endfor %}</select>
+<input name="n_{{ key }}" maxlength="600" value="{{ b.note or '' }}" placeholder="Note: how it is met, what is missing, or why it does not apply" aria-label="Note: {{ label }}"{% if locked_a %} disabled{% endif %}></div></li>{% endfor %}
+</ul>
+<p class="hint">Only needed when the assurance level is not an independent audit. A critical or high vendor without one is reviewed every 6 months.</p>{% endif %}
+{% if not locked_a %}<div class="actions"><button class="btn" type="submit">Save</button></div>{% endif %}
+</form></section>
+{% if needs_acceptance or (r.acceptance or {}).reason %}<section class="card" id="acceptance"><h2>Risk acceptance</h2>
+{% if (r.acceptance or {}).reason %}<dl class="kv"><dt>Accepted by</dt><dd>{{ r.acceptance.owner_name }}{% if r.acceptance.owner_title %}, {{ r.acceptance.owner_title }}{% endif %}</dd>
+<dt>What and why</dt><dd class="v-pre">{{ r.acceptance.reason }}</dd><dt>Until</dt><dd>{{ r.acceptance.expires }}</dd>
+<dt>Evidence</dt><dd>{% if r.acceptance.file_id in files_by_id %}<a href="/vendors/{{ v.RowKey }}/files/{{ r.acceptance.file_id }}">{{ files_by_id[r.acceptance.file_id].filename }}</a>{% endif %}</dd>
+<dt>Recorded by</dt><dd>{{ r.acceptance.recorded_by }} · {{ when(r.acceptance.at) }}</dd></dl>
+{% else %}<p class="sub">This vendor holds sensitive data without an independent audit and is self-attested or misses a baseline control. The business owner must accept the remaining risk in writing, for a limited time. Upload their email or signed note as “Risk acceptance” above, then record it here.</p>{% endif %}
+{% if user.is_admin and r.status != 'approved' %}<details class="mt"><summary>{{ 'Replace the acceptance' if (r.acceptance or {}).reason else 'Record the acceptance' }}</summary>
+<form method="post" action="/vendors/{{ v.RowKey }}/review/acceptance" class="mt-s"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="form-row"><div><label for="acc-name">Business owner who accepts</label><input id="acc-name" name="owner_name" required maxlength="120" value="{{ v.owner_name or '' }}"></div>
+<div><label for="acc-title">Their title</label><input id="acc-title" name="owner_title" maxlength="120" value="{{ v.owner_title or '' }}"></div>
+<div><label for="acc-exp">Accepted until (at most 12 months)</label><input id="acc-exp" name="expires" type="date" required></div></div>
+<label for="acc-reason">What risk is accepted, and why</label><textarea id="acc-reason" name="reason" required maxlength="2000" placeholder="For example: payroll contractor without SOC 2; works only in our M365 tenant with MFA; MFA on their own email confirmed by screen-share; no copies outside our systems."></textarea>
+<div class="actions"><button class="btn small" type="submit">Record acceptance</button></div></form></details>{% endif %}
+</section>{% endif %}
+{% endif %}
+
+{% if r.kind == 'offboarding' %}<section class="card" id="signin"><h2>Check sign-in is removed in Entra ID</h2>
+<p class="sub">Looks in the latest Entra ID collector runs for this vendor's apps{% if v.entra_apps %} ({{ v.entra_apps|join(', ') }}){% endif %} that are still enabled, and for enabled accounts, including guests, from its domains{% if v.domains %} ({{ v.domains|join(', ') }}){% endif %}. If nothing is left, “Sign-in removed” is ticked with the runs as evidence.</p>
+{% set sc = r.signin_check or {} %}
+{% if sc.at %}<div class="{{ 'card-info' if sc.ok else 'hint-box' }} mt"><b>{{ 'Nothing left' if sc.ok else 'Not removed yet' }}</b> · checked {{ when(sc.at) }} by {{ sc.by }}
+{% if sc.remaining_apps %}<div>Apps still enabled: {{ sc.remaining_apps|join(', ') }}</div>{% endif %}
+{% if sc.remaining_accounts %}<div>Accounts still enabled: {{ sc.remaining_accounts|join(', ') }}</div>{% endif %}
+{% for n in sc.notes or [] %}<div>{{ n }}</div>{% endfor %}
+{% if sc.runs %}<div class="sub">Runs: {% for src, run in sc.runs.items() %}{% if user.sees_everything %}<a href="/evidence/{{ run }}">{{ run }}</a>{% else %}{{ run }}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}</div>{% endif %}
+{% if can_work %}<form method="post" action="/vendors/{{ v.RowKey }}/signin-check" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ghost" type="submit">Check now</button>
+{% if not v.entra_apps and not v.domains %}<span class="hint">Add the vendor's apps or domains first (Edit vendor).</span>{% endif %}</form>{% endif %}
+<p class="hint">Not in Entra ID (for example accounts in another system)? Mark the checklist item by hand with a note and upload a screenshot.</p></section>{% endif %}
 
 {% if user.is_admin %}
 {% if r.kind == 'annual' %}<section class="card"><h2>Exceptions in the vendor's report</h2>
@@ -139,7 +188,7 @@ To sign off anyway, write why these are accepted. The note and the list go to th
 <section class="card"><h2>Annual review</h2>
 {% if v.status == 'active' %}<p>Last review: <b>{{ v.last_review or 'never' }}</b> · next review due <b>{{ v.next_review }}</b>.</p>
 {% if can_work %}<div class="actions"><form method="post" action="/vendors/{{ v.RowKey }}/review/start"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" type="submit">Start the annual review</button></form>
-<form method="post" action="/vendors/{{ v.RowKey }}/questionnaire"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ghost" type="submit">Download our questionnaire (.xlsx)</button></form></div>
+{% for qid, info in questionnaires.items() %}<form method="post" action="/vendors/{{ v.RowKey }}/questionnaire"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="q" value="{{ qid }}"><button class="btn ghost" type="submit" title="{{ info[2] }}">Download {{ info[0]|lower }} (.xlsx)</button></form>{% endfor %}</div>
 <p class="hint">Downloading the questionnaire also starts the review and records which version was sent.</p>{% endif %}
 {% else %}<p class="sub">{{ statuses[v.status] }}. No review is open.</p>{% endif %}
 <h3 class="mt-l">What a {{ tiers.get(v.tier, '')|lower }} vendor needs each year</h3>
@@ -152,7 +201,13 @@ To sign off anyway, write why these are accepted. The note and the list go to th
 {% for x in done %}<tr><td>{{ review_kinds[x.kind] }}<div class="sub">started {{ x.opened_at[:10] }}</div></td>
 <td>{{ {'approve': 'Signed off', 'reject': 'Not approved', 'superseded': 'Closed (offboarding started)'}.get(x.decision, x.decision) }}
 {% if x.accepted_gaps %}<div class="sub">Accepted open items: {{ x.accepted_gaps|join('; ') }}</div>{% endif %}
-{% if x.decision_note %}<div class="sub">{{ x.decision_note }}</div>{% endif %}{% if x.self_approved %}<div class="sub bad-text">Self-approved (only one admin)</div>{% endif %}</td>
+{% if x.decision_note %}<div class="sub">{{ x.decision_note }}</div>{% endif %}{% if x.self_approved %}<div class="sub bad-text">Self-approved (only one admin)</div>{% endif %}
+{% if x.assurance_level %}<div class="sub">Assurance: {{ levels.get(x.assurance_level, x.assurance_level) }}</div>{% endif %}
+{% if x.baseline or (x.acceptance or {}).reason or (x.signin_check or {}).at %}<details class="mt-s"><summary>Details</summary>
+{% if x.baseline %}<ul class="list mt-s">{% for key, label, how in baseline %}{% set b = x.baseline.get(key) %}{% if b %}<li>{{ label }}: <b>{{ baseline_status.get(b.status, b.status) }}</b>{% if b.note %} · {{ b.note }}{% endif %}</li>{% endif %}{% endfor %}</ul>{% endif %}
+{% if (x.acceptance or {}).reason %}<p class="sub">Risk accepted by {{ x.acceptance.owner_name }}{% if x.acceptance.owner_title %} ({{ x.acceptance.owner_title }}){% endif %} until {{ x.acceptance.expires }}: {{ x.acceptance.reason }}</p>{% endif %}
+{% if (x.signin_check or {}).at %}<p class="sub">Entra ID sign-in check {{ x.signin_check.at[:10] }}: {{ 'nothing left' if x.signin_check.ok else 'not removed' }}</p>{% endif %}
+</details>{% endif %}</td>
 <td>{{ x.approved_by }}<div class="sub">{{ (x.approved_at or '')[:10] }}</div></td>
 <td><ul class="v-files">{% for fid in x.file_ids or [] %}{% if fid in files_by_id %}<li><a href="/vendors/{{ v.RowKey }}/files/{{ fid }}">{{ files_by_id[fid].filename }}</a></li>{% endif %}{% endfor %}</ul></td></tr>{% endfor %}
 </tbody></table></div>{% else %}<p class="sub">No signed-off reviews yet.</p>{% endif %}</section>

@@ -6,6 +6,7 @@ from __future__ import annotations
 from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse
 
+from grcpal.portal import vendor_import as imod
 from grcpal.portal import vendors as vmod
 from grcpal.portal.auth import User
 from grcpal.portal.security import MAX_UPLOAD_BYTES
@@ -40,6 +41,8 @@ def register(app, h) -> None:
                     assurance=vmod.ASSURANCE, opinions=vmod.OPINIONS, contract=vmod.CONTRACT, file_kinds=vmod.FILE_KINDS,
                     cuec_status=vmod.CUEC_STATUS, review_kinds=vmod.REVIEW_KINDS, review_statuses=vmod.REVIEW_STATUSES,
                     questions=vmod.QUESTIONS, answer_labels=vmod.ANSWER_LABELS, q_types=vmod.Q_TYPES,
+                    levels=vmod.ASSURANCE_LEVELS, baseline=vmod.BASELINE, baseline_status=vmod.BASELINE_STATUS,
+                    questionnaires=vmod.QUESTIONNAIRES,
                     criteria=portal.catalog.criteria, max_mb=MAX_UPLOAD_BYTES // (1024 * 1024))
 
     # ---------------------------------------------------------------- register
@@ -76,6 +79,62 @@ def register(app, h) -> None:
             raise h.HTTPError(403, str(exc)) from exc
         return back("/vendors", msg=f"Imported {len(added)} vendor{'s' if len(added) != 1 else ''} from vendors.yaml")
 
+    # ---------------------------------------------------------------- bulk import from CSV (admins)
+    @app.get("/vendors/import", response_class=HTMLResponse)
+    def vendors_import_page(request: Request, user: User = Depends(current_user)):
+        h.need(user, "admin")
+        return render(request, user, "vendor_import.html", nav_active="vendors", columns=imod.COLUMNS,
+                      imports=p().vendor_imports(), max_rows=imod.MAX_ROWS, rec=None, delta=None, **options())
+
+    @app.get("/vendors/import/template.csv")
+    def vendors_import_template(user: User = Depends(current_user)):
+        h.need(user, "admin")
+        return h.attachment("grcpal-vendor-import-template.csv", imod.template_csv())
+
+    @app.post("/vendors/import/upload")
+    async def vendors_import_upload(request: Request, user: User = Depends(current_user)):
+        raw = await posted(request, user)
+        upload = raw.get("file")
+        if upload is None or not hasattr(upload, "read"):
+            return back("/vendors/import", err="Choose a CSV file")
+        data = await upload.read(imod.MAX_BYTES + 1)
+        try:
+            rec = p().vendor_import_upload(user, upload.filename or "vendors.csv", data)
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back("/vendors/import", err=str(exc))
+        return back(f"/vendors/import/{rec['RowKey']}")
+
+    @app.get("/vendors/import/{token}", response_class=HTMLResponse)
+    def vendors_import_preview(request: Request, token: str, user: User = Depends(current_user)):
+        h.need(user, "admin")
+        try:
+            rec, delta = p().vendor_import(user, token)
+        except Invalid as exc:
+            return back("/vendors/import", err=str(exc))
+        return render(request, user, "vendor_import.html", nav_active="vendors", columns=imod.COLUMNS, imports=[],
+                      max_rows=imod.MAX_ROWS, rec=rec, delta=delta, **options())
+
+    @app.post("/vendors/import/{token}/apply")
+    async def vendors_import_apply(request: Request, token: str, user: User = Depends(current_user)):
+        raw = await posted(request, user)
+        rows = [int(x) for x in raw.getlist("row") if str(x).isdigit()][:imod.MAX_ROWS]
+        try:
+            added = p().vendor_import_apply(user, token, rows, str(raw.get("spread", "")) == "1")
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(f"/vendors/import/{token}" if len(token) == 32 else "/vendors/import", err=str(exc))
+        h.invalidate()
+        return back("/vendors", msg=f"Added {len(added)} vendor{'s' if len(added) != 1 else ''}. "
+                    "Nothing already in the register was changed.")
+
+    @app.post("/vendors/import/{token}/discard")
+    async def vendors_import_discard(request: Request, token: str, user: User = Depends(current_user)):
+        await posted(request, user)
+        return run("/vendors/import", "Import discarded; nothing was added", p().vendor_import_discard, user, token)
+
     @app.get("/vendors/new", response_class=HTMLResponse)
     def vendor_new(request: Request, user: User = Depends(current_user)):
         h.need(user, "admin", "contributor")
@@ -101,28 +160,31 @@ def register(app, h) -> None:
 
     # ---------------------------------------------------------------- questionnaire
     @app.get("/vendors/questionnaire", response_class=HTMLResponse)
-    def questionnaire_page(request: Request, version: int = 0, user: User = Depends(current_user)):
+    def questionnaire_page(request: Request, version: int = 0, q: str = "full", user: User = Depends(current_user)):
         portal = p()
-        versions = portal.questionnaire_versions()
+        qid = q if q in vmod.QUESTIONNAIRES else "full"
+        versions = portal.questionnaire_versions(qid)
         try:
-            shown = portal.questionnaire_version(version) if version else None
+            shown = portal.questionnaire_version(version, qid) if version else None
         except Invalid as exc:
             raise h.HTTPError(404, str(exc)) from exc
-        draft = portal.questionnaire_draft(user) if user.is_admin and not shown else None
+        draft = portal.questionnaire_draft(user, qid) if user.is_admin and not shown else None
         q = shown or draft or versions[0]
         all_sections = [(s["id"], s["title"]) for s in q["sections"]]
         return render(request, user, "questionnaire.html", nav_active="vendors", q=q, draft=draft, versions=versions,
-                      latest=versions[0], viewing=shown, all_sections=all_sections,
+                      latest=versions[0], viewing=shown, all_sections=all_sections, qid=qid,
                       count=sum(len(s["questions"]) for s in q["sections"]), **options())
 
     @app.get("/vendors/questionnaire.xlsx")
-    def questionnaire_xlsx(version: int = 0, user: User = Depends(current_user)):
+    def questionnaire_xlsx(version: int = 0, q: str = "full", user: User = Depends(current_user)):
         portal = p()
+        qid = q if q in vmod.QUESTIONNAIRES else "full"
         try:
-            ver = portal.questionnaire_version(version)
+            ver = portal.questionnaire_version(version, qid)
         except Invalid as exc:
             raise h.HTTPError(404, str(exc)) from exc
-        return h.attachment(f"security-questionnaire-v{ver['version']}.xlsx", portal.questionnaire_xlsx(ver))
+        name = "security-questionnaire" if qid == "full" else "security-essentials"
+        return h.attachment(f"{name}-v{ver['version']}.xlsx", portal.questionnaire_xlsx(ver))
 
     @app.post("/vendors/questionnaire/edit")
     async def questionnaire_edit(request: Request, user: User = Depends(current_user)):
@@ -131,16 +193,19 @@ def register(app, h) -> None:
                                                   "text", "type", "guidance")}
         form["criteria"] = [str(c).strip() for c in str(raw.get("criteria", "")).replace(";", ",").split(",") if c.strip()]
         op = str(raw.get("op", ""))
+        qid = str(raw.get("q", "full"))
+        page = "/vendors/questionnaire" + ("" if qid == "full" else f"?q={qid}" if qid in vmod.QUESTIONNAIRES else "")
         anchor = f"#{form['question'] or form['section']}" if (form["question"] or form["section"]) else ""
         msgs = {"discard": "Draft discarded", "delete_question": "Question removed from the draft",
                 "delete_section": "Section removed from the draft"}
-        return run("/vendors/questionnaire" + anchor, msgs.get(op, "Saved in the draft"), p().edit_questionnaire, user, op, form)
+        return run(page + anchor, msgs.get(op, "Saved in the draft"), p().edit_questionnaire, user, op, form, qid)
 
     @app.post("/vendors/questionnaire/publish")
     async def questionnaire_publish(request: Request, user: User = Depends(current_user)):
         raw = await posted(request, user)
-        return run("/vendors/questionnaire", "Saved as a new version", p().publish_questionnaire, user,
-                   str(raw.get("reason", "")))
+        qid = str(raw.get("q", "full"))
+        page = "/vendors/questionnaire" + ("" if qid == "full" else f"?q={qid}" if qid in vmod.QUESTIONNAIRES else "")
+        return run(page, "Saved as a new version", p().publish_questionnaire, user, str(raw.get("reason", "")), qid)
 
     # ---------------------------------------------------------------- one vendor
     @app.get("/vendors/{vid}", response_class=HTMLResponse)
@@ -164,7 +229,9 @@ def register(app, h) -> None:
                       can_work=user.is_admin or portal._is_vendor_owner(user, v), controls=controls,
                       history=portal.vendor_history(user, vid) if tab == "history" else [],
                       versions=portal.vendor_versions(user, vid) if tab == "history" else [],
-                      latest_q=portal.questionnaire_version(), **options())
+                      latest_q={qid: portal.questionnaire_version(0, qid) for qid in vmod.QUESTIONNAIRES},
+                      needs_baseline=bool(r and portal.needs_baseline(v, r)),
+                      needs_acceptance=bool(r and portal.needs_acceptance(v, r)), **options())
 
     @app.get("/vendors/{vid}/edit", response_class=HTMLResponse)
     def vendor_edit(request: Request, vid: str, user: User = Depends(current_user)):
@@ -265,6 +332,36 @@ def register(app, h) -> None:
                 "controls": [str(c) for c in raw.getlist("controls")]}
         return run(f"/vendors/{vid}?tab=cuecs", "CUEC saved", p().save_cuec, user, vid, cid, form)
 
+    @app.post("/vendors/{vid}/review/assurance")
+    async def vendor_assurance(request: Request, vid: str, user: User = Depends(current_user)):
+        raw = await posted(request, user)
+        items = {key: {"status": str(raw.get(f"b_{key}", "")), "note": str(raw.get(f"n_{key}", ""))}
+                 for key in vmod.BASELINE_KEYS}
+        return run(f"/vendors/{vid}?tab=review#assurance", "Assurance saved", p().save_assurance, user, vid,
+                   str(raw.get("level", "")), items)
+
+    @app.post("/vendors/{vid}/review/acceptance")
+    async def vendor_acceptance(request: Request, vid: str, user: User = Depends(current_user)):
+        raw = await posted(request, user)
+        form = {k: str(raw.get(k, "")) for k in ("owner_name", "owner_title", "reason", "expires")}
+        return run(f"/vendors/{vid}?tab=review#acceptance", "Risk acceptance recorded", p().record_acceptance,
+                   user, vid, form)
+
+    @app.post("/vendors/{vid}/signin-check")
+    async def vendor_signin_check(request: Request, vid: str, user: User = Depends(current_user)):
+        await posted(request, user)
+        try:
+            result = p().vendor_signin_check(user, vid)
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(f"/vendors/{vid}?tab=review", err=str(exc))
+        h.invalidate()
+        if result["ok"]:
+            return back(f"/vendors/{vid}?tab=review", msg="No enabled app or account left in Entra ID. "
+                        "'Sign-in removed' is ticked.")
+        return back(f"/vendors/{vid}?tab=review#signin", err="Sign-in is not fully removed yet; see the check below.")
+
     @app.post("/vendors/{vid}/offboard")
     async def vendor_offboard(request: Request, vid: str, user: User = Depends(current_user)):
         raw = await posted(request, user)
@@ -273,9 +370,9 @@ def register(app, h) -> None:
 
     @app.post("/vendors/{vid}/questionnaire")
     async def vendor_questionnaire(request: Request, vid: str, user: User = Depends(current_user)):
-        await posted(request, user)
+        raw = await posted(request, user)
         try:
-            name, data = p().send_questionnaire(user, vid)
+            name, data = p().send_questionnaire(user, vid, str(raw.get("q", "full")))
         except Forbidden as exc:
             raise h.HTTPError(403, str(exc)) from exc
         except Invalid as exc:

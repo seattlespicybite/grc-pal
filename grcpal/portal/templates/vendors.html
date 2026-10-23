@@ -5,6 +5,7 @@
 {% else %}Every vendor that stores, processes or can reach company or customer data (SOC 2 CC9.2). Each one is reviewed once a year; the tier decides what the review needs.{% endif %}</div></div>
 <div class="head-actions">
 {% if user.can_write %}<a class="btn" href="/vendors/new">{{ 'Add vendor' if user.is_admin else 'Request a new vendor' }}</a>{% endif %}
+{% if user.is_admin %}<a class="btn ghost" href="/vendors/import">Import from CSV</a>{% endif %}
 <a class="btn ghost" href="/vendors/questionnaire">Security questionnaire</a>
 {% if user.sees_everything %}<a class="btn ghost" href="/cycles">Export for auditor</a>{% endif %}
 </div></div>

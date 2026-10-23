@@ -45,8 +45,11 @@ OPINIONS = {"": "Not reviewed", "unqualified": "Clean", "qualified": "With excep
 # "unknown" shows as an empty choice: nobody has checked the contract yet.
 CONTRACT = {"unknown": "", "yes": "Yes", "partial": "Partly", "no": "No", "na": "Not applicable"}
 FILE_KINDS = {"report": "SOC 2 report or certificate", "bridge": "Bridge letter", "questionnaire": "Returned questionnaire",
+              "proof": "Proof from the vendor (screenshot, policy, their provider's report)",
+              "acceptance": "Risk acceptance (email or signed note from the business owner)",
               "contract": "Contract or DPA", "offboarding": "Offboarding evidence", "other": "Other"}
 FILE_CONTROLS = {"report": ["VEN-02"], "bridge": ["VEN-02"], "questionnaire": ["VEN-02"], "contract": ["VEN-03"],
+                 "proof": ["VEN-02"], "acceptance": ["VEN-02"],
                  "offboarding": ["VEN-05"], "other": ["VEN-02"]}
 CUEC_STATUS = {"not_mapped": "Not mapped", "met": "Met", "not_applicable": "Not applicable"}
 REVIEW_KINDS = {"onboarding": "Onboarding check", "annual": "Annual review", "offboarding": "Offboarding"}
@@ -75,7 +78,7 @@ CONTACT_FIELDS = ("owner_name", "owner_title", "owner_email", "owner_phone", "ba
                   "docs_text", "docs_url")
 OWNER_LOCKED = ("owner_email", "backup_email")  # grant access to the vendor, so only admins change them
 AUDITOR_KEEPS = ("owner_title",)                # auditors see that an owner exists (by title), not who
-DETAIL_FIELDS = ("name", "service", "tier", "data_access", "subservice", "contract_terms", "dpa", "contract_note",
+DETAIL_FIELDS = ("name", "service", "tier", "data_access", "domains", "entra_apps", "subservice", "contract_terms", "dpa", "contract_note",
                  "assurance", "period_start", "period_end", "opinion", "start_date", "notes", "next_review_override")
 RESERVED = {"new", "import", "questionnaire", "export"}
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,59}$")
@@ -85,6 +88,52 @@ LIMITS = {"name": 120, "service": 200, "contract_note": 300, "notes": 2000, "sup
           "backup_name": 120, "backup_title": 120, "ext_name": 120, "ext_title": 120, "ext_phone": 40,
           "owner_email": 254, "backup_email": 254, "ext_email": 254}
 REVIEW_MONTHS, DUE_SOON_DAYS, MAX_CUECS, MAX_EXCEPTIONS = 12, 30, 60, 40
+# How much we can rely on a vendor's own controls. Critical and high vendors without an independent audit get the
+# baseline controls check, a 6-month review interval and, when self-attested or a baseline control is not met, a
+# written risk acceptance by the business owner with an expiry date.
+ASSURANCE_LEVELS = {"independent": "Independent audit (SOC 2 Type 2 or ISO 27001 covering the service)",
+                    "evidence": "Evidence reviewed (our questionnaire with proof, and a call)",
+                    "self": "Self-attested (questionnaire answers without proof)",
+                    "none": "None"}
+BASELINE = [  # (key, what must be true, how to check it)
+    ("mfa", "Multi-factor sign-in on the vendor's email and on every system that holds our data",
+     "Screenshot of the MFA setting in their Google Workspace or Microsoft 365 admin, or a screen-share"),
+    ("accounts", "Each person has their own account; no shared logins",
+     "Ask who will work on our account; list of named users"),
+    ("devices", "Laptops and phones that handle our data are encrypted, locked and kept up to date",
+     "Screenshot of BitLocker or FileVault and automatic updates, or a screen-share"),
+    ("our_systems", "Our data stays in our systems (accounts we own and can switch off) or in their providers that have SOC 2 or ISO 27001",
+     "Name the systems; collect their providers' reports or trust pages"),
+    ("least_data", "They receive only the data the service needs",
+     "Agree the data fields with the business owner"),
+    ("no_copies", "No copies on personal devices, USB drives or personal email",
+     "Answer in our questionnaire plus contract clause"),
+    ("backups", "Backups exist and a restore has worked",
+     "Date of the last successful restore"),
+    ("breach_notice", "Contract: they tell us within 72 hours of a breach",
+     "Clause in the contract or data processing agreement"),
+    ("subcontractors", "Contract: no subcontractors or freelancers handle our data without our approval",
+     "Clause in the contract; list of people who will work on our data"),
+    ("deletion", "Contract: our data is returned or deleted at the end, with written confirmation",
+     "Clause in the contract"),
+    ("location", "We know the countries our data is stored in and accessed from, and that is acceptable",
+     "Answer in our questionnaire; check with legal for employee or payroll data sent abroad"),
+    ("sanctions", "The company and its owners are not on a sanctions list",
+     "Search https://sanctionssearch.ofac.treas.gov/ and note the date"),
+    ("continuity", "We can get our data and the service back if the vendor stops working",
+     "Who else can do the work; how we export our data; notice period"),
+]
+BASELINE_KEYS = [k for k, _, _ in BASELINE]
+BASELINE_STATUS = {"": "Not assessed", "met": "Met", "compensated": "Met another way", "not_met": "Not met",
+                   "na": "Not applicable"}
+SHORT_REVIEW_MONTHS, ACCEPT_MAX_MONTHS = 6, 12
+# Two questionnaires: the full one, and a short one for small vendors where every answer asks for proof.
+QUESTIONNAIRES = {
+    "full": ("Full security questionnaire", "catalog/vendor_questionnaire.yaml",
+             "For vendors with a SOC 2 report or ISO certificate, and for larger vendors"),
+    "essentials": ("Small vendor essentials", "catalog/vendor_questionnaire_essentials.yaml",
+                   "For small vendors without a SOC 2 report or ISO certificate: fewer questions, each asks for proof"),
+}
 LIST_BYTES = 16000  # CUECs and exceptions are copied into snapshots; an Azure Table text property holds 32K characters
 # Questionnaire limits keep one version inside an Azure Table text property (64 KB, about 32K characters).
 Q_TYPES = {"yesno": "Yes / No / N/A", "text": "Text"}
@@ -164,7 +213,10 @@ class VendorsMixin:
             return ""
         if v.get("next_review_override"):
             return v["next_review_override"]
-        return add_months(v["last_review"], REVIEW_MONTHS) if v.get("last_review") else self.today.isoformat()
+        if not v.get("last_review"):
+            return self.today.isoformat()
+        due = add_months(v["last_review"], int(v.get("review_months") or REVIEW_MONTHS))
+        return min(due, v["acceptance_expires"]) if v.get("acceptance_expires") else due
 
     def _vendor_view(self, v: dict) -> dict:
         v = dict(v)
@@ -184,11 +236,13 @@ class VendorsMixin:
         elif open_r and open_r["status"] == "submitted":
             health = ("info", "Waiting for sign-off")
         elif not v.get("last_review"):
-            health = ("warn", "Never reviewed")
+            health = (("bad", "First review overdue") if v["next_review"] < today else
+                      ("warn", "Never reviewed") if days is not None and days <= DUE_SOON_DAYS else
+                      ("info", "First review planned"))
         elif v["next_review"] < today:
-            health = ("bad", "Annual review overdue")
+            health = ("bad", "Review overdue")
         elif days is not None and days <= DUE_SOON_DAYS:
-            health = ("warn", "Annual review due soon")
+            health = ("warn", "Review due soon")
         elif any(c.get("status") == "not_mapped" for c in v.get("cuecs") or []):
             health = ("warn", "CUECs not mapped")
         else:
@@ -201,10 +255,18 @@ class VendorsMixin:
     def tier_needs(tier: str) -> list[tuple[str, str]]:
         """What a review needs for a tier: (item, requirement)."""
         return {
-            "critical": [("Assurance report", "SOC 2 Type 2 or ISO 27001"), ("Our questionnaire", "Required"),
-                         ("CUEC mapping", "Required for SOC 2 reports"), ("Contract terms", "Required")],
-            "high": [("Assurance report", "SOC 2 or ISO 27001"), ("Our questionnaire", "Required"),
-                     ("CUEC mapping", "Required for SOC 2 reports"), ("Contract terms", "Required")],
+            "critical": [("Assurance", "SOC 2 Type 2 or ISO 27001 report; without one: our essentials "
+                                        "questionnaire with proof, a call and the baseline controls"),
+                         ("Our questionnaire", "Required"), ("CUEC mapping", "Required for SOC 2 reports"),
+                         ("Contract terms", "Required"),
+                         ("Risk acceptance", "Required when self-attested or a baseline control is not met"),
+                         ("Review interval", "12 months; 6 months without an independent audit")],
+            "high": [("Assurance", "SOC 2 or ISO 27001 report; without one: our essentials questionnaire with "
+                                   "proof, a call and the baseline controls"),
+                     ("Our questionnaire", "Required"), ("CUEC mapping", "Required for SOC 2 reports"),
+                     ("Contract terms", "Required"),
+                     ("Risk acceptance", "Required when self-attested or a baseline control is not met"),
+                     ("Review interval", "12 months; 6 months without an independent audit")],
             "moderate": [("Assurance report", "Report, certificate or our questionnaire"),
                          ("Our questionnaire", "If there is no report"), ("CUEC mapping", "If a SOC 2 report is used"),
                          ("Contract terms", "Required")],
@@ -223,6 +285,21 @@ class VendorsMixin:
             if key == "data_access":
                 vals = [x for x in (val or []) if x in DATA_ACCESS]
                 out[key] = vals
+                continue
+            if key == "entra_apps":
+                items = val if isinstance(val, list) else re.split(r"[;\n]+", str(val or ""))
+                items = [str(x).strip() for x in items if str(x).strip()]
+                if len(items) > 10 or any(len(x) > 120 or any(ord(c) < 32 for c in x) for x in items):
+                    raise Invalid("List up to 10 Entra ID app names or application IDs, separated by ;")
+                out[key] = items
+                continue
+            if key == "domains":
+                from grcpal.portal.vendor_import import clean_domains
+
+                good, bad = clean_domains(val)
+                if bad:
+                    raise Invalid(f"Not a domain: {', '.join(bad)} (use names like contoso.com)")
+                out[key] = good
                 continue
             val = str(val if val is not None else "").strip()
             if key in LIMITS and len(val) > LIMITS[key]:
@@ -438,7 +515,10 @@ class VendorsMixin:
                              for k, label in CHECKLISTS.get(kind, [])],
                "questionnaire_version": 0, "questionnaire_sent_at": "", "submitted_by": "", "submitted_at": "",
                "approved_by": "", "approved_at": "", "self_approved": False, "decision_note": "",
-               "accepted_gaps": [], "snapshot": {}, "returned_note": ""}
+               "accepted_gaps": [], "snapshot": {}, "returned_note": "", "assurance_level": "", "baseline": {},
+               "acceptance": {}, "questionnaire_id": "", "signin_check": {}}
+        if kind == "annual":  # start from the level found last time; the baseline is checked again every time
+            row["assurance_level"] = (self._vendor_row(vid) or {}).get("assurance_level", "")
         self.store.insert("vendorreviews", row)
         self.audit(actor, "vendor.review.start", vid, {"controls": ["VEN-01", "VEN-02"], "review": rid, "kind": kind})
         return row
@@ -665,10 +745,12 @@ class VendorsMixin:
                     gaps.append("Tier, data access or internal owner email is missing")
                 if tier != "low" and not kinds & {"report", "questionnaire"}:
                     gaps.append("No SOC 2 report, certificate or returned questionnaire attached")
+                gaps += self._assurance_gaps(v, r)
             return gaps
         soc2 = (v.get("assurance") or "").startswith("soc2")
+        independent = r.get("assurance_level") in ("independent", "")
         if tier in ("critical", "high"):
-            if "report" not in kinds:
+            if "report" not in kinds and independent:
                 gaps.append("No SOC 2 report or ISO certificate attached to this review")
             if "questionnaire" not in kinds:
                 gaps.append("Our questionnaire was not returned")
@@ -688,7 +770,95 @@ class VendorsMixin:
                 gaps.append("The report period ended more than 12 months ago; ask for a newer report or a bridge letter")
         if len(r.get("answers") or {}) < len(QUESTIONS):
             gaps.append("The owner's review questions are not all answered")
+        return gaps + self._assurance_gaps(v, r)
+
+    # ---------------------------------------------------------------- assurance for vendors without an audit
+    @staticmethod
+    def needs_baseline(v: dict, r: dict) -> bool:
+        """Critical and high vendors without an independent audit get the baseline controls check."""
+        return (r["kind"] in ("onboarding", "annual") and v.get("tier") in ("critical", "high")
+                and r.get("assurance_level") != "independent")
+
+    def needs_acceptance(self, v: dict, r: dict) -> bool:
+        """A written risk acceptance is needed when such a vendor is only self-attested (or nothing), or a
+        baseline control is not met."""
+        if not self.needs_baseline(v, r):
+            return False
+        return (r.get("assurance_level") in ("self", "none")
+                or any(i.get("status") == "not_met" for i in (r.get("baseline") or {}).values()))
+
+    def _assurance_gaps(self, v: dict, r: dict) -> list[str]:
+        gaps = []
+        if v.get("tier") != "low" and not r.get("assurance_level"):
+            gaps.append("Choose the assurance level (how much we can rely on the vendor's own controls)")
+        if self.needs_baseline(v, r):
+            done = sum(1 for k in BASELINE_KEYS if ((r.get("baseline") or {}).get(k) or {}).get("status"))
+            if done < len(BASELINE):
+                gaps.append(f"Baseline controls not assessed: {len(BASELINE) - done} of {len(BASELINE)}")
+            files = [f for f in self.store.list("vendorfiles", v["RowKey"]) if f["RowKey"] in (r.get("file_ids") or [])]
+            if r.get("assurance_level") == "evidence" and not any(f["kind"] == "proof" for f in files):
+                gaps.append("Evidence reviewed, but no proof from the vendor is attached")
+        if self.needs_acceptance(v, r) and not (r.get("acceptance") or {}).get("reason"):
+            gaps.append("Risk acceptance needed: a critical or high vendor without an independent audit that is "
+                        "self-attested or has a baseline control not met")
         return gaps
+
+    def save_assurance(self, actor, vid: str, level: str, items: dict) -> dict:
+        """Record the assurance level and the baseline controls on the open onboarding or annual review."""
+        v, r = self._work_review(actor, vid)
+        if r["kind"] not in ("onboarding", "annual"):
+            raise self._invalid("The assurance level belongs to an onboarding check or an annual review")
+        if r["status"] == "submitted" and not actor.is_admin:
+            raise self._invalid("The review is waiting for sign-off. Ask an admin to return it if something changed.")
+        if level not in ASSURANCE_LEVELS and level != "":
+            raise self._invalid("Choose an assurance level")
+        baseline = {}
+        for key, label, _how in BASELINE:
+            item = items.get(key) or {}
+            status, note = str(item.get("status", "")), str(item.get("note", "")).strip()[:600]
+            if status not in BASELINE_STATUS:
+                raise self._invalid("Choose Met, Met another way, Not met or Not applicable")
+            if status in ("compensated", "not_met", "na") and not note:
+                raise self._invalid(f"Add a note for '{label}': say how it is met, what is missing or why it does "
+                                    "not apply")
+            if status or note:
+                baseline[key] = {"status": status, "note": note}
+        if len(json.dumps(baseline)) > LIST_BYTES:
+            raise self._invalid("The baseline notes are too long. Shorten them.")
+        self.store.update("vendorreviews", vid, r["RowKey"], {"assurance_level": level, "baseline": baseline})
+        self.audit(actor, "vendor.review.assurance", vid, {
+            "controls": ["VEN-02"], "review": r["RowKey"], "level": level,
+            "baseline": {k: x["status"] for k, x in baseline.items()}})
+        return self._review(vid, r["RowKey"])
+
+    def record_acceptance(self, actor, vid: str, form: dict) -> dict:
+        """The business owner's written acceptance of the remaining risk, with an expiry date. Admins record
+        it after uploading the owner's email or signed note to the review."""
+        self._admin(actor)
+        v, r = self._work_review(actor, vid)
+        if r["kind"] not in ("onboarding", "annual"):
+            raise self._invalid("A risk acceptance belongs to an onboarding check or an annual review")
+        name, title = str(form.get("owner_name", "")).strip()[:120], str(form.get("owner_title", "")).strip()[:120]
+        reason, expires = str(form.get("reason", "")).strip()[:2000], str(form.get("expires", "")).strip()
+        if not name or not reason:
+            raise self._invalid("Name the business owner who accepts the risk and write what is accepted and why")
+        if not DATE_RE.match(expires):
+            raise self._invalid("Give the date the acceptance ends (for example 2027-04-30)")
+        latest = add_months(self.today.isoformat(), ACCEPT_MAX_MONTHS)
+        if not self.today.isoformat() < expires <= latest:
+            raise self._invalid(f"The acceptance must end after today and no later than {latest}")
+        files = [f for f in self.store.list("vendorfiles", vid)
+                 if f["RowKey"] in (r.get("file_ids") or []) and f["kind"] == "acceptance"]
+        if not files:
+            raise self._invalid("First upload the business owner's written acceptance (email or signed note) to "
+                                "this review as 'Risk acceptance'")
+        acceptance = {"owner_name": name, "owner_title": title, "reason": reason, "expires": expires,
+                      "file_id": files[-1]["RowKey"], "recorded_by": actor.email, "at": _now()}
+        self.store.update("vendorreviews", vid, r["RowKey"], {"acceptance": acceptance})
+        self.audit(actor, "vendor.review.acceptance", vid, {
+            "controls": ["VEN-02"], "review": r["RowKey"], "accepted_by": name, "title": title,
+            "expires": expires, "reason": reason[:300], "file_sha256": files[-1]["sha256"]})
+        return self._review(vid, r["RowKey"])
 
     def decide_review(self, actor, vid: str, decision: str, note: str) -> dict:
         """Sign off (approve) or return the open review. Approving with gaps needs a note explaining why
@@ -730,10 +900,14 @@ class VendorsMixin:
         updates = {"version": int(v.get("version", 1)) + 1, "updated_by": actor.email, "updated_at": _now()}
         if decision == "reject":
             updates.update(status="rejected", end_date=today)
-        elif r["kind"] == "onboarding":
-            updates.update(status="active", approved_at=_now(), last_review=today, next_review_override="")
-        elif r["kind"] == "annual":
-            updates.update(last_review=today, next_review_override="")
+        elif r["kind"] in ("onboarding", "annual"):
+            level = r.get("assurance_level") or ""
+            short = v.get("tier") in ("critical", "high") and level != "independent"
+            updates.update(last_review=today, next_review_override="", assurance_level=level,
+                           review_months=SHORT_REVIEW_MONTHS if short else REVIEW_MONTHS,
+                           acceptance_expires=(r.get("acceptance") or {}).get("expires", ""))
+            if r["kind"] == "onboarding":
+                updates.update(status="active", approved_at=_now())
         else:
             updates.update(status="offboarded", end_date=today)
         v2 = self.store.update("vendors", "v", vid, updates)
@@ -748,6 +922,81 @@ class VendorsMixin:
             f"{actor.name} {'did not approve' if decision == 'reject' else 'signed off'} the {REVIEW_KINDS[r['kind']].lower()}."
             + (f" Note: {note}" if note else "")), ["VEN-02"])
         return self._review(vid, r["RowKey"])
+
+    # ---------------------------------------------------------------- offboarding: sign-in removed in Entra ID
+    def _latest_collected(self, source: str, name: str) -> dict | None:
+        """Rows of the latest collector run (read from the evidence store; Entra is not called from here)."""
+        runs = self.evidence.list_runs(source)
+        if not runs:
+            return None
+        manifest = self.evidence.latest_manifest(source) or {}
+        raw = self.evidence.read(source, runs[-1], f"{name}.json")
+        try:
+            rows = json.loads(raw) if raw else []
+        except ValueError:
+            rows = []
+        return {"run": f"{source}/{runs[-1]}", "finished": manifest.get("finished", ""),
+                "rows": rows if isinstance(rows, list) else []}
+
+    @staticmethod
+    def _account_email(upn: str) -> str:
+        """Guest accounts look like jo_vendor.example#EXT#@ourtenant.onmicrosoft.com; this gives jo@vendor.example."""
+        upn = (upn or "").lower()
+        if "#ext#" in upn:
+            local = upn.split("#ext#")[0]
+            return local[:local.rfind("_")] + "@" + local[local.rfind("_") + 1:] if "_" in local else local
+        return upn
+
+    def vendor_signin_check(self, actor, vid: str) -> dict:
+        """Offboarding: look in the latest Entra ID collector runs for the vendor's apps that are still enabled
+        and enabled accounts (guest or member) from its email domains. If nothing is left and the runs are recent,
+        the checklist item "Sign-in removed" is ticked with a note naming the runs."""
+        v, r = self._work_review(actor, vid)
+        if r["kind"] != "offboarding":
+            raise self._invalid("The sign-in check is part of offboarding")
+        apps = [a.lower() for a in v.get("entra_apps") or []]
+        domains = v.get("domains") or []
+        if not apps and not domains:
+            raise self._invalid("Add the vendor's Entra ID apps or its email domains first (Edit vendor), so the "
+                                "check knows what to look for")
+        notes, left_apps, left_accounts = [], [], []
+        oldest_ok = (self.today - dt.timedelta(days=7)).isoformat()
+        runs = {}
+        for want, source, name, label in ((apps, "entra_apps", "enterprise_apps", "apps"),
+                                          (domains, "entra_users", "users", "accounts")):
+            if not want:
+                continue
+            got = self._latest_collected(source, name)
+            if not got:
+                notes.append(f"No {source} collection yet: run the {source} collector, then check again")
+                continue
+            runs[source] = got["run"]
+            if (got["finished"] or "")[:10] < oldest_ok:
+                notes.append(f"The latest {source} run is from {got['finished'][:10] or 'an unknown date'}; run it "
+                             "again so the check reflects today")
+            for row in got["rows"]:
+                if not isinstance(row, dict) or row.get("enabled") is False:
+                    continue
+                if label == "apps" and ({str(row.get("app_id") or "").lower(), str(row.get("name") or "").lower()}
+                                        & set(apps)):
+                    left_apps.append(str(row.get("name") or row.get("app_id")))
+                if label == "accounts":
+                    email = self._account_email(str(row.get("upn") or ""))
+                    domain = email.rsplit("@", 1)[-1]
+                    if any(domain == d or domain.endswith("." + d) for d in domains):
+                        left_accounts.append(str(row.get("upn")))
+        ok = not notes and not left_apps and not left_accounts
+        result = {"at": _now(), "by": actor.email, "runs": runs, "apps": apps, "domains": domains,
+                  "remaining_apps": left_apps[:50], "remaining_accounts": left_accounts[:100], "notes": notes, "ok": ok}
+        self.store.update("vendorreviews", vid, r["RowKey"], {"signin_check": result})
+        self.audit(actor, "vendor.signin.check", vid, {"controls": ["VEN-05"], "review": r["RowKey"], "ok": ok,
+                                                       "runs": runs, "remaining_apps": len(left_apps),
+                                                       "remaining_accounts": len(left_accounts)})
+        if ok:
+            self.update_checklist(actor, vid, "access", True,
+                                  f"Checked in Entra ID on {self.today.isoformat()}: no enabled app or account left "
+                                  f"({', '.join(runs.values())})")
+        return result
 
     def start_offboarding(self, actor, vid: str, reason: str) -> dict:
         self._admin(actor)
@@ -771,13 +1020,30 @@ class VendorsMixin:
         return self._open_review(actor, vid, "offboarding")
 
     # ================================================================ questionnaire
-    def _q_starter(self) -> dict:
+    @staticmethod
+    def _qpk(qid: str) -> tuple[str, str]:
+        """Table partitions for a questionnaire's versions and draft (the full one keeps its original keys)."""
+        if qid not in QUESTIONNAIRES:
+            raise ValueError(qid)
+        return ("v", "d") if qid == "full" else (f"v-{qid}", f"d-{qid}")
+
+    def _qid(self, qid: str) -> str:
+        if qid not in QUESTIONNAIRES:
+            raise self._invalid("Unknown questionnaire")
+        return qid
+
+    @staticmethod
+    def _qtarget(qid: str, n: int) -> str:
+        return f"v{n}" if qid == "full" else f"{qid}:v{n}"
+
+    def _q_starter(self, qid: str = "full") -> dict:
         from grcpal.catalog import load_yaml
 
-        path = self.catalog.base / "catalog/vendor_questionnaire.yaml"
+        rel = QUESTIONNAIRES[qid][1]
+        path = self.catalog.base / rel
         if not path.exists():
             from grcpal.catalog import STARTER
-            path = STARTER / "catalog/vendor_questionnaire.yaml"
+            path = STARTER / rel
         data = load_yaml(path.read_text(encoding="utf-8")) if path.exists() else {}
         sections = [{"id": s["id"], "title": str(s.get("title", ""))[:Q_TITLE],
                      "questions": [{"id": q["id"], "text": str(q.get("text", ""))[:Q_TEXT],
@@ -786,7 +1052,7 @@ class VendorsMixin:
                                     "criteria": [c for c in q.get("criteria") or [] if c in self.catalog.criteria]}
                                    for q in s.get("questions") or []]}
                     for s in data.get("sections") or []]
-        return {"title": str(data.get("title") or "Vendor security questionnaire")[:Q_TITLE],
+        return {"title": str(data.get("title") or QUESTIONNAIRES[qid][0])[:Q_TITLE],
                 "intro": str(data.get("intro") or "").strip()[:Q_INTRO], "sections": sections}
 
     @staticmethod
@@ -795,43 +1061,49 @@ class VendorsMixin:
                 if Q_ID_RE.match(x["id"]) and x["id"][0] == prefix]
         return max(nums, default=0) + 1
 
-    def questionnaire_versions(self) -> list[dict]:
-        self._q_seed()
-        return sorted(self.store.list("questionnaires", "v"), key=lambda r: r["RowKey"], reverse=True)
+    def questionnaire_versions(self, qid: str = "full") -> list[dict]:
+        self._q_seed(self._qid(qid))
+        rows = sorted(self.store.list("questionnaires", self._qpk(qid)[0]), key=lambda r: r["RowKey"], reverse=True)
+        for r in rows:
+            r["questionnaire"] = qid
+        return rows
 
-    def questionnaire_version(self, n: int = 0) -> dict:
-        versions = self.questionnaire_versions()
+    def questionnaire_version(self, n: int = 0, qid: str = "full") -> dict:
+        versions = self.questionnaire_versions(qid)
         if not n:
             return versions[0]
-        row = self.store.get("questionnaires", "v", f"{int(n):04d}") if 0 < int(n) < 10000 else None
+        row = next((r for r in versions if r["version"] == int(n)), None) if 0 < int(n) < 10000 else None
         if not row:
             raise self._invalid("Questionnaire version not found")
         return row
 
-    def _q_seed(self) -> None:
-        if self.store.get("questionnaires", "v", "0001"):
+    def _q_seed(self, qid: str = "full") -> None:
+        pk = self._qpk(qid)[0]
+        if self.store.get("questionnaires", pk, "0001"):
             return
-        q = self._q_starter()
-        self.store.insert("questionnaires", {"PartitionKey": "v", "RowKey": "0001", "version": 1, **q,
+        q = self._q_starter(qid)
+        self.store.insert("questionnaires", {"PartitionKey": pk, "RowKey": "0001", "version": 1, **q,
                                              "saved_by": "system", "saved_at": _now(), "reason": "Starter questionnaire"})
-        self.audit("system", "questionnaire.seed", "v1", {"controls": ["VEN-01"], "questions": sum(
+        self.audit("system", "questionnaire.seed", self._qtarget(qid, 1), {"controls": ["VEN-01"], "questions": sum(
             len(s["questions"]) for s in q["sections"])})
 
-    def questionnaire_draft(self, actor) -> dict:
+    def questionnaire_draft(self, actor, qid: str = "full") -> dict:
         """The admin's working copy. It starts as the latest version; nothing changes for anyone else until
         it is saved as a new version."""
         self._admin(actor)
-        latest = self.questionnaire_version()
-        draft = self.store.get("questionnaires", "d", "draft")
+        latest = self.questionnaire_version(0, qid)
+        dpk = self._qpk(qid)[1]
+        draft = self.store.get("questionnaires", dpk, "draft")
         if not draft:
-            draft = {"PartitionKey": "d", "RowKey": "draft", "based_on": latest["version"], "changed": False,
+            draft = {"PartitionKey": dpk, "RowKey": "draft", "based_on": latest["version"], "changed": False,
                      **{k: latest[k] for k in ("title", "intro", "sections")}}
             self.store.upsert("questionnaires", draft)
         return draft
 
-    def edit_questionnaire(self, actor, op: str, form: dict) -> dict:
+    def edit_questionnaire(self, actor, op: str, form: dict, qid: str = "full") -> dict:
         """One change to the draft: add, edit, move or remove a section or question."""
-        draft = self.questionnaire_draft(actor)
+        draft = self.questionnaire_draft(actor, qid)
+        vpk, dpk = self._qpk(qid)
         sections = json.loads(json.dumps(draft["sections"]))
         Invalid = self._invalid
 
@@ -841,10 +1113,10 @@ class VendorsMixin:
                     return i, s
             raise Invalid("Section not found")
 
-        def find_question(qid):
+        def find_question(question_id):
             for si, s in enumerate(sections):
                 for qi, q in enumerate(s["questions"]):
-                    if q["id"] == qid:
+                    if q["id"] == question_id:
                         return si, qi, q
             raise Invalid("Question not found")
 
@@ -864,7 +1136,7 @@ class VendorsMixin:
             return {"text": text, "type": qtype, "guidance": str(form.get("guidance", "")).strip()[:Q_GUIDE],
                     "criteria": crit[:10]}
 
-        sid, qid = str(form.get("section", "")), str(form.get("question", ""))
+        sid, question = str(form.get("section", "")), str(form.get("question", ""))
         direction = str(form.get("direction", ""))
         title = str(form.get("title", "")).strip()
         if op == "intro":
@@ -897,14 +1169,14 @@ class VendorsMixin:
             if sum(len(x["questions"]) for x in sections) >= Q_MAX:
                 raise Invalid(f"A questionnaire can have up to {Q_MAX} questions")
             # Question ids are never reused, even after a question is removed in an earlier version.
-            used = [v["sections"] for v in self.store.list("questionnaires", "v")] + [sections]
+            used = [v["sections"] for v in self.store.list("questionnaires", vpk)] + [sections]
             n = max(self._q_next(x, "Q") for x in used)
             s["questions"].append({"id": f"Q-{n:03d}", **question_fields()})
         elif op == "edit_question":
-            si, qi, q = find_question(qid)
+            si, qi, q = find_question(question)
             sections[si]["questions"][qi] = {"id": q["id"], **question_fields()}
         elif op == "move_question":
-            si, qi, q = find_question(qid)
+            si, qi, q = find_question(question)
             qs = sections[si]["questions"]
             if direction == "up":
                 if qi > 0:
@@ -917,30 +1189,32 @@ class VendorsMixin:
                 elif si < len(sections) - 1:  # bottom of a section: move to the start of the next one
                     sections[si + 1]["questions"].insert(0, qs.pop(qi))
         elif op == "move_to_section":
-            si, qi, q = find_question(qid)
+            si, qi, q = find_question(question)
             ti, target = find_section(str(form.get("target", "")))
             if ti != si:
                 target["questions"].append(sections[si]["questions"].pop(qi))
         elif op == "delete_question":
-            si, qi, q = find_question(qid)
+            si, qi, q = find_question(question)
             sections[si]["questions"].pop(qi)
         elif op == "discard":
-            latest = self.questionnaire_version()
-            self.store.delete("questionnaires", "d", "draft")
-            self.audit(actor, "questionnaire.draft.discard", f"v{latest['version']}", {})
-            return self.questionnaire_draft(actor)
+            latest = self.questionnaire_version(0, qid)
+            self.store.delete("questionnaires", dpk, "draft")
+            self.audit(actor, "questionnaire.draft.discard", self._qtarget(qid, latest["version"]), {})
+            return self.questionnaire_draft(actor, qid)
         else:
             raise Invalid("Unknown change")
         if len(json.dumps(sections)) > Q_BYTES:
             raise Invalid("The questionnaire is too long. Shorten or remove some questions.")
         fields = {"sections": sections, "title": draft["title"], "intro": draft["intro"], "changed": True}
-        self.store.update("questionnaires", "d", "draft", fields)
-        self.audit(actor, f"questionnaire.draft.{op}", qid or sid or "draft",
-                   {"section": sid, "question": qid, "direction": direction, "target": str(form.get("target", ""))})
-        return self.store.get("questionnaires", "d", "draft")
+        self.store.update("questionnaires", dpk, "draft", fields)
+        self.audit(actor, f"questionnaire.draft.{op}", question or sid or "draft",
+                   {"questionnaire": qid, "section": sid, "question": question, "direction": direction,
+                    "target": str(form.get("target", ""))})
+        return self.store.get("questionnaires", dpk, "draft")
 
-    def publish_questionnaire(self, actor, reason: str) -> dict:
-        draft = self.questionnaire_draft(actor)
+    def publish_questionnaire(self, actor, reason: str, qid: str = "full") -> dict:
+        draft = self.questionnaire_draft(actor, qid)
+        vpk, dpk = self._qpk(qid)
         reason = (reason or "").strip()[:500]
         if not reason:
             raise self._invalid("Say what changed in this version (kept for the auditor)")
@@ -948,13 +1222,14 @@ class VendorsMixin:
             raise self._invalid("Nothing has changed since the last version")
         if not any(s["questions"] for s in draft["sections"]):
             raise self._invalid("The questionnaire needs at least one question")
-        n = self.questionnaire_version()["version"] + 1
-        row = {"PartitionKey": "v", "RowKey": f"{n:04d}", "version": n, "title": draft["title"], "intro": draft["intro"],
+        n = self.questionnaire_version(0, qid)["version"] + 1
+        row = {"PartitionKey": vpk, "RowKey": f"{n:04d}", "version": n, "title": draft["title"], "intro": draft["intro"],
                "sections": draft["sections"], "saved_by": actor.email, "saved_at": _now(), "reason": reason}
         self.store.insert("questionnaires", row)
-        self.store.delete("questionnaires", "d", "draft")
-        self.audit(actor, "questionnaire.publish", f"v{n}", {"controls": ["VEN-01"], "version": n, "reason": reason,
-                                                             "questions": sum(len(s["questions"]) for s in row["sections"])})
+        self.store.delete("questionnaires", dpk, "draft")
+        self.audit(actor, "questionnaire.publish", self._qtarget(qid, n), {
+            "controls": ["VEN-01"], "questionnaire": qid, "version": n, "reason": reason,
+            "questions": sum(len(s["questions"]) for s in row["sections"])})
         return row
 
     def questionnaire_xlsx(self, version: dict, vendor: dict | None = None, due: str = "") -> bytes:
@@ -984,7 +1259,7 @@ class VendorsMixin:
                    "protect": True, "lists": [(" ".join(yesno), YES_NO)] if yesno else []}]
         return xlsx.workbook(sheets)
 
-    def send_questionnaire(self, actor, vid: str) -> tuple[str, bytes]:
+    def send_questionnaire(self, actor, vid: str, qid: str = "full") -> tuple[str, bytes]:
         """Download the latest questionnaire for one vendor and record on its open review which version was
         sent. Owners and admins only."""
         v = self._vendor_row(vid)
@@ -992,17 +1267,19 @@ class VendorsMixin:
             raise self._invalid("Vendor not found")
         if not self.can_work_vendor(actor, v):
             raise self._forbidden("Only admins and this vendor's owners can send the questionnaire")
-        version = self.questionnaire_version()
+        version = self.questionnaire_version(0, self._qid(qid))
         due = (self.today + dt.timedelta(days=30)).isoformat()
         r = self.open_review(vid)
         if not r and v.get("status") == "active":
             r = self._open_review(actor, vid, "annual")
         if r:
             self.store.update("vendorreviews", vid, r["RowKey"], {"questionnaire_version": version["version"],
+                                                                  "questionnaire_id": qid,
                                                                   "questionnaire_sent_at": _now()})
-        self.audit(actor, "questionnaire.sent", vid, {"controls": ["VEN-02"], "version": version["version"],
-                                                      "review": r["RowKey"] if r else ""})
-        return (f"{slug(v['name'])}-security-questionnaire-v{version['version']}.xlsx",
+        self.audit(actor, "questionnaire.sent", vid, {"controls": ["VEN-02"], "questionnaire": qid,
+                                                      "version": version["version"], "review": r["RowKey"] if r else ""})
+        kind = "security-questionnaire" if qid == "full" else "security-essentials"
+        return (f"{slug(v['name'])}-{kind}-v{version['version']}.xlsx",
                 self.questionnaire_xlsx(version, v, due))
 
     # ================================================================ reminders and calendar
@@ -1058,7 +1335,8 @@ class VendorsMixin:
         vendors = self.store.list("vendors", "v")
         tables: dict[str, list[dict]] = {"vendors": [], "vendor_register_history": [], "vendor_reviews": [],
                                          "vendor_exceptions": [], "vendor_cuecs": [], "vendor_files": [],
-                                         "subservice_organizations": [], "questionnaire_versions": []}
+                                         "subservice_organizations": [], "questionnaire_versions": [],
+                                         "vendor_baseline": [], "vendor_risk_acceptances": [], "vendor_imports": []}
         files: dict[str, bytes] = {}
         for v in sorted(vendors, key=lambda x: x["name"].lower()):
             vid = v["RowKey"]
@@ -1100,7 +1378,27 @@ class VendorsMixin:
                     "tier_at_signoff": (r.get("snapshot") or {}).get("tier", ""),
                     "assurance_at_signoff": (r.get("snapshot") or {}).get("assurance", ""),
                     "report_period_end_at_signoff": (r.get("snapshot") or {}).get("period_end", ""),
-                    "opinion_at_signoff": (r.get("snapshot") or {}).get("opinion", "")})
+                    "opinion_at_signoff": (r.get("snapshot") or {}).get("opinion", ""),
+                    "assurance_level": r.get("assurance_level", ""), "questionnaire": r.get("questionnaire_id", ""),
+                    "risk_acceptance_expires": (r.get("acceptance") or {}).get("expires", ""),
+                    "signin_check_ok": (r.get("signin_check") or {}).get("ok", ""),
+                    "signin_check_at": (r.get("signin_check") or {}).get("at", ""),
+                    "signin_check_runs": list(((r.get("signin_check") or {}).get("runs") or {}).values())})
+                for key, label, _how in BASELINE:
+                    item = (r.get("baseline") or {}).get(key)
+                    if item or self.needs_baseline(v, r):
+                        tables["vendor_baseline"].append({
+                            "vendor": vid, "name": v["name"], "review": r["RowKey"], "control": key, "requirement": label,
+                            "result": BASELINE_STATUS.get((item or {}).get("status", ""), ""),
+                            "note": (item or {}).get("note", "")})
+                acc = r.get("acceptance") or {}
+                if acc.get("reason"):
+                    tables["vendor_risk_acceptances"].append({
+                        "vendor": vid, "name": v["name"], "review": r["RowKey"], "tier": v.get("tier", ""),
+                        "assurance_level": r.get("assurance_level", ""), "accepted_by": acc["owner_name"],
+                        "accepted_by_title": acc.get("owner_title", ""), "reason": acc["reason"],
+                        "expires": acc["expires"], "evidence_file": acc.get("file_id", ""),
+                        "recorded_by": acc["recorded_by"], "recorded_at": acc["at"]})
                 for x in r.get("exceptions") or []:
                     tables["vendor_exceptions"].append({"vendor": vid, "name": v["name"], "review": r["RowKey"], **x})
                 for c in (r.get("snapshot") or {}).get("cuecs") or []:
@@ -1118,11 +1416,16 @@ class VendorsMixin:
                 data = self.evidence.read(source, run, f["filename"])
                 if data is not None:
                     files[path] = data
-        for ver in self.questionnaire_versions():
+        for rec in self.store.list("vendorimports", "i"):
+            if start <= rec["at"][:10] <= end:
+                tables["vendor_imports"].append({k: rec.get(k, "") for k in (
+                    "RowKey", "filename", "sha256", "evidence_run", "by", "at", "status", "applied_at", "import_counts",
+                    "added_ids", "spread")})
+        for ver in [x for qid in QUESTIONNAIRES for x in self.questionnaire_versions(qid)]:
             for si, s in enumerate(ver["sections"], 1):
                 for qi, q in enumerate(s["questions"], 1):
                     tables["questionnaire_versions"].append({
-                        "version": ver["version"], "saved_at": ver["saved_at"], "saved_by": ver["saved_by"],
+                        "questionnaire": QUESTIONNAIRES[ver["questionnaire"]][0], "version": ver["version"], "saved_at": ver["saved_at"], "saved_by": ver["saved_by"],
                         "reason": ver["reason"], "number": f"{si}.{qi}", "id": q["id"], "section": s["title"],
                         "question": q["text"], "type": Q_TYPES[q["type"]], "guidance": q.get("guidance", ""),
                         "criteria": q.get("criteria", [])})

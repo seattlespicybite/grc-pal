@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% from "_macros.html" import when %}{% block title %}Security questionnaire{% endblock %}
 {% set editing = draft is not none %}
 {% macro op(name, section='', question='', direction='', label='', cls='btn ghost small', aria='') -%}
-<form method="post" action="/vendors/questionnaire/edit" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}">
+<form method="post" action="/vendors/questionnaire/edit" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="q" value="{{ qid }}">
 <input type="hidden" name="op" value="{{ name }}"><input type="hidden" name="section" value="{{ section }}"><input type="hidden" name="question" value="{{ question }}">
 <input type="hidden" name="direction" value="{{ direction }}"><button class="{{ cls }}" type="submit"{% if aria %} aria-label="{{ aria }}" title="{{ aria }}"{% endif %}>{{ label }}</button></form>
 {%- endmacro %}
@@ -13,15 +13,17 @@
 {%- endmacro %}
 {% block content %}
 <div class="mb"><a href="/vendors">‹ Vendors</a></div>
+<nav class="v-tabs" aria-label="Questionnaires">{% for k, info in questionnaires.items() %}<a href="/vendors/questionnaire?q={{ k }}" class="{{ 'on' if qid == k }}"{% if qid == k %} aria-current="page"{% endif %}>{{ info[0] }}</a>{% endfor %}</nav>
+<p class="sub">{{ questionnaires[qid][2] }}.</p>
 <div class="page-head"><div><h1>Security questionnaire</h1>
 <div class="sub">Our own vendor questionnaire. Download it as an Excel file, send it to the vendor, then upload the returned file to that vendor's review. {{ count }} questions in {{ q.sections|length }} sections.</div></div>
-<div class="head-actions"><a class="btn" href="/vendors/questionnaire.xlsx{{ '?version=' ~ viewing.version if viewing else '' }}">Download {{ 'v' ~ (viewing.version if viewing else latest.version) }} (.xlsx)</a></div></div>
+<div class="head-actions"><a class="btn" href="/vendors/questionnaire.xlsx?q={{ qid }}{{ '&amp;version=' ~ viewing.version if viewing else '' }}">Download {{ 'v' ~ (viewing.version if viewing else latest.version) }} (.xlsx)</a></div></div>
 
-{% if viewing %}<div class="card card-info mb">Version {{ viewing.version }}, saved {{ viewing.saved_at[:10] }} by {{ viewing.saved_by }}: {{ viewing.reason }}. Read-only. <a href="/vendors/questionnaire">Back to the latest</a></div>
+{% if viewing %}<div class="card card-info mb">Version {{ viewing.version }}, saved {{ viewing.saved_at[:10] }} by {{ viewing.saved_by }}: {{ viewing.reason }}. Read-only. <a href="/vendors/questionnaire?q={{ qid }}">Back to the latest</a></div>
 {% elif editing %}<div class="card card-info mb"><div class="row-between"><div><b>{{ 'Draft with unsaved changes' if draft.changed else 'Editing a draft' }}</b> based on version {{ draft.based_on }}.
 <div class="sub">Vendors, owners and auditors keep seeing version {{ latest.version }} until you save a new version. Question IDs never change when you move a question, so answers to older versions still match.</div></div>
 {% if draft.changed %}{{ op('discard', label='Discard draft') }}{% endif %}</div>
-{% if draft.changed %}<form method="post" action="/vendors/questionnaire/publish" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+{% if draft.changed %}<form method="post" action="/vendors/questionnaire/publish" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="q" value="{{ qid }}">
 <div class="form-row"><div class="grow"><label for="reason">What changed in this version? (kept for the auditor)</label><input id="reason" name="reason" required maxlength="500" placeholder="For example: moved breach notice to Data protection"></div></div>
 <div class="actions"><button class="btn" type="submit">Save as version {{ latest.version + 1 }}</button></div></form>{% endif %}</div>
 {% else %}<div class="card mb sub">Version {{ q.version }}, saved {{ q.saved_at[:10] }}. {{ 'Read-only. Auditors see every version and which version each vendor received.' if user.is_auditor else 'Only an admin edits the questionnaire. Download it for a vendor from that vendor’s Review tab, so the version sent is recorded.' }}</div>{% endif %}
@@ -29,7 +31,7 @@
 <div class="grid g-main">
 <div>
 <section class="card"><h2>{{ q.title }}</h2>{% if q.intro %}<p class="v-pre">{{ q.intro }}</p>{% endif %}
-{% if editing %}<details><summary>Edit title and introduction</summary><form method="post" action="/vendors/questionnaire/edit" class="mt-s"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="op" value="intro">
+{% if editing %}<details><summary>Edit title and introduction</summary><form method="post" action="/vendors/questionnaire/edit" class="mt-s"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="q" value="{{ qid }}"><input type="hidden" name="op" value="intro">
 <label for="qtitle">Title</label><input id="qtitle" name="title" required maxlength="120" value="{{ q.title }}">
 <label for="qintro">Introduction (first sheet of the Excel file)</label><textarea id="qintro" name="intro" maxlength="2000">{{ q.intro }}</textarea>
 <div class="actions"><button class="btn small" type="submit">Save in draft</button></div></form></details>{% endif %}</section>
@@ -38,7 +40,7 @@
 <section class="card v-qsec" id="{{ s.id }}"><div class="row-between"><h2>{{ si }}. {{ s.title }}</h2>
 {% if editing %}<div class="v-qtools">{{ op('move_section', s.id, direction='up', label='↑', aria='Move section up') }}{{ op('move_section', s.id, direction='down', label='↓', aria='Move section down') }}
 {% if not s.questions %}{{ op('delete_section', s.id, label='Remove section') }}{% endif %}</div>{% endif %}</div>
-{% if editing %}<details class="mb"><summary>Rename section</summary><form method="post" action="/vendors/questionnaire/edit" class="mt-s"><input type="hidden" name="csrf" value="{{ csrf }}">
+{% if editing %}<details class="mb"><summary>Rename section</summary><form method="post" action="/vendors/questionnaire/edit" class="mt-s"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="q" value="{{ qid }}">
 <input type="hidden" name="op" value="rename_section"><input type="hidden" name="section" value="{{ s.id }}">
 <label for="sn-{{ s.id }}">Section name</label><input id="sn-{{ s.id }}" name="title" required maxlength="120" value="{{ s.title }}"><div class="actions"><button class="btn small" type="submit">Rename</button></div></form></details>{% endif %}
 <ol class="v-qlist">
@@ -46,27 +48,27 @@
 <div class="v-qbody"><div>{{ qq.text }}</div>{% if qq.guidance %}<div class="sub">{{ qq.guidance }}</div>{% endif %}
 <div class="tags mt-s"><span>{{ q_types[qq.type] }}</span>{% for c in qq.criteria or [] %}<span class="mono">{{ c }}</span>{% endfor %}</div>
 {% if editing %}<div class="v-qtools mt-s">{{ op('move_question', s.id, qq.id, 'up', '↑', aria='Move question up') }}{{ op('move_question', s.id, qq.id, 'down', '↓', aria='Move question down') }}
-{% if all_sections|length > 1 %}<form method="post" action="/vendors/questionnaire/edit" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="op" value="move_to_section"><input type="hidden" name="question" value="{{ qq.id }}">
+{% if all_sections|length > 1 %}<form method="post" action="/vendors/questionnaire/edit" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="q" value="{{ qid }}"><input type="hidden" name="op" value="move_to_section"><input type="hidden" name="question" value="{{ qq.id }}">
 <select name="target" aria-label="Move {{ qq.id }} to section">{% for sid, stitle in all_sections %}{% if sid != s.id %}<option value="{{ sid }}">{{ stitle }}</option>{% endif %}{% endfor %}</select> <button class="btn ghost small" type="submit">Move to section</button></form>{% endif %}
 {{ op('delete_question', s.id, qq.id, label='Remove') }}</div>
-<details class="mt-s"><summary>Edit question</summary><form method="post" action="/vendors/questionnaire/edit" class="mt-s"><input type="hidden" name="csrf" value="{{ csrf }}">
+<details class="mt-s"><summary>Edit question</summary><form method="post" action="/vendors/questionnaire/edit" class="mt-s"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="q" value="{{ qid }}">
 <input type="hidden" name="op" value="edit_question"><input type="hidden" name="question" value="{{ qq.id }}">{{ qfields(qq, s.id) }}
 <div class="actions"><button class="btn small" type="submit">Save in draft</button></div></form></details>{% endif %}
 </div></li>{% else %}<li class="sub">No questions in this section.</li>{% endfor %}
 </ol>
-{% if editing %}<details class="mt"><summary><b>Add a question to this section</b></summary><form method="post" action="/vendors/questionnaire/edit" class="mt-s"><input type="hidden" name="csrf" value="{{ csrf }}">
+{% if editing %}<details class="mt"><summary><b>Add a question to this section</b></summary><form method="post" action="/vendors/questionnaire/edit" class="mt-s"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="q" value="{{ qid }}">
 <input type="hidden" name="op" value="add_question"><input type="hidden" name="section" value="{{ s.id }}">{{ qfields({'id': 'new', 'text': '', 'type': 'yesno', 'guidance': '', 'criteria': []}, s.id) }}
 <div class="actions"><button class="btn small" type="submit">Add question</button></div></form></details>{% endif %}
 </section>{% endfor %}
 
-{% if editing %}<section class="card"><h2>Add a section</h2><form method="post" action="/vendors/questionnaire/edit"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="op" value="add_section">
+{% if editing %}<section class="card"><h2>Add a section</h2><form method="post" action="/vendors/questionnaire/edit"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="q" value="{{ qid }}"><input type="hidden" name="op" value="add_section">
 <label for="new-sec">Section name</label><input id="new-sec" name="title" required maxlength="120"><div class="actions"><button class="btn small" type="submit">Add section</button></div></form></section>{% endif %}
 </div>
 
 <aside>
 <section class="card"><h2>The Excel file</h2><p class="sub">An Instructions sheet (your organization, the vendor, the return date, the version) and a Questions sheet. Questions are locked; the Answer and Comments columns are for the vendor, and Yes/No questions have a Yes, No, N/A list.</p></section>
 <section class="card"><h2>Versions</h2><ul class="v-files">
-{% for ver in versions %}<li><a href="/vendors/questionnaire?version={{ ver.version }}"><b>v{{ ver.version }}</b></a> <span class="sub">{{ ver.saved_at[:10] }} · {{ ver.saved_by }}</span><div class="sub">{{ ver.reason }}</div></li>{% endfor %}</ul>
+{% for ver in versions %}<li><a href="/vendors/questionnaire?q={{ qid }}&amp;version={{ ver.version }}"><b>v{{ ver.version }}</b></a> <span class="sub">{{ ver.saved_at[:10] }} · {{ ver.saved_by }}</span><div class="sub">{{ ver.reason }}</div></li>{% endfor %}</ul>
 <p class="hint">Old versions never change. Each vendor review records which version was sent.</p></section>
 </aside>
 </div>
