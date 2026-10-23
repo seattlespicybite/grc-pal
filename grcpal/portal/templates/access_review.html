@@ -106,8 +106,8 @@ if some are still open, write why the review closes anyway. Closing stores the d
 <div class="card"><h2>Evidence</h2>
 <div class="sub">Closed {{ c.closed_at[:10] }}. {% if c.close_note %}Note: {{ c.close_note }}{% endif %}</div>
 <table><tbody>
-<tr><td>Accounts file received</td><td class="mono">{{ c.snapshot_run }}</td></tr>
-<tr><td>SHA-256 of the accounts file</td><td class="mono">{{ c.snapshot_sha256 }}</td></tr>
+<tr><td>Account list stored</td><td class="mono">{{ c.snapshot_run }}</td></tr>
+<tr><td>SHA-256 of the reviewed account list (population.csv)</td><td class="mono">{{ c.snapshot_sha256 }}</td></tr>
 <tr><td>Decisions stored</td><td class="mono">{{ c.result_run }}</td></tr>
 <tr><td>SHA-256 of the decisions file</td><td class="mono">{{ c.result_sha256 }}</td></tr>
 </tbody></table></div>

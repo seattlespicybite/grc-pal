@@ -16,7 +16,8 @@ Where collectors run decides the best sign-in method:
 
 - **Permissions (Microsoft Graph, application):** User.Read.All, AuditLog.Read.All,
   RoleManagement.Read.Directory, Application.Read.All, Policy.Read.All,
-  DeviceManagementManagedDevices.Read.All. `deploy/azure/grant-permissions.ps1` grants them to an identity.
+  DeviceManagementManagedDevices.Read.All, and GroupMember.Read.All for access reviews that include groups
+  (Entra enterprise applications and Azure). `deploy/azure/grant-permissions.ps1` grants them to an identity.
 - **Azure:** Reader at the management group or on each subscription in scope. Optionally assign the
   built-in Azure Policy initiative *SOC 2 Type 2* in audit mode and enter its assignment name.
 
