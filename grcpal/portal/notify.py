@@ -135,3 +135,25 @@ def doc_approval(p, kind: str, number: str, title: str, did: str, v: dict, note:
             "intro": "The approval request was closed. There is nothing for you to do.",
             "fields": fields, "sections": [("Why", (note or "(none)").splitlines())],
             "button": ("Open GRC-pal", p.link("/work"))}
+
+
+def config_changed(p, section, changed: list[str], cleared: list[str], endpoints: dict, actor) -> dict:
+    """Security notice to every admin when a Configuration section is saved. Field names only; secret values are
+    never included. Changed endpoints are shown in full so a redirect of traffic is easy to spot."""
+    from grcpal.settings import FIELDS
+
+    labels = [FIELDS[k].label + (" (secret)" if FIELDS[k].secret else "") for k in changed]
+    sections = [("Changed", labels)]
+    if endpoints:
+        sections.append(("Server addresses", [f"{FIELDS[k].label}: {old or '(default)'} -> {new or '(default)'}"
+                                              for k, (old, new) in endpoints.items()]))
+    if cleared:
+        sections.append(("Secrets cleared because the address changed",
+                         [FIELDS[k].label for k in cleared] + ["Enter them again if this change was intended."]))
+    return {"subject": f"Configuration changed: {section.title}",
+            "title": "GRC-pal configuration was changed",
+            "intro": f"{actor.name} ({actor.email}) saved the {section.title} settings. If you did not expect this, "
+                     "check the audit log and the account that made the change.",
+            "fields": [("Section", section.title), ("Changed by", actor.email)],
+            "sections": sections,
+            "button": ("Review the configuration", p.link(f"/settings/{section.id}"))}

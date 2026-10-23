@@ -1,7 +1,7 @@
 """Microsoft Entra ID, Microsoft 365 and Azure: credentials and connection tests."""
 from __future__ import annotations
 
-import requests
+from grcpal import checks
 
 GRAPH = "https://graph.microsoft.com/v1.0"
 ARM = "https://management.azure.com"
@@ -36,8 +36,10 @@ def token(settings, scope: str) -> str:
     return credential(settings).get_token(scope).token
 
 
-def _get(url: str, bearer: str) -> requests.Response:
-    return requests.get(url, headers={"Authorization": f"Bearer {bearer}"}, timeout=20)
+def _get(url: str, bearer: str) -> checks.Response:
+    """Connection-test probe through the outbound guard (public addresses only; token dropped on cross-host redirect)."""
+    return checks.safe_request("GET", url, headers={"Authorization": f"Bearer {bearer}"}, timeout=20,
+                               user_agent="GRC-pal/1", allow_private=False)
 
 
 def validate(settings, ctx, result) -> None:
@@ -53,7 +55,7 @@ def validate(settings, ctx, result) -> None:
         hint = (f"Grant the application permission {permission} to the identity and grant admin consent. "
                 "Licensing can also block some reports (Entra ID P1 for sign-in data, Intune for devices).")
         result.add(f"Graph permission {permission}", r.status_code == 200,
-                   "ok" if r.status_code == 200 else f"HTTP {r.status_code}: {r.text[:160]}", hint)
+                   "ok" if r.status_code == 200 else f"HTTP {r.status_code}: {r.text()[:160]}", hint)
 
 
 def validate_azure(settings, ctx, result) -> None:

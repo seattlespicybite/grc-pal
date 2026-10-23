@@ -4,6 +4,20 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Security
+- **Outbound endpoint controls (hardening B3, F-11).** AI provider, GitHub (connection test and collector client)
+  and Microsoft Graph connection-test calls now go through the same guard as custom checks: public addresses
+  only, every redirect re-checked, cloud metadata and private ranges blocked. Credential headers are dropped when a
+  redirect leaves the original host (this also applies to custom checks). Self-hosted models and GitHub Enterprise
+  Server on a private network need `GRCPAL_AI_ALLOW_PRIVATE=1` / `GRCPAL_GITHUB_ALLOW_PRIVATE=1` in the
+  environment. **Upgrade note:** an existing `http://ollama:11434/v1` setup needs `GRCPAL_AI_ALLOW_PRIVATE=1`.
+- **Secrets follow their server.** Changing the AI endpoint, the GitHub API URL or the SMTP server on the
+  Configuration page clears that section's secret unless a new one is entered in the same save, and blocks a
+  deployment-provided secret (such as the Azure SMTP password) for the new server. "Test without saving" does not
+  send the saved secret to a changed address.
+- **Configuration changes are emailed to every admin**, the person who saved included, and the audit entry lists
+  cleared secrets and new endpoints (names and addresses only, never secret values).
+
 ### Added
 - **Security scanning in CI** (`.github/workflows/security-scan.yml`, on every pull request, nightly and on demand):
   bandit (medium and high, with a reviewed baseline of false positives), pip-audit on everything the image ships,

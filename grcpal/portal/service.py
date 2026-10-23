@@ -841,11 +841,13 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Vendors
         return {o["control"]: o for o in self.overrides() if o["active"]}
 
     # ================================================================ email
-    def _notify(self, kind: str, recipients, actor: User, content: dict, controls: list[str] | None = None) -> list[str]:
-        """Queue one email per recipient. Skips the actor, disabled accounts and invalid addresses."""
+    def _notify(self, kind: str, recipients, actor: User, content: dict, controls: list[str] | None = None,
+                include_actor: bool = False) -> list[str]:
+        """Queue one email per recipient. Skips the actor (unless include_actor), disabled accounts and invalid
+        addresses."""
         sent = []
         for email in sorted({(r or "").lower() for r in recipients}):
-            if not EMAIL.match(email) or email == actor.email:
+            if not EMAIL.match(email) or (email == actor.email and not include_actor):
                 continue
             row = self.user_row(email)
             if row and not row.get("active", True):

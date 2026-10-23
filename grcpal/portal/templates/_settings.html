@@ -12,7 +12,7 @@
   {% elif f.kind == 'secret' %}
   {% set info = s.secret_info(f.key) %}
   <input id="f-{{ f.key }}" name="{{ f.key }}" type="password" autocomplete="new-password" spellcheck="false"
-    placeholder="{% if info.set_at %}Saved {{ info.set_at[:10] }} by {{ info.set_by }}. Leave blank to keep.{% elif s.source(f.key) == 'environment' %}Set by the deployment. Enter a value to override.{% else %}Not set{% endif %}">
+    placeholder="{% if info.set_at %}Saved {{ info.set_at[:10] }} by {{ info.set_by }}. Leave blank to keep.{% elif info.cleared_at %}Cleared {{ info.cleared_at[:10] }}: {{ info.reason or 'the server address changed' }}. Enter it again.{% elif s.source(f.key) == 'environment' %}Set by the deployment. Enter a value to override.{% else %}Not set{% endif %}">
   {% if info.set_at %}<label class="check small-check"><input type="checkbox" name="{{ f.key }}__clear" value="1"> Remove the saved value</label>{% endif %}
   {% else %}
   <input id="f-{{ f.key }}" name="{{ f.key }}" type="{{ 'number' if f.kind == 'number' else 'text' }}" value="{{ val }}" placeholder="{{ f.placeholder }}" spellcheck="false">

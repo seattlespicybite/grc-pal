@@ -366,22 +366,18 @@ def test_ai_prompt_masks_emails_and_fences_injection(env):
 def test_anthropic_and_openai_compatible_request_shapes(monkeypatch):
     sent = []
 
-    class R:
-        status_code = 200
-        headers = {}
-        def __init__(self, data):
-            self._d = data
-        def json(self):
-            return self._d
+    def R(data):
+        return checks.Response(200, {}, json.dumps(data).encode(), 1, "", "93.184.216.34")
 
-    def fake_post(url, headers, json, timeout):
-        sent.append((url, headers, json))
+    def fake_request(method, url, headers=None, body=None, **kw):   # the outbound guard (B3); see test_outbound.py
+        payload = json.loads(body)
+        sent.append((url, headers, payload))
         if "anthropic" in url:
-            return R({"content": [{"type": "text", "text": '{"verdict": "effective"}'}], "model": json["model"],
+            return R({"content": [{"type": "text", "text": '{"verdict": "effective"}'}], "model": payload["model"],
                       "usage": {"input_tokens": 10, "output_tokens": 5}})
         return R({"choices": [{"message": {"content": "OK"}}], "usage": {"prompt_tokens": 3, "completion_tokens": 1}})
 
-    monkeypatch.setattr(providers.requests, "post", fake_post)
+    monkeypatch.setattr(providers.checks, "safe_request", fake_request)
     c = providers.AnthropicProvider("", "sk-ant-test").complete("sys", [{"type": "text", "text": "hi"}], 100)
     url, headers, body = sent[0]
     assert url == "https://api.anthropic.com/v1/messages" and headers["x-api-key"] == "sk-ant-test"
