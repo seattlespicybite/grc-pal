@@ -1,0 +1,44 @@
+{% extends "base.html" %}{% block title %}Control matrix{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Control matrix</h1>
+<div class="sub">Every control ({{ count }}) with its description, owners and mappings to {{ frameworks.values()|map(attribute='name')|join(', ') }}.
+Download it to read, share with auditors, or edit in bulk and import back.</div></div>
+<a class="btn ghost small" href="/controls">Back to controls</a></div>
+
+<div class="matrix-cards">
+<div class="card"><h2>Report</h2>
+<p class="sub">A readable document for leadership and auditors: every control, its owners and evidence, and a cross-reference per framework. It is never imported.</p>
+<div class="actions"><a class="btn" href="/matrix/report">Open report (print or save as PDF)</a> <a class="btn ghost" href="/matrix/report.docx">Download Word</a></div></div>
+
+<div class="card"><h2>Data file</h2>
+<p class="sub">An Excel file in a fixed layout, one row per control. Edit it and import it back to change many controls at once. Only frameworks switched on are included.</p>
+<div class="actions"><a class="btn" href="/matrix/data.xlsx">Download data file (.xlsx)</a></div></div>
+</div>
+
+{% if is_owner %}
+<div class="card mt-l"><h2>Import changes</h2>
+<form method="post" action="/matrix/import" enctype="multipart/form-data" class="grid">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<label>Edited data file (.xlsx, up to {{ max_mb }} MB)<input type="file" name="file" accept=".xlsx" required></label>
+<div><button class="btn" type="submit">Upload and preview</button></div>
+</form>
+<ul class="hint">
+<li>Nothing changes when you upload. You see every change first, old and new, and then apply or discard it.</li>
+<li>Controls are matched by Control ID. Rows you removed from the file are left alone: an import never deletes anything.</li>
+<li>To retire a custom control, set its Status to <span class="mono">retired</span>. Built-in controls cannot be retired.</li>
+<li>Only files exported from this organization are accepted. If a control was changed here after you downloaded the file, that row is refused so nobody's change is overwritten.</li>
+</ul></div>
+{% elif user.is_admin %}
+<div class="card mt-l card-info"><h2>Import changes</h2><p class="sub m0">Only the control library owner ({{ library_owner or 'not assigned yet' }}) can import changes. This keeps one accountable person for the control set.</p></div>
+{% endif %}
+
+{% if imports %}
+<div class="card mt-l"><h2>Recent imports</h2><div class="table-wrap"><table>
+<thead><tr><th>When</th><th>By</th><th>File</th><th>Status</th><th>Changes</th></tr></thead>
+<tbody>{% for i in imports %}<tr><td class="nowrap mono">{{ i.at[:16]|replace('T', ' ') }}</td><td>{{ i.by }}</td>
+<td>{{ i.file_name }}<div class="sub mono">SHA-256 {{ i.file_sha256[:16] }}…</div></td>
+<td><span class="pill {{ {'applied': 'ok', 'pending': 'pending', 'partial': 'error', 'stale': 'stale'}.get(i.status, 'na') }}">{{ i.status }}</span></td>
+<td>{{ i.summary.changes if i.summary else '' }}{% if i.reason %}<div class="sub">{{ i.reason }}</div>{% endif %}</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% endif %}
+{% endblock %}

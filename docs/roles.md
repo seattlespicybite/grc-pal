@@ -60,6 +60,8 @@ the person who defines controls from the people who operate them, which auditors
 | Logs page and background jobs | ✓ |  | ✓ |
 | Frameworks and coverage; turn frameworks on or off | ✓ |  | ✓ (read) |
 | Change control definitions (owners, wording, evidence wanted, mappings); create, edit, retire custom controls and custom frameworks | library owner only |  | history (read) |
+| Control matrix: download the data file and the report (PDF, Word) | ✓ |  | ✓ |
+| Control matrix: import changes from the data file | library owner only |  |  |
 | Add and run checks | ✓ |  |  |
 | AI review and mock audit | ✓ (run, accept, dismiss) |  | ✓ (read) |
 

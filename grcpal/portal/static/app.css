@@ -489,3 +489,35 @@ a.stat:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .v-baseline li.v-b-not_met { border-left-color: var(--bad); } .v-baseline li.v-b-na { border-left-color: var(--idle); }
 .v-b-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .v-b-row select { flex: 0 0 170px; } .v-b-row input { flex: 1 1 260px; min-width: 0; }
+
+/* Control matrix: page, import preview, report (print to PDF) */
+.matrix-cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.card-bad { border-color: var(--bad); }
+.matrix-change { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 12px; }
+.matrix-change h3 { margin: 0 0 8px; font-size: 15px; }
+table.diff td { vertical-align: top; white-space: pre-wrap; }
+table.diff td.was { color: var(--muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--bad) 60%, transparent); }
+table.diff td.now { color: var(--text); }
+.report-doc { max-width: 960px; }
+.report-cover { margin-bottom: 28px; }
+.report-cover h1 { font-size: 30px; margin-bottom: 4px; }
+.report-org { font-size: 18px; font-weight: 600; margin: 0 0 6px; }
+.report-toc a { color: var(--accent); }
+.report-section h2 { margin-top: 28px; border-bottom: 2px solid var(--border); padding-bottom: 6px; }
+.report-control { break-inside: avoid; border-bottom: 1px solid var(--border); padding: 10px 0 14px; }
+.report-control h3 { margin: 6px 0; font-size: 16px; }
+.report-control p { margin: 4px 0 8px; white-space: pre-wrap; }
+.report-table { display: table; width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; margin: 6px 0 14px; }
+.report-table th, .report-table td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; vertical-align: top; }
+.report-table thead th { background: var(--surface-2); }
+.report-table th.w-id { width: 16%; } .report-table th.w-ctl { width: 30%; }
+.report-table.kv th { width: 22%; background: var(--surface-2); font-weight: 600; }
+@media print {
+  .side, .no-print, .devbar, .skip, .flash { display: none !important; }
+  .layout { display: block; } .main { padding: 0; max-width: none; }
+  body { background: #fff; color: #000; }
+  .report-doc { max-width: none; }
+  .page-break { break-before: page; }
+  .report-table thead { display: table-header-group; }
+  .report-toc a { color: #000; text-decoration: none; }
+}

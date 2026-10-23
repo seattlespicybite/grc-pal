@@ -1,0 +1,42 @@
+{% extends "base.html" %}{% block title %}Import preview{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Import preview</h1>
+<div class="sub">{{ r.file_name }} · SHA-256 <span class="mono">{{ r.file_sha256[:16] }}…</span>{% if r.exported_at %} · exported {{ r.exported_at[:16]|replace('T', ' ') }} UTC by {{ r.exported_by }}{% endif %}</div></div>
+<a class="btn ghost small" href="/matrix">Back</a></div>
+
+{% if r.errors %}
+<div class="card mb card-bad"><h2>Fix these rows first ({{ r.errors|length }})</h2>
+<p class="sub">Nothing was imported. Correct the file and upload it again.</p>
+<ul>{% for e in r.errors %}<li>{{ e }}</li>{% endfor %}</ul></div>
+{% endif %}
+{% if r.warnings %}<div class="card mb"><h2>Notes</h2><ul>{% for w in r.warnings %}<li>{{ w }}</li>{% endfor %}</ul></div>{% endif %}
+
+{% if not r.errors and not r.changes %}
+<div class="card"><div class="empty">The file matches the controls in GRC-pal. There is nothing to import.</div></div>
+{% endif %}
+
+{% if r.changes %}
+<div class="card mb"><h2>{{ r.changes|length }} control{{ 's' if r.changes|length != 1 }} will change</h2>
+<p class="sub">{{ r.unchanged }} unchanged. Controls not in the file are left alone.</p>
+{% for c in r.changes %}<div class="matrix-change">
+<h3><span class="pill {{ 'ok' if c.action == 'create' else ('error' if c.action == 'retire' else 'pending') }}">{{ {'create': 'New custom control', 'update': 'Update', 'retire': 'Retire'}[c.action] }}</span> {{ c.id }} {{ c.title }}</h3>
+<div class="table-wrap"><table class="diff"><thead><tr><th>Field</th><th>Now</th><th>After import</th></tr></thead>
+<tbody>{% for f in c.fields %}<tr><td class="nowrap"><b>{{ f.field }}</b></td><td class="was">{{ f.old or '(empty)' }}</td><td class="now">{{ f.new or '(empty)' }}</td></tr>{% endfor %}</tbody></table></div>
+</div>{% endfor %}</div>
+{% endif %}
+
+{% if r.import_id %}
+<div class="card"><h2>Apply</h2>
+<form method="post" action="/matrix/import/{{ r.import_id }}/apply" class="grid">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="plan" value="{{ r.plan_hash }}">
+<label>Why are you making these changes? (recorded in every control's history and the audit log)
+<input type="text" name="reason" minlength="10" maxlength="1000" required placeholder="Annual control review: updated owners and ISO mappings"></label>
+{% if r.gaps %}<div class="hint-box">After this import, {{ r.gaps|join(', ') }} {{ 'has' if r.gaps|length == 1 else 'have' }} no control. An auditor will flag an in-scope criterion with no control.
+<label class="check"><input type="checkbox" name="accept_gaps" value="yes" required> I accept this gap</label></div>{% endif %}
+<div><button class="btn" type="submit">Apply {{ r.changes|length }} change{{ 's' if r.changes|length != 1 }}</button></div>
+</form>
+<form method="post" action="/matrix/import/{{ r.import_id }}/discard" class="mt">
+<input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ghost small" type="submit">Discard this import</button></form>
+<p class="hint">The file is kept as write-once evidence. This preview expires after 24 hours.</p></div>
+{% endif %}
+{% endblock %}

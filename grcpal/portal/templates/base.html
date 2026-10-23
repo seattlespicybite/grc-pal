@@ -23,7 +23,7 @@
       {% set in_framework = nav_active == 'framework' or path.startswith('/criteria') or path.startswith('/frameworks/' ~ view) %}
       {% set fw_page = path == '/frameworks' or path.startswith('/frameworks/new') %}
       {% set p = namespace(prog=in_framework or (view == 'all' and path.startswith('/frameworks'))) %}
-      {% for pre in ['/controls', '/calendar', '/vendors', '/access-reviews', '/overrides', '/ai', '/cycles'] %}{% if path.startswith(pre) %}{% set p.prog = True %}{% endif %}{% endfor %}
+      {% for pre in ['/controls', '/matrix', '/calendar', '/vendors', '/access-reviews', '/overrides', '/ai', '/cycles'] %}{% if path.startswith(pre) %}{% set p.prog = True %}{% endif %}{% endfor %}
       {% set p.docs = path.startswith('/evidence') or path.startswith('/policies') or path.startswith('/library') or path.startswith('/kb') %}
       {% set p.conf = (fw_page and view != 'all') %}
       {% for pre in ['/settings', '/setup', '/backups', '/updates', '/logs', '/jobs', '/audit', '/users', '/dev'] %}{% if path.startswith(pre) %}{% set p.conf = True %}{% endif %}{% endfor %}
@@ -34,7 +34,7 @@
         {% if user.sees_everything %}{% if view == 'soc2' %}{{ navlink('/criteria', 'criteria', 'SOC 2 criteria', in_framework) }}
         {% elif view_fw %}{{ navlink('/frameworks/' ~ view_fw.id, 'criteria', view_fw.name.split(' (')[0].split(':')[0], in_framework) }}
         {% else %}{{ navlink('/frameworks', 'criteria', 'Frameworks', path.startswith('/frameworks') or path.startswith('/criteria') or nav_active == 'framework') }}{% endif %}{% endif %}
-        {{ navlink('/controls', 'controls', 'My controls' if user.is_contributor else 'Controls', path.startswith('/controls') and not in_framework) }}
+        {{ navlink('/controls', 'controls', 'My controls' if user.is_contributor else 'Controls', (path.startswith('/controls') or path.startswith('/matrix')) and not in_framework) }}
         {% if user.is_admin %}{{ navlink('/calendar', 'calendar', 'Calendar', path.startswith('/calendar'), calendar_due, 'Past due, not recorded') }}{% endif %}
         {{ navlink('/vendors', 'vendors', 'Vendors', path.startswith('/vendors')) }}
         {% if user.sees_everything or ar_open %}{{ navlink('/access-reviews', 'access', 'Access reviews', path.startswith('/access-reviews'), ar_open, 'Open reviews waiting for you') }}{% endif %}

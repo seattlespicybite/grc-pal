@@ -274,6 +274,48 @@ collected automatically is listed but changed in the catalog or Configuration.
   release later changes the starter text of a control you edited, your version stays in use and
   the control page says the starter changed, so you can compare and decide.
 
+## Control matrix: export, bulk edit and import, report
+
+**Controls > Control matrix** (admins and auditors) offers two different files on purpose:
+
+- **Report**: a readable document for leadership and auditors. Every control with its description,
+  owners, frequency, framework mappings, points of focus and evidence, then a cross-reference table per
+  framework (requirement, title, controls; requirements with no control are flagged). Open it in the
+  browser and **Print or save as PDF**, or **Download Word**. The report is never imported, so its layout
+  can change freely.
+- **Data file (.xlsx)**: one row per control in a fixed layout, for bulk editing. Only frameworks that are
+  switched on get a column (SOC 2 always). Columns marked *(read only)* are ignored on import.
+
+**Importing changes (control library owner only).** Edit the data file and upload it on the same page.
+
+1. **Preview.** Nothing changes yet. You see every control that will change, old and new value side by side,
+   rows with problems, and any in-scope SOC 2 criterion that would be left with no control.
+2. **Apply** with a reason, or **Discard**. Each row is saved through the same rules as **Edit control**
+   and **New control**, so each change gets its own version in the definition history and audit log
+   entry, with the reason.
+
+What an import does and does not do:
+
+| In the file | Result |
+| --- | --- |
+| Existing Control ID, values changed | The control is updated; each changed field is replaced with the file's text |
+| Existing Control ID, nothing changed | Nothing happens |
+| New Control ID | A custom control is created |
+| Status `retired` (custom control) | The custom control is retired (history kept) |
+| Row deleted from the file | **Nothing happens.** An import never deletes or hides a control |
+| Status `retired` on a built-in control, unknown requirement ID, unknown owner role, duplicate ID | The whole import is refused and the rows are listed |
+| A row changed in GRC-pal after you downloaded the file | That row is refused (conflict), so nobody's edit is overwritten silently |
+| File exported from another organization | Refused |
+
+Frequency can be changed for custom controls only; built-in frequencies come from the catalog. Evidence
+wanted and reference links are not in the file and are kept as they are.
+
+**Evidence for auditors.** The uploaded file is stored write-once under `control_matrix_import/` (with its
+SHA-256 and the preview), and the result under `control_matrix_apply/` (who, when, why, every change applied).
+The audit log has `control.matrix.preview`, `control.matrix.import` and one `control.edit` per built-in
+control; downloads are logged as `control.matrix.export` and `control.matrix.report`. If storage fails part
+way through an apply, the import is marked **partial** and the result lists exactly what was applied.
+
 ## Custom (manual) controls
 
 **Controls > New control** creates a control without editing YAML:

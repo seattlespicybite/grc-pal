@@ -32,20 +32,23 @@ All notable changes are listed here. The project follows [semantic versioning](h
   counts only. The reviewed list is stored write-once as `population.csv` (its SHA-256 is the review's), next to each
   source's accounts. New table `arapps` (no migration needed). Microsoft Graph permission **GroupMember.Read.All** is
   added to `deploy/azure/grant-permissions.ps1`; run it again before reviewing applications or Azure access granted to groups.
-
-### Security
-- Custom application tokens are encrypted per organization and application, never shown, logged or audited, and only sent
-  to that application's host: no redirects, next-page links must stay on the same host, internal and metadata addresses
-  are blocked. `Clients.gh_list(..., complete=True)` raises instead of silently returning a partial list.
-=======
-Update-button-fixed2
-Update-button-fixed2
-### Added
+- **Control matrix: export, bulk edit and import back.** **Controls > Control matrix** downloads a data file
+  (.xlsx, one row per control, a column per framework switched on). The control library owner edits it and
+  uploads it: a **preview** shows every change (old and new) and every problem before anything is saved, then
+  **Apply** (with a reason) or **Discard**. Rows go through the same rules as **Edit control** and **New
+  control**, so each change has its own history version and audit entry. New IDs create custom controls,
+  Status `retired` retires a custom control, and rows left out of the file are never deleted. Files from
+  another organization, rows changed in GRC-pal after the download (conflicts) and changes made between the
+  preview and the apply are refused. The uploaded file and the result are kept as write-once evidence
+  (`control_matrix_import/`, `control_matrix_apply/`). Admins and auditors can download; only the library
+  owner imports.
+- **Control matrix report** for leadership and auditors: every control with description, owners, mappings,
+  points of focus and evidence, plus a cross-reference per framework. Print or save as PDF from the browser,
+  or download Word (.docx). Written with the standard library, no new dependency.
 - **Updates page manual check**: Admins can manually trigger an update check with the **Check for updates** button, receiving immediate confirmation of whether newer releases are available or the instance is up to date, protected by a request cooldown.
 - **Tenant installation verification**: Added **Verify installation** on the Updates page to validate the signed-in tenant's data model version, audit log hash chain, and evidence digests via a background job.
 - **Activity log table**: Enhanced the Updates page history table with status indicators and audit log fallback.
- main
-=======
+
 ### Changed
 - **Evidence uploaded by an admin is approved on upload.** Admins own the program and upload evidence that
   is already approved, so a second review made no sense, and with a single admin the upload stayed
@@ -55,14 +58,22 @@ Update-button-fixed2
   emails are sent. Evidence from Control owners still waits for review by any admin. Admin uploads left
   pending from before can be approved on **Reviews** or the control page with an approval note.
   No data model change (the new field is read with a default).
-main
+
+### Security
+- Custom application tokens are encrypted per organization and application, never shown, logged or audited, and only sent
+  to that application's host: no redirects, next-page links must stay on the same host, internal and metadata addresses
+  are blocked. `Clients.gh_list(..., complete=True)` raises instead of silently returning a partial list.
+- GRC-pal now reads one kind of uploaded spreadsheet (the control matrix). The reader in `grcpal/xlsx.py` is
+  standard library only and refuses large or zip-bomb files, DOCTYPE and entities, formulas and password-protected
+  files; it opens only the workbook, shared text and worksheet parts.
+
+New tables `arapps`, `matriximports` and `vendorimports` (no migration needed). No other data model change.
 
 ### Fixed
 - **Program repository knowledge articles and frameworks now reach Azure portals.** `grcpal publish-config`
   sent only `catalog/`, `registers/` and `policies/`, so your own `kb/` articles and `frameworks/` files worked
   on a VM (local folder) but were silently ignored on Azure. The bundle now carries `kb/` and `frameworks/` too.
   No data model change.
-main
 
 ## [0.5.0] - 2026-10-20 - Document approvals, signed VM updates
 
