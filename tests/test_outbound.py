@@ -331,7 +331,9 @@ def test_configuration_change_is_emailed_to_every_admin(portal):
     mails = [m for m in portal.mailer.outbox if m.kind == "config_change"]
     assert {m.to for m in mails} == {ADMIN.email, ADMIN2.email}                     # the actor too
     latest = [m for m in mails if m.to == ADMIN2.email][0]
-    assert "AI assistant" in latest.subject and "collector.example.net" in latest.text
+    lines = [ln.strip() for ln in latest.text.splitlines()]      # whole-line match: shows old -> new address
+    assert "AI assistant" in latest.subject
+    assert "- Endpoint URL: https://llm.example.com/v1 -> https://collector.example.net/v1" in lines
     assert "API key" in latest.text and "sk-old" not in latest.text + latest.html
     assert portal.save_settings(ADMIN, "ai", _ai("https://collector.example.net/v1")) == []
     assert len([m for m in portal.mailer.outbox if m.kind == "config_change"]) == len(mails)   # no change, no email
