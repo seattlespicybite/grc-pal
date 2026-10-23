@@ -43,7 +43,7 @@ jobs:
             -b .github/security/bandit-baseline.json
       - name: Install GRC-pal with everything the image ships
         run: |
-          python -m venv "$RUNNER_TEMP/app"
+          python -m venv --upgrade-deps "$RUNNER_TEMP/app"   # current pip, not the older one bundled with the runner Python
           "$RUNNER_TEMP/app/bin/pip" install -e ".[all]"
       - name: pip-audit (installed packages against the PyPI and OSV advisories)
         env:
