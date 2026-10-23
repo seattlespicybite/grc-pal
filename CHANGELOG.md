@@ -4,6 +4,7 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+feature/control-matrix-import-export
 ### Added
 - **Control matrix: export, bulk edit and import back.** **Controls > Control matrix** downloads a data file
   (.xlsx, one row per control, a column per framework switched on). The control library owner edits it and
@@ -25,12 +26,32 @@ All notable changes are listed here. The project follows [semantic versioning](h
   files; it opens only the workbook, shared text and worksheet parts.
 
 New table `matriximports` (no migration needed). No other data model change.
+=======
+Update-button-fixed2
+Update-button-fixed2
+### Added
+- **Updates page manual check**: Admins can manually trigger an update check with the **Check for updates** button, receiving immediate confirmation of whether newer releases are available or the instance is up to date, protected by a request cooldown.
+- **Tenant installation verification**: Added **Verify installation** on the Updates page to validate the signed-in tenant's data model version, audit log hash chain, and evidence digests via a background job.
+- **Activity log table**: Enhanced the Updates page history table with status indicators and audit log fallback.
+=======
+### Changed
+- **Evidence uploaded by an admin is approved on upload.** Admins own the program and upload evidence that
+  is already approved, so a second review made no sense, and with a single admin the upload stayed
+  "pending" forever with nobody able to approve it. Admin uploads now require an approval note (who
+  approved it and when) and are recorded as approved on upload: the decision is write-once evidence, the
+  audit log and the auditor export (`uploads_and_reviews.csv`) carry `approved_on_upload`, and no review
+  emails are sent. Evidence from Control owners still waits for review by any admin. Admin uploads left
+  pending from before can be approved on **Reviews** or the control page with an approval note.
+  No data model change (the new field is read with a default).
+main
+main
 
 ### Fixed
 - **Program repository knowledge articles and frameworks now reach Azure portals.** `grcpal publish-config`
   sent only `catalog/`, `registers/` and `policies/`, so your own `kb/` articles and `frameworks/` files worked
   on a VM (local folder) but were silently ignored on Azure. The bundle now carries `kb/` and `frameworks/` too.
   No data model change.
+main
 
 ## [0.5.0] - 2026-10-20 - Document approvals, signed VM updates
 

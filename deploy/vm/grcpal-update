@@ -569,6 +569,10 @@ def handle_requests() -> None:
                 write_json(STATE / "policy.json", pol)
                 history({"event": "update.policy", "by": by, "auto_patch": pol["auto_patch"], "online": pol["online"]})
                 record("update.policy", {"by": by, "auto_patch": pol["auto_patch"], "online": pol["online"]})
+            elif action == "check":
+                check()
+                history({"event": "update.checked", "by": by})
+                record("update.checked", {"by": by})
             else:
                 log(f"ignored invalid request {p.name}")
         except Failed as exc:

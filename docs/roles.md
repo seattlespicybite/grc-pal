@@ -105,7 +105,12 @@ accounts, use **Password link** on the Users page so they can sign in).
 ## Safeguards
 
 - The last active admin cannot be demoted or disabled.
-- Nobody can review evidence they uploaded (segregation of duties).
+- Evidence from Control owners waits for review by any admin (every admin sees it on **Reviews** and
+  is emailed). Control owners can never approve evidence.
+- Admins own the program and upload evidence that is already approved (a signed policy, approved
+  minutes), so an admin's upload is **approved on upload**. The admin must add an approval note saying
+  who approved it and when; the note, the admin's name, the time and the file's checksum are stored as
+  write-once evidence, recorded in the audit log and marked `approved_on_upload` in the auditor export.
 - Auditors cannot be assigned work.
 - Accounts are disabled, never deleted, so the audit trail keeps a name for every action.
 - `/users.csv` gives the full user list with role, source, created and last seen dates, access end
