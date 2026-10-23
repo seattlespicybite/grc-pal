@@ -10,7 +10,9 @@ Sign-in modes:
   * proxy: a trusted reverse proxy (oauth2-proxy, Pomerium, Caddy forward_auth) signs the user
     in and sets X-Forwarded-Email. Only safe when the app is reachable through that proxy alone.
   * dev: local development and demos. The user comes from a cookie set on /dev/login, the
-    X-Dev-Principal header or GRCPAL_DEV_PRINCIPAL. Refused when GRCPAL_ENV=production.
+    X-Dev-Principal header or GRCPAL_DEV_PRINCIPAL. Anyone can pick any user, so it is allowed only
+    when GRCPAL_ENV=dev (or development) is set explicitly (`grcpal serve --demo` sets it and listens on this
+    computer only; docker-compose.yml sets it and publishes on 127.0.0.1 only).
 
 Authorization does not come from the identity provider. Each organization's users table holds
 exactly one role per person (see ROLES); the service resolves an Identity to a User.
@@ -99,8 +101,10 @@ def auth_mode() -> str:
     mode = os.getenv("GRCPAL_AUTH_MODE", "local")
     if mode not in AUTH_MODES:
         raise RuntimeError("GRCPAL_AUTH_MODE must be local, easyauth, proxy or dev")
-    if mode == "dev" and os.getenv("GRCPAL_ENV", "").lower() == "production":
-        raise RuntimeError("GRCPAL_AUTH_MODE=dev is not allowed when GRCPAL_ENV=production")
+    if mode == "dev" and os.getenv("GRCPAL_ENV", "") not in ("dev", "development"):
+        # Fail closed: a missing or mistyped GRCPAL_ENV must never open the password-free sign-in page.
+        raise RuntimeError("GRCPAL_AUTH_MODE=dev lets anyone sign in as anyone; it needs GRCPAL_ENV=dev, set "
+                           "explicitly (grcpal serve --demo and docker compose do this). Use local, easyauth or proxy otherwise.")
     return mode
 
 

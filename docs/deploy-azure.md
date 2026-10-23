@@ -204,8 +204,11 @@ with each daily copy) or rely on the auditor exports and write-once evidence for
 With `--alert-email`, you get an email when no verified scheduled backup was logged for 2 days
 (`backupAlertWindow`; set `P8D` for a weekly schedule).
 
-Download the **recovery kit** from the Backups page after the first sign-in and keep it in your password
-manager. It holds the backup key and the app key; with a backup file it rebuilds the instance anywhere.
+Save the **recovery kit** once: re-run `deploy.sh` with the same options plus `--kit-out recovery-kit.json`
+(or add it to the first run). Move the file into your password manager and delete the local copy. It holds the
+backup key and the app key; with a backup file it rebuilds the instance anywhere. In production the Backups page
+does not offer the kit or backup downloads, so a stolen admin session cannot take them
+(`GRCPAL_WEB_BACKUP_DOWNLOAD=on` brings them back, with an email to every admin on each download).
 
 Evidence itself is also in write-once storage (step 6) and geo-redundant by default, so the backup file is
 your second, portable copy.

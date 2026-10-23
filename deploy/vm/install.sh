@@ -110,6 +110,8 @@ cat > "$ETC/grcpal.env" <<EOF
 # GRC-pal settings for this VM (no secrets here; those are in secrets.env).
 GRCPAL_ENV=production
 GRCPAL_AUTH_MODE=local
+# Caddy is the one proxy in front; only the address it adds to X-Forwarded-For is believed.
+GRCPAL_TRUSTED_PROXY_HOPS=1
 GRCPAL_PUBLIC_URL=https://$HOSTNAME_ARG
 GRCPAL_SQLITE=/data/grcpal.db
 GRCPAL_EVIDENCE_DIR=/data/evidence

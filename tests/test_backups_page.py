@@ -7,7 +7,7 @@ import os
 
 import pytest
 from fastapi.testclient import TestClient
-from test_portal import ADMIN, AUDITOR, CONTRIB, as_, csrf, make_portal
+from test_portal import ADMIN, ADMIN2, AUDITOR, CONTRIB, as_, csrf, make_portal
 
 from grcpal import backup, backup_store
 from grcpal.portal.app import create_app
@@ -25,6 +25,7 @@ def site(tmp_path, monkeypatch):
                 "GRCPAL_TABLES_URL", "GRCPAL_PUBLIC_URL", "GRCPAL_DEV_PRINCIPAL", "GRCPAL_SQLITE", "GRCPAL_BACKUP_KEY",
                 "GRCPAL_BACKUP_DIR_2"):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("GRCPAL_ENV", "dev")
     portal = make_portal(tmp_path)
     run = portal.evidence.new_run("entra_users", ["IAM-01"])
     run.add("users", [{"upn": "a@example.com"}])
@@ -105,6 +106,59 @@ def test_recovery_kit_opens_the_backups_and_is_recorded(site, monkeypatch):
     assert "backup.kit_export" in actions(portal)
     assert "app-key-for-integrations" not in json.dumps([r["detail"] for r in portal.log.records()])
     assert "Download your recovery kit" not in client.get("/backups").text
+
+
+def _production(monkeypatch, portal, who=ADMIN):
+    """A production portal behind Easy Auth (dev sign-in is refused in production), signed in as `who`."""
+    import base64
+
+    monkeypatch.setenv("GRCPAL_ENV", "production")
+    monkeypatch.setenv("GRCPAL_AUTH_MODE", "easyauth")
+    monkeypatch.setenv("GRCPAL_SECRET", "test-secret-0123456789abcdef0123456789abcdef")
+    client = TestClient(create_app(portal), base_url="https://grc.example.com")
+    claims = {"claims": [{"typ": "preferred_username", "val": who.email}, {"typ": "name", "val": who.name}]}
+    client.headers["X-MS-CLIENT-PRINCIPAL"] = base64.b64encode(json.dumps(claims).encode()).decode()
+    return client
+
+
+def test_production_keeps_backup_files_and_keys_off_the_web(site, monkeypatch):
+    # One stolen admin session must not be able to take every record plus the keys that open them.
+    portal, _, tmp = site
+    portal.backup_now(ADMIN, "local")
+    name = next((tmp / "backups").glob("*.grcbak")).name
+    monkeypatch.delenv("GRCPAL_WEB_BACKUP_DOWNLOAD", raising=False)
+    client = _production(monkeypatch, portal)
+    page = client.get("/backups")
+    assert page.status_code == 200
+    assert 'action="/backups/kit"' not in page.text and 'action="/backups/download"' not in page.text
+    assert "grcpal backup kit" in page.text
+    token = csrf(client, "/backups")
+    assert client.post("/backups/kit", data={"csrf": token}).status_code == 404
+    assert client.post("/backups/download", data={"destination": "local", "name": name, "csrf": token}).status_code == 404
+    with pytest.raises(Forbidden):
+        portal.recovery_kit(ADMIN)
+    with pytest.raises(Forbidden):
+        portal.backup_download(ADMIN, "local", name)
+    assert "backup.kit_export" not in actions(portal) and "backup.download" not in actions(portal)
+    assert client.post("/backups/now", data={"destination": "local", "csrf": token},
+                       follow_redirects=False).status_code == 303  # backing up still works
+
+
+def test_web_backup_download_can_be_turned_on_and_alerts_every_admin(site, monkeypatch):
+    portal, _, tmp = site
+    portal.backup_now(ADMIN, "local")
+    name = next((tmp / "backups").glob("*.grcbak")).name
+    monkeypatch.setenv("GRCPAL_WEB_BACKUP_DOWNLOAD", "on")
+    client = _production(monkeypatch, portal)
+    portal.mailer.outbox.clear()
+    token = csrf(client, "/backups")
+    assert client.post("/backups/kit", data={"csrf": token}).status_code == 200
+    r = client.post("/backups/download", data={"destination": "local", "name": name, "csrf": token})
+    assert r.status_code == 200 and r.content == (tmp / "backups" / name).read_bytes()
+    assert {"backup.kit_export", "backup.download"} <= set(actions(portal))
+    alerted = {(m.to, m.kind) for m in portal.mailer.outbox}
+    assert (ADMIN2.email, "security.backup_kit") in alerted and (ADMIN2.email, "security.backup_download") in alerted
+    assert all(m.to != CONTRIB.email for m in portal.mailer.outbox)
 
 
 def test_instance_with_another_organization_is_blocked(site):
@@ -511,6 +565,7 @@ def test_verify_installation_two_tenants_isolation(tmp_path, monkeypatch):
     for var in ("GRCPAL_ENV", "GRCPAL_TENANT", "GRCPAL_BOOTSTRAP_ADMINS", "GRCPAL_EVIDENCE_ACCOUNT_URL",
                 "GRCPAL_TABLES_URL", "GRCPAL_PUBLIC_URL", "GRCPAL_DEV_PRINCIPAL", "GRCPAL_SQLITE"):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("GRCPAL_ENV", "dev")
 
     from grcpal.portal.store import SqliteStore
     shared_store = SqliteStore(str(tmp_path / "shared.db"))

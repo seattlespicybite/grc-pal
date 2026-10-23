@@ -36,3 +36,36 @@ def test_backup_alert_matches_what_the_job_prints(monkeypatch, capsys):
     query = re.search(r"query: '(.+)'", BICEP).group(1).replace("\\'", "'")
     needles = [a or b for a, b in re.findall(r"(?:has|contains) (?:\"([^\"]+)\"|'([^']+)')", query)]
     assert len(needles) == 3 and all(n in line for n in needles), (needles, line)
+
+
+def test_only_the_platform_proxy_is_believed_for_client_addresses():
+    # security.client_ip: Container Apps ingress (Azure) and Caddy (VM) are each one trusted hop
+    assert "{ name: 'GRCPAL_TRUSTED_PROXY_HOPS', value: '1' }" in BICEP
+    assert "GRCPAL_TRUSTED_PROXY_HOPS=1" in (ROOT / "deploy/vm/install.sh").read_text()
+
+
+def test_deploy_writes_a_recovery_kit_that_restore_accepts(tmp_path, monkeypatch):
+    import base64
+    import importlib.util
+
+    import pytest
+
+    from grcpal import backup
+
+    spec = importlib.util.spec_from_file_location("write_kit", ROOT / "deploy/azure/write_kit.py")
+    write_kit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(write_kit)
+    key = bytes(range(32))
+    monkeypatch.setenv("GRCPAL_BACKUP_KEY", base64.b64encode(key).decode())
+    monkeypatch.setenv("GRCPAL_ENCRYPTION_KEY", "app-key-for-integrations-0123456789")
+    out = tmp_path / "kit.json"
+    write_kit.main(str(out), "https://grc.example.com")
+    kit = backup.load_kit(out.read_text())
+    assert kit["key"] == key and kit["settings_key"] == "app-key-for-integrations-0123456789"
+    assert backup.load_kit(backup.make_kit(key, "app-key-for-integrations-0123456789"))["backup_key_id"] == kit["backup_key_id"]
+    assert out.stat().st_mode & 0o077 == 0  # readable by the owner only
+    with pytest.raises(FileExistsError):  # an existing kit is never overwritten
+        write_kit.main(str(out), "")
+    script = (ROOT / "deploy/azure/deploy.sh").read_text()
+    assert "--kit-out" in script and 'python3 -I "$HERE/write_kit.py"' in script
+    assert 'echo "  GRCPAL_ENCRYPTION_KEY=$ENCRYPTION_KEY"' not in script  # keys are not printed to the terminal

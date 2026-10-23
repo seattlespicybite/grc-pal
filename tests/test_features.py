@@ -24,6 +24,7 @@ def env(tmp_path, monkeypatch):
     for var in ("GRCPAL_ENV", "GRCPAL_TENANT", "GRCPAL_ENCRYPTION_KEY", "GRCPAL_AI_PROVIDER", "GRCPAL_CHECKS_ALLOW_PRIVATE",
                 "GRCPAL_AWS_ENABLED", "GRCPAL_GCP_ENABLED", "GRCPAL_GITHUB_TOKEN"):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("GRCPAL_ENV", "dev")
     portal = make_portal(tmp_path)
     client = TestClient(create_app(portal), base_url="https://grc.example.com")
     return portal, client

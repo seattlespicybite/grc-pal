@@ -39,7 +39,7 @@ def register(app, h) -> None:
                    csrf: str = Form("")):
         h.check_csrf(request, LOGIN_CSRF, csrf)
         try:
-            token = h.p().sign_in(email, password, ip=request.client.host if request.client else "")
+            token = h.p().sign_in(email, password, ip=h.ip_of(request))
         except AuthError as exc:
             return login_page(request, next, str(exc), exc.status, email=email)
         resp = RedirectResponse(h.safe_dest(next, "/"), status_code=303)

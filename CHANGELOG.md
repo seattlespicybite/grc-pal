@@ -60,6 +60,19 @@ All notable changes are listed here. The project follows [semantic versioning](h
   No data model change (the new field is read with a default).
 
 ### Security
+- **Backup files and the recovery kit are no longer downloadable from the web page in production.** One stolen
+  admin session could take every record plus the keys that open them and the saved integration credentials.
+  Operators get the kit on the command line: `grcpal backup kit` (VM) or the new `deploy.sh --kit-out FILE`
+  (Azure; `deploy.sh` no longer prints the encryption key). `GRCPAL_WEB_BACKUP_DOWNLOAD=on` brings the
+  downloads back, and each one is then emailed to every admin. Backing up, checking and restoring are unchanged.
+- **Caller addresses can no longer be forged.** The container trusted every `X-Forwarded-For` header, so the
+  address a client typed in was recorded in sign-in events and the audit log. Now only the address added by
+  our own proxy counts (`GRCPAL_TRUSTED_PROXY_HOPS`, set to 1 by the Azure template and the VM installer), and
+  request log lines carry it as `ip`.
+- **Development sign-in fails closed.** `GRCPAL_AUTH_MODE=dev` now needs `GRCPAL_ENV=dev` (or `development`) set
+  explicitly; before, only `GRCPAL_ENV=production` refused it, so a missing variable left a password-free
+  sign-in open. `grcpal serve --demo` sets it and refuses a non-local `--host` unless `--insecure-demo` is given.
+  **Action:** if you run dev mode outside `grcpal serve --demo` or Docker Compose, set `GRCPAL_ENV=dev`.
 - Custom application tokens are encrypted per organization and application, never shown, logged or audited, and only sent
   to that application's host: no redirects, next-page links must stay on the same host, internal and metadata addresses
   are blocked. `Clients.gh_list(..., complete=True)` raises instead of silently returning a partial list.

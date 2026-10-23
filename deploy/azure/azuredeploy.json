@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "4408034797675592942"
+      "templateHash": "4800100442311900352"
     }
   },
   "parameters": {
@@ -658,6 +658,10 @@
                   "value": "easyauth"
                 },
                 {
+                  "name": "GRCPAL_TRUSTED_PROXY_HOPS",
+                  "value": "1"
+                },
+                {
                   "name": "GRCPAL_TENANT",
                   "value": "[parameters('instanceName')]"
                 },
@@ -815,6 +819,10 @@
                 {
                   "name": "GRCPAL_AUTH_MODE",
                   "value": "easyauth"
+                },
+                {
+                  "name": "GRCPAL_TRUSTED_PROXY_HOPS",
+                  "value": "1"
                 },
                 {
                   "name": "GRCPAL_TENANT",

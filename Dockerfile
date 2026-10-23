@@ -26,5 +26,8 @@ USER 10001
 ENV GRCPAL_ENV=production GRCPAL_AUTH_MODE=local GRCPAL_EVIDENCE_DIR=/tmp/evidence GRCPAL_SQLITE=/tmp/grcpal.db
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')" || exit 1
+# --forwarded-allow-ips "*" lets uvicorn read the scheme (https) from the platform's proxy. It also makes
+# request.client the left-most X-Forwarded-For entry, which the caller controls, so GRC-pal never records that:
+# security.client_ip takes only the address our own proxy added (GRCPAL_TRUSTED_PROXY_HOPS).
 CMD ["uvicorn", "grcpal.portal.app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", \
      "--proxy-headers", "--forwarded-allow-ips", "*", "--no-server-header", "--limit-concurrency", "50"]

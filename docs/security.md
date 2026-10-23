@@ -31,7 +31,9 @@ remains your responsibility. To report a vulnerability, see [SECURITY.md](../SEC
 | Session theft | HttpOnly, SameSite=Lax cookie (Secure over HTTPS); sessions end after 8 hours, on sign-out, and when the person is disabled, changes role or sets a new password |
 | Auditor keeps access after fieldwork | Every auditor account has an access end date (default 90 days); after it, sign-in and existing sessions are refused |
 | Losing the last admin | `grcpal create-admin` on the server creates or restores a local admin (break-glass); it needs shell access to the VM and is in the audit log |
-| Development shortcuts reaching production | `dev` sign-in refused when `GRCPAL_ENV=production`; production requires `GRCPAL_SECRET` |
+| Development shortcuts reaching production | `dev` sign-in runs only with `GRCPAL_ENV=dev` set explicitly (a missing or mistyped value refuses it); `grcpal serve --demo` listens on 127.0.0.1 only; production requires `GRCPAL_SECRET` |
+| One stolen admin session taking everything | In production the Backups page offers neither backup files nor the recovery kit (the keys that open backups and saved credentials); operators get them on the command line. `GRCPAL_WEB_BACKUP_DOWNLOAD=on` brings them back, and every download is then emailed to all admins |
+| Forged caller address in logs | Only the address added by our own proxy (`GRCPAL_TRUSTED_PROXY_HOPS`) is recorded in sign-in events, the audit log and request logs; a client-sent `X-Forwarded-For` is ignored |
 
 ## Data handled
 

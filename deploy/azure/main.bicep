@@ -331,6 +331,9 @@ var appEnv = [
   { name: 'AZURE_CLIENT_ID', value: portalIdentity.properties.clientId }
   { name: 'GRCPAL_ENV', value: 'production' }
   { name: 'GRCPAL_AUTH_MODE', value: 'easyauth' }
+  // Container Apps ingress is the one proxy in front: it appends the caller's address to X-Forwarded-For.
+  // Anything to its left was sent by the client and is not believed (security.client_ip).
+  { name: 'GRCPAL_TRUSTED_PROXY_HOPS', value: '1' }
   { name: 'GRCPAL_TENANT', value: instanceName }
   { name: 'GRCPAL_SECRET', secretRef: 'grcpal-secret' }
   { name: 'GRCPAL_ENCRYPTION_KEY', secretRef: 'encryption-key' }

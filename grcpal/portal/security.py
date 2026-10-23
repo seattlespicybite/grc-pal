@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import os
 import re
 import secrets
@@ -100,3 +101,38 @@ def csv_cell(value) -> str:
     with a quote, so Excel shows it as text instead of running it."""
     text = ", ".join(map(str, value)) if isinstance(value, list) else str(value if value is not None else "")
     return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
+
+
+def _address(text: str) -> str:
+    """One address from a header or socket value ("203.0.113.9", "203.0.113.9:443", "[2001:db8::5]:443"),
+    normalized; "" when it is not an IP address."""
+    text = (text or "").strip()
+    if text.startswith("["):
+        text = text[1:].split("]", 1)[0]
+    elif text.count(":") == 1:
+        text = text.split(":", 1)[0]
+    try:
+        return str(ipaddress.ip_address(text))
+    except ValueError:
+        return ""
+
+
+def client_ip(headers, peer: str | None) -> str:
+    """The address of the person making the request, for sign-in events, the audit log and request logs.
+
+    X-Forwarded-For is written left to right: whatever the client sent first, then one address per proxy.
+    Only the entries added by our own proxies can be believed, so GRCPAL_TRUSTED_PROXY_HOPS says how many
+    proxies sit in front of GRC-pal (Azure Container Apps ingress: 1; Caddy on the VM: 1). The address that
+    the outermost trusted proxy saw is the hops-th entry from the right. 0 (the default) trusts no header
+    and uses the connection's own address. Anything that is not an IP address is never recorded."""
+    try:
+        hops = max(0, int(os.getenv("GRCPAL_TRUSTED_PROXY_HOPS", "0")))
+    except ValueError:
+        hops = 0
+    if hops:
+        getlist = getattr(headers, "getlist", None)
+        values = getlist("x-forwarded-for") if getlist else [headers.get("x-forwarded-for") or ""]
+        parts = [p.strip() for p in ",".join(values).split(",") if p.strip()]
+        if len(parts) >= hops:
+            return _address(parts[-hops])
+    return _address(peer or "")

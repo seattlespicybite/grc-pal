@@ -174,7 +174,8 @@ development only.
 - **Local accounts have no MFA or lockout yet.** Use them only on a portal reachable from your
   internal network or VPN, always behind HTTPS. For anything wider, use Entra ID sign-in (Azure)
   or an identity-aware proxy (`GRCPAL_AUTH_MODE=proxy`). See [docs/security.md](docs/security.md).
-- `GRCPAL_ENV=production` refuses the demo's simulated sign-in and requires the secrets above.
+- The demo's simulated sign-in runs only with `GRCPAL_ENV=dev`; `GRCPAL_ENV=production` requires the secrets
+  above and keeps backup files and the recovery kit off the web page.
 - Keep `GRCPAL_ENCRYPTION_KEY` and the backup key in a password manager, apart from the backups.
 - Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
@@ -194,8 +195,9 @@ development only.
 
 **2. Back up** (set once, then check monthly)
 
-1. Sign in, open **Administration → Backups** and **download the recovery kit**. Store it in a password
-   manager, never next to the backups. Without it no backup can be read.
+1. Save the **recovery kit** from the command line: `deploy.sh ... --kit-out recovery-kit.json` (Azure) or
+   `sudo grcpal backup kit --out /backups/recovery-kit.json` (VM). Store it in a password manager, never next
+   to the backups. Without it no backup can be read.
 2. The nightly backup is on by default (02:00 UTC). On a VM, add a second location outside the VM (network
    share, `GRCPAL_BACKUP_DIR_2_HOST`); on Azure, backups are write-once for 35 days.
 3. Each backup is checked right after it is written. **Check** re-verifies one at any time.

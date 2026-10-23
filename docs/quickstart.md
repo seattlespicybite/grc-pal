@@ -76,7 +76,8 @@ backups, signed updates or rollback, so do not use it for production.
 ## Development mode is for your computer only
 
 `grcpal serve --demo` and Docker Compose use simulated sign-in: anyone who can reach the page can act as
-any user. The app refuses to start in that mode when `GRCPAL_ENV=production`. For a shared
+any user. That mode runs only when `GRCPAL_ENV` is `dev` or `development` (both commands set it), and
+`grcpal serve --demo` refuses to listen on anything but this computer unless you add `--insecure-demo`. For a shared
 instance, follow [deploy-vm.md](deploy-vm.md) or [deploy-azure.md](deploy-azure.md).
 
 ## Next

@@ -50,8 +50,10 @@ Then create the first admin and sign in:
 sudo grcpal create-admin you@example.com --name "Your Name"
 ```
 
-**Right after the first sign-in, open Administration → Backups and download the recovery kit.** Keep it in
-your password manager, separate from the backups. Without it a backup cannot be read.
+**Right after the first sign-in, save the recovery kit:** `sudo grcpal backup kit --out /backups/recovery-kit.json`,
+copy it into your password manager, then delete it from the VM. Keep it separate from the backups. Without it a
+backup cannot be read. (In production the Backups page does not offer the kit or backup downloads; see
+`GRCPAL_WEB_BACKUP_DOWNLOAD` in [configuration.md](configuration.md).)
 
 ## Where everything is
 
@@ -71,7 +73,8 @@ these folders, and GRC-pal starts again by itself after a reboot.
 
 Backups are set up for you: every night, kept for 7 days, 4 weeks and 12 months, plus the last 3 taken before
 updates. Manage them on **Administration → Backups**: **Back up now**, the schedule, **Check** and
-**Download** for each backup, and the recovery kit. Every action is in the audit log.
+a list of backups. Copy backup files with `scp` from `/var/lib/grcpal/backups`; downloads from the page are off in
+production. Every action is in the audit log.
 
 A backup on the same VM does not protect you if the VM is lost. Copy `/var/lib/grcpal/backups` somewhere
 else every night. Pick one:

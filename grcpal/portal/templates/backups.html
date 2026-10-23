@@ -8,7 +8,13 @@
 <section class="card"><p>{{ data.blocker }}</p></section>
 {% else %}
 
-{% if not data.kit.at %}
+{% if not data.web_download %}
+<section class="card"><h2>Recovery kit</h2>
+<p>A backup can only be opened with its key. In production, backup files and the recovery kit (that key plus the key for saved integration credentials) are not downloadable from this page, so a stolen admin session cannot take them. Get the kit on the command line and keep it in a password manager, away from the backups:</p>
+<p class="mono">Azure: deploy/azure/deploy.sh ... --kit-out recovery-kit.json</p>
+<p class="mono">VM: sudo grcpal backup kit --out /backups/recovery-kit.json</p>
+<p class="sub">To allow downloads here again, set GRCPAL_WEB_BACKUP_DOWNLOAD=on; every download is then emailed to all admins. Details: docs/operations.md, "Recovery kit".</p></section>
+{% elif not data.kit.at %}
 <section class="card backup-warn" role="alert"><h2>Download your recovery kit</h2>
 <p>A backup can only be opened with its key. The recovery kit holds that key and the key for saved integration credentials. Download it once, store it in a password manager or safe <strong>away from the backups</strong>, then delete the downloaded copy. Without it, nobody can restore these backups.</p>
 <form method="post" action="/backups/kit" class="actions"><input type="hidden" name="csrf" value="{{ csrf }}">
@@ -58,7 +64,7 @@
 {% if b.summary.verified_at %}<div class="sub">{{ when(b.summary.verified_at) }}</div>{% endif %}</td>
 <td class="actions-cell">
 <form method="post" action="/backups/verify" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="destination" value="{{ d.id }}"><input type="hidden" name="name" value="{{ b.name }}"><button class="btn ghost small" type="submit">Check</button></form>
-<form method="post" action="/backups/download" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="destination" value="{{ d.id }}"><input type="hidden" name="name" value="{{ b.name }}"><button class="btn ghost small" type="submit">Download</button></form>
+{% if data.web_download %}<form method="post" action="/backups/download" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="destination" value="{{ d.id }}"><input type="hidden" name="name" value="{{ b.name }}"><button class="btn ghost small" type="submit">Download</button></form>{% endif %}
 </td></tr>
 {% if data.can_restore and d.id == 'local' and b.summary.verified_ok %}<tr class="restore-row"><td colspan="6">
 <details><summary>Restore this backup</summary>
@@ -76,7 +82,7 @@
 <p>To rebuild on a clean machine, install GRC-pal, copy a backup file and your recovery kit to the server, and run:</p>
 <p class="mono">grcpal backup restore FILE.grcbak --kit recovery-kit.json</p>
 <p class="sub">Restore checks the whole file first and only fills an empty instance or a new folder, so it can never overwrite data. Everyone signs in again afterwards with their existing accounts. Details: docs/operations.md, "Restore".</p>
-{% if data.kit.at %}<p class="sub mt">Recovery kit last downloaded {{ when(data.kit.at) }} UTC by {{ data.kit.by }}.
+{% if data.kit.at and data.web_download %}<p class="sub mt">Recovery kit last downloaded {{ when(data.kit.at) }} UTC by {{ data.kit.by }}.
 <form method="post" action="/backups/kit" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ghost small" type="submit">Download it again</button></form></p>{% endif %}
 </section>
 {% endif %}
