@@ -120,3 +120,32 @@ def register(app, h) -> None:
         except (Invalid, Forbidden) as exc:
             return back("/updates", err=str(exc))
         return back("/updates", msg="Update settings sent to the updater.")
+
+    @app.post("/updates/check")
+    def updates_check(request: Request, csrf: str = Form(""), user: User = Depends(current_user)):
+        h.need(user, "admin")
+        h.check_csrf(request, user.email, csrf)
+        try:
+            res = p().check_for_updates(user)
+        except (Invalid, Forbidden) as exc:
+            return back("/updates", err=str(exc))
+        if res.get("error"):
+            msg = f"Check completed: {res['error']}"
+        elif res.get("count"):
+            msg = f"Check completed: GRC-pal {res['newest']} is available."
+        elif res.get("recent"):
+            msg = f"Checked recently (within the last minute): GRC-pal {p().updates_overview(user)['version']} is up to date."
+        else:
+            msg = f"Check completed: GRC-pal {p().updates_overview(user)['version']} is up to date."
+        return back("/updates", msg=msg)
+
+    @app.post("/updates/verify")
+    def updates_verify(request: Request, csrf: str = Form(""), user: User = Depends(current_user)):
+        h.need(user, "admin")
+        h.check_csrf(request, user.email, csrf)
+        try:
+            job = p().verify_installation(user)
+        except (Invalid, Forbidden) as exc:
+            return back("/updates", err=str(exc))
+        return RedirectResponse(f"/jobs/{job['RowKey']}", status_code=303)
+

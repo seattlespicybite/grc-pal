@@ -4,6 +4,13 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+Update-button-fixed2
+Update-button-fixed2
+### Added
+- **Updates page manual check**: Admins can manually trigger an update check with the **Check for updates** button, receiving immediate confirmation of whether newer releases are available or the instance is up to date, protected by a request cooldown.
+- **Tenant installation verification**: Added **Verify installation** on the Updates page to validate the signed-in tenant's data model version, audit log hash chain, and evidence digests via a background job.
+- **Activity log table**: Enhanced the Updates page history table with status indicators and audit log fallback.
+=======
 ### Changed
 - **Evidence uploaded by an admin is approved on upload.** Admins own the program and upload evidence that
   is already approved, so a second review made no sense, and with a single admin the upload stayed
@@ -13,12 +20,14 @@ All notable changes are listed here. The project follows [semantic versioning](h
   emails are sent. Evidence from Control owners still waits for review by any admin. Admin uploads left
   pending from before can be approved on **Reviews** or the control page with an approval note.
   No data model change (the new field is read with a default).
+main
 
 ### Fixed
 - **Program repository knowledge articles and frameworks now reach Azure portals.** `grcpal publish-config`
   sent only `catalog/`, `registers/` and `policies/`, so your own `kb/` articles and `frameworks/` files worked
   on a VM (local folder) but were silently ignored on Azure. The bundle now carries `kb/` and `frameworks/` too.
   No data model change.
+main
 
 ## [0.5.0] - 2026-10-20 - Document approvals, signed VM updates
 
