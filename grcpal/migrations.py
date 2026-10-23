@@ -42,7 +42,7 @@ class Migration:
 MIGRATIONS: tuple[Migration, ...] = ()
 
 # Released versions and the data model each shipped with; add a line in every release commit.
-RELEASES = {"0.1.0": 1, "0.2.0": 1, "0.3.0": 1, "0.4.0": 1, "0.5.0": 1}
+RELEASES = {"0.1.0": 1, "0.2.0": 1, "0.3.0": 1, "0.4.0": 1, "0.5.0": 1, "0.6.0": 1}
 
 
 class SchemaError(Exception):

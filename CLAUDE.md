@@ -71,7 +71,8 @@ explain choices in plain words, keep changes small, never leave the test suite r
 | Sign-in and roles | `grcpal/portal/auth.py` (local, easyauth, proxy, dev; roles admin/contributor/auditor, shown as Admin/Control owner/Auditor), local accounts and sessions in `accounts.py` + `routes_accounts.py` (tests: `tests/test_accounts.py`) |
 | Audit log (hash chain), event log, jobs | `grcpal/portal/auditlog.py`, `eventlog.py`, `jobs.py` |
 | Email | `grcpal/portal/mailer.py`, `notify.py`, `templates/email/` |
-| Security headers, CSRF, upload validation | `grcpal/portal/security.py` |
+| Security headers, CSRF, upload validation, trusted client address | `grcpal/portal/security.py` |
+| CI security scans (bandit, pip-audit, Trivy, SBOM, ZAP; pinned in `.github/security/`) | `.github/workflows/security-scan.yml`, docs `docs/security.md`, tests `tests/test_outbound.py`, `tests/test_deploy.py` |
 | Templates and static | `grcpal/portal/templates/`, `grcpal/portal/static/app.css`, `app.js` |
 | Demo data | `grcpal/portal/demo.py` |
 | Deployment | `Dockerfile`, `docker-compose.yml` (development), `deploy/vm/` (VM), `deploy/azure/main.bicep`, `deploy.sh`, `update.sh` (Azure) |
@@ -90,8 +91,9 @@ explain choices in plain words, keep changes small, never leave the test suite r
 4. Secrets: saved via `SettingsStore` (AES-GCM, bound to tenant and field), never echoed to the browser,
    logs, events or audit details. New secret fields use `kind="secret"`.
 5. The portal never executes shell commands. Command checks only come from `catalog/checks.yaml` and run
-   from the CLI/job. Outbound requests from checks use `checks.safe_request` (blocks private, link-local,
-   metadata addresses; re-checks redirects).
+   from the CLI/job. Outbound requests from checks, the AI provider and GitHub use `checks.safe_request` (blocks
+   private, link-local, metadata addresses; re-checks redirects; each caller has its own `*_ALLOW_PRIVATE` opt-in).
+   The caller's address comes only from `security.client_ip` (`GRCPAL_TRUSTED_PROXY_HOPS`), never from a raw header.
 6. AI output is advisory: stored as evidence (`ai_review/`), shown escaped, accepted or dismissed by an
    admin. Evidence sent to models stays inside `<evidence>` tags (`_fence`), emails masked by default.
 7. Contributors (Control owners) see only assigned or owned controls (404 for others); auditors are read-only
@@ -122,5 +124,5 @@ explain choices in plain words, keep changes small, never leave the test suite r
 ## Test fixtures
 - `tests/test_portal.py::make_portal(tmp_path, tenant="acme", people=(...))` builds a portal with users
   ADMIN, ADMIN2, HR (owner of hr-lead), CONTRIB, AUDITOR and a console mailer (`portal.mailer.outbox`).
-- `env` fixtures set `GRCPAL_AUTH_MODE=dev`; log in with the `X-Dev-Principal` header.
+- `env` fixtures set `GRCPAL_AUTH_MODE=dev` and `GRCPAL_ENV=dev` (dev sign-in fails closed without it); log in with the `X-Dev-Principal` header.
 - Set `GRCPAL_JOBS_SYNC=1` so background jobs run inline in tests.

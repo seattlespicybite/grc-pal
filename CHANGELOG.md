@@ -4,6 +4,27 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-23 - Security hardening
+
+Security hardening release from the internal assessment of the Azure deployment (batches B1, B2, B3 and the CI
+security scan; findings F-01, F-02, F-04, F-05, F-10, F-11 and B-3). This was an internal assessment with
+automated scanning, not an independent penetration test.
+
+No data model change.
+
+**Before you upgrade (action may be needed):**
+- **Azure:** nothing to do if you deployed with the template (it sets `GRCPAL_ENV=production`, your tenant in
+  `GRCPAL_ALLOWED_TENANT_IDS` and `GRCPAL_TRUSTED_PROXY_HOPS=1`). Custom deployments in easyauth mode must set
+  `GRCPAL_ALLOWED_TENANT_IDS`, or the portal refuses to start. After the upgrade run checks V-1 and V-2 in
+  [docs/deploy-azure.md](docs/deploy-azure.md).
+- **Proxy mode (VM with oauth2-proxy or Caddy):** set `GRCPAL_PROXY_SECRET` and have the proxy send it as
+  `X-GRCPAL-Proxy-Secret`, or the portal refuses to start.
+- **Self-hosted AI models or GitHub Enterprise Server on a private network:** set `GRCPAL_AI_ALLOW_PRIVATE=1` /
+  `GRCPAL_GITHUB_ALLOW_PRIVATE=1`, or those calls are refused.
+- **Backups:** in production the web page no longer downloads backup files or the recovery kit; use
+  `grcpal backup ...` or the backup job (`GRCPAL_WEB_BACKUP_DOWNLOAD=on` brings the buttons back).
+- **Anything that used `GRCPAL_AUTH_MODE=dev`** (demo containers, test setups) must also set `GRCPAL_ENV=dev`.
+
 ### Security
 - **Outbound endpoint controls (hardening B3, F-11).** AI provider, GitHub (connection test and collector client)
   and Microsoft Graph connection-test calls now go through the same guard as custom checks: public addresses
@@ -17,6 +38,37 @@ All notable changes are listed here. The project follows [semantic versioning](h
   send the saved secret to a changed address.
 - **Configuration changes are emailed to every admin**, the person who saved included, and the audit entry lists
   cleared secrets and new endpoints (names and addresses only, never secret values).
+- **Entra accounts are linked at first sign-in.** On Azure (easyauth) each person's Entra object ID and tenant
+  are stored the first time they sign in; the same email from another Entra account is refused and logged as a
+  security event until an admin clicks **Unlink Entra account** on Users and roles. In production the tenant
+  allow-list (`GRCPAL_ALLOWED_TENANT_IDS`) is now required; the Azure template already sets it.
+- **Proxy mode needs a shared secret.** `GRCPAL_AUTH_MODE=proxy` now requires `GRCPAL_PROXY_SECRET` (32+
+  characters), which the proxy sends as `X-GRCPAL-Proxy-Secret`; a request that reaches the app without it is
+  refused, so nobody can claim to be someone by sending `X-Forwarded-Email` directly. **Action for proxy users:**
+  set the secret on both sides before upgrading (examples in docs/configuration.md).
+- **Request logs name the person and hide password-link tokens.** Every request line now carries the signed-in
+  `actor` (it was always "-"), and `/account/password/<token>` is logged as `/account/password/[redacted]`.
+- **Backup files and the recovery kit are no longer downloadable from the web page in production.** One stolen
+  admin session could take every record plus the keys that open them and the saved integration credentials.
+  Operators get the kit on the command line: `grcpal backup kit` (VM) or the new `deploy.sh --kit-out FILE`
+  (Azure; `deploy.sh` no longer prints the encryption key). `GRCPAL_WEB_BACKUP_DOWNLOAD=on` brings the
+  downloads back, and each one is then emailed to every admin. Backing up, checking and restoring are unchanged.
+- **Caller addresses can no longer be forged.** The container trusted every `X-Forwarded-For` header, so the
+  address a client typed in was recorded in sign-in events and the audit log. Now only the address added by
+  our own proxy counts (`GRCPAL_TRUSTED_PROXY_HOPS`, set to 1 by the Azure template and the VM installer), and
+  request log lines carry it as `ip`.
+- **Development sign-in fails closed.** `GRCPAL_AUTH_MODE=dev` now needs `GRCPAL_ENV=dev` (or `development`) set
+  explicitly; before, only `GRCPAL_ENV=production` refused it, so a missing variable left a password-free
+  sign-in open. `grcpal serve --demo` sets it and refuses a non-local `--host` unless `--insecure-demo` is given.
+  **Action:** if you run dev mode outside `grcpal serve --demo` or Docker Compose, set `GRCPAL_ENV=dev`.
+- Custom application tokens are encrypted per organization and application, never shown, logged or audited, and only sent
+  to that application's host: no redirects, next-page links must stay on the same host, internal and metadata addresses
+  are blocked. `Clients.gh_list(..., complete=True)` raises instead of silently returning a partial list.
+- GRC-pal now reads one kind of uploaded spreadsheet (the control matrix). The reader in `grcpal/xlsx.py` is
+  standard library only and refuses large or zip-bomb files, DOCTYPE and entities, formulas and password-protected
+  files; it opens only the workbook, shared text and worksheet parts.
+
+New tables `arapps`, `matriximports` and `vendorimports` (no migration needed). No other data model change.
 
 ### Added
 - **Security scanning in CI** (`.github/workflows/security-scan.yml`, on every pull request, nightly and on demand):
@@ -79,38 +131,6 @@ All notable changes are listed here. The project follows [semantic versioning](h
   pending from before can be approved on **Reviews** or the control page with an approval note.
   No data model change (the new field is read with a default).
 
-### Security
-- **Entra accounts are linked at first sign-in.** On Azure (easyauth) each person's Entra object ID and tenant
-  are stored the first time they sign in; the same email from another Entra account is refused and logged as a
-  security event until an admin clicks **Unlink Entra account** on Users and roles. In production the tenant
-  allow-list (`GRCPAL_ALLOWED_TENANT_IDS`) is now required; the Azure template already sets it.
-- **Proxy mode needs a shared secret.** `GRCPAL_AUTH_MODE=proxy` now requires `GRCPAL_PROXY_SECRET` (32+
-  characters), which the proxy sends as `X-GRCPAL-Proxy-Secret`; a request that reaches the app without it is
-  refused, so nobody can claim to be someone by sending `X-Forwarded-Email` directly. **Action for proxy users:**
-  set the secret on both sides before upgrading (examples in docs/configuration.md).
-- **Request logs name the person and hide password-link tokens.** Every request line now carries the signed-in
-  `actor` (it was always "-"), and `/account/password/<token>` is logged as `/account/password/[redacted]`.
-- **Backup files and the recovery kit are no longer downloadable from the web page in production.** One stolen
-  admin session could take every record plus the keys that open them and the saved integration credentials.
-  Operators get the kit on the command line: `grcpal backup kit` (VM) or the new `deploy.sh --kit-out FILE`
-  (Azure; `deploy.sh` no longer prints the encryption key). `GRCPAL_WEB_BACKUP_DOWNLOAD=on` brings the
-  downloads back, and each one is then emailed to every admin. Backing up, checking and restoring are unchanged.
-- **Caller addresses can no longer be forged.** The container trusted every `X-Forwarded-For` header, so the
-  address a client typed in was recorded in sign-in events and the audit log. Now only the address added by
-  our own proxy counts (`GRCPAL_TRUSTED_PROXY_HOPS`, set to 1 by the Azure template and the VM installer), and
-  request log lines carry it as `ip`.
-- **Development sign-in fails closed.** `GRCPAL_AUTH_MODE=dev` now needs `GRCPAL_ENV=dev` (or `development`) set
-  explicitly; before, only `GRCPAL_ENV=production` refused it, so a missing variable left a password-free
-  sign-in open. `grcpal serve --demo` sets it and refuses a non-local `--host` unless `--insecure-demo` is given.
-  **Action:** if you run dev mode outside `grcpal serve --demo` or Docker Compose, set `GRCPAL_ENV=dev`.
-- Custom application tokens are encrypted per organization and application, never shown, logged or audited, and only sent
-  to that application's host: no redirects, next-page links must stay on the same host, internal and metadata addresses
-  are blocked. `Clients.gh_list(..., complete=True)` raises instead of silently returning a partial list.
-- GRC-pal now reads one kind of uploaded spreadsheet (the control matrix). The reader in `grcpal/xlsx.py` is
-  standard library only and refuses large or zip-bomb files, DOCTYPE and entities, formulas and password-protected
-  files; it opens only the workbook, shared text and worksheet parts.
-
-New tables `arapps`, `matriximports` and `vendorimports` (no migration needed). No other data model change.
 
 ### Fixed
 - **Program repository knowledge articles and frameworks now reach Azure portals.** `grcpal publish-config`

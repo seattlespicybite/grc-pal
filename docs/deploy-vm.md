@@ -23,13 +23,13 @@ Copy the installer kit from the release page (`grcpal-vm-installer-<version>.tar
 (the installer kit and signed update files are published from release 0.5.0 on):
 
 ```bash
-tar -xzf grcpal-vm-installer-0.5.0.tar.gz && cd vm
+tar -xzf grcpal-vm-installer-0.6.0.tar.gz && cd vm
 # with internet access:
-sudo ./install.sh --hostname grc.internal.example.com --version 0.5.0
-# without internet access: also copy grcpal-0.5.0.grcupdate from the release page
-sudo ./install.sh --hostname grc.internal.example.com --bundle grcpal-0.5.0.grcupdate
+sudo ./install.sh --hostname grc.internal.example.com --version 0.6.0
+# without internet access: also copy grcpal-0.6.0.grcupdate from the release page
+sudo ./install.sh --hostname grc.internal.example.com --bundle grcpal-0.6.0.grcupdate
 # your own certificate instead of Caddy's:
-sudo ./install.sh --hostname grc.internal.example.com --version 0.5.0 --tls files --cert grc.crt --key grc.key
+sudo ./install.sh --hostname grc.internal.example.com --version 0.6.0 --tls files --cert grc.crt --key grc.key
 ```
 
 The installer is safe to run again and never deletes data. It:
@@ -170,7 +170,7 @@ publish the image but no update file (the workflow says so).
 You need a backup file (from your off-VM copy) and the recovery kit.
 
 ```bash
-sudo ./install.sh --hostname grc.internal.example.com --version 0.5.0 \
+sudo ./install.sh --hostname grc.internal.example.com --version 0.6.0 \
      --restore grcpal-acme-20261001T020000Z-scheduled.grcbak --kit recovery-kit.json
 ```
 
