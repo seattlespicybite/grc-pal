@@ -1,0 +1,145 @@
+name: Security scan
+# Code scan (bandit), known-vulnerable packages (pip-audit), container image scan (Trivy) with a CycloneDX
+# SBOM, and nightly a ZAP baseline scan of a demo container. What runs, where results go and how to
+# suppress a finding: docs/security.md ("Security scanning in CI"). Config: .github/security/.
+on:
+  pull_request:
+  schedule:
+    - cron: "17 6 * * *"   # nightly, 06:17 UTC
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: security-scan-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  # Scanner downloads are pinned by version and checked against a SHA-256 before use (no third-party
+  # actions: trivy-action and setup-trivy had tags hijacked in March 2026, GHSA-69fq-xp46-6x23).
+  # To update: change the version, take the hash from the release's checksums file (Trivy) or
+  # ZapVersions.xml (ZAP), and check it matches the file you downloaded.
+  TRIVY_VERSION: "0.75.0"
+  TRIVY_SHA256: c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f
+  ZAP_VERSION: "2.17.0"
+  ZAP_SHA256: efe799aaa3627db683b43f00c9c210aea0b75c00cc8f0a0f0434d12bb3ddde5a
+jobs:
+  code:
+    name: bandit and pip-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install the scanners (pinned with hashes, in their own environment)
+        run: |
+          python -m venv "$RUNNER_TEMP/tools"
+          "$RUNNER_TEMP/tools/bin/pip" install --require-hashes -r .github/security/requirements.txt
+      - name: bandit (medium and high severity; known false positives in the baseline)
+        run: |
+          "$RUNNER_TEMP/tools/bin/bandit" -r grcpal --severity-level medium \
+            -b .github/security/bandit-baseline.json
+      - name: Install GRC-pal with everything the image ships
+        run: |
+          python -m venv --upgrade-deps "$RUNNER_TEMP/app"   # current pip, not the older one bundled with the runner Python
+          "$RUNNER_TEMP/app/bin/pip" install -e ".[all]"
+      - name: pip-audit (installed packages against the PyPI and OSV advisories)
+        env:
+          PIPAPI_PYTHON_LOCATION: ${{ runner.temp }}/app/bin/python   # audit the app environment, not the tools
+        run: |
+          "$RUNNER_TEMP/tools/bin/pip-audit" --skip-editable --progress-spinner off --desc on
+
+  image:
+    name: Trivy image scan and SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: false
+          load: true
+          tags: grc-pal:scan
+      - name: Install Trivy (checked against its SHA-256)
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/trivy.tgz" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  $RUNNER_TEMP/trivy.tgz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/bin" && tar -xzf "$RUNNER_TEMP/trivy.tgz" -C "$RUNNER_TEMP/bin" trivy
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: SBOM (CycloneDX) of the image
+        run: |
+          mkdir -p reports
+          trivy image --quiet --format cyclonedx --output reports/grc-pal-sbom.cdx.json grc-pal:scan
+      - name: Full vulnerability report (every severity, for the record)
+        run: |
+          trivy image --quiet --scanners vuln --format json --output reports/trivy-image.json \
+            --ignorefile .github/security/trivyignore.yaml grc-pal:scan
+      - name: Fail on high or critical vulnerabilities that have a fix
+        run: |
+          trivy image --quiet --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+            --ignorefile .github/security/trivyignore.yaml grc-pal:scan
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: image-scan-and-sbom
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  zap:
+    name: ZAP baseline (demo container)
+    if: github.event_name != 'pull_request'   # nightly and manual runs only
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: false
+          load: true
+          tags: grc-pal:scan
+      - name: Start the demo portal (dev sign-in, sample data, only on this runner)
+        run: |
+          docker run -d --name grcpal-demo -p 127.0.0.1:8000:8000 \
+            -e GRCPAL_ENV=dev -e GRCPAL_AUTH_MODE=dev -e GRCPAL_DEMO=1 grc-pal:scan
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8000/healthz && exit 0; sleep 1; done
+          docker logs grcpal-demo; exit 1
+      - name: Install ZAP (checked against its SHA-256)
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/zap.tgz" \
+            "https://github.com/zaproxy/zaproxy/releases/download/v${ZAP_VERSION}/ZAP_${ZAP_VERSION}_Linux.tar.gz"
+          echo "${ZAP_SHA256}  $RUNNER_TEMP/zap.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/zap.tgz" -C "$RUNNER_TEMP"
+          java -version
+      - name: ZAP baseline, signed in as the demo admin (fails on any High alert)
+        env:
+          TARGET_URL: http://127.0.0.1:8000
+          REPORT_DIR: ${{ github.workspace }}/reports
+          ZAP_AUTH_HEADER: X-Dev-Principal
+          ZAP_AUTH_HEADER_VALUE: '{"email":"alex.admin@example.com"}'
+          ZAP_AUTH_HEADER_SITE: 127.0.0.1
+        run: |
+          mkdir -p reports
+          "$RUNNER_TEMP/ZAP_${ZAP_VERSION}/zap.sh" -cmd -silent -dir "$RUNNER_TEMP/zaphome" \
+            -autorun "$GITHUB_WORKSPACE/.github/security/zap-baseline.yaml"
+      - name: Portal log (for 500 errors seen by the crawl)
+        if: always()
+        run: docker logs grcpal-demo > reports/portal.log 2>&1 || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: zap-baseline
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 30

@@ -55,10 +55,70 @@ file contents.
 - Every change reaches `main` through a pull request that must pass tests, CodeQL (security-extended
   rules), dependency review and a workflow security check (zizmor). CODEOWNERS requires the
   maintainer's review for CI, Docker and deployment files.
+- Pull requests and a nightly run also scan the code, the installed packages and the built image, and
+  nightly a ZAP baseline crawls a demo container ([Security scanning in CI](#security-scanning-in-ci)).
 - GitHub Actions are pinned to exact commit hashes and get the least permissions they need; checkouts do
   not keep the token on disk. Dependabot proposes updates after a 7-day cooldown.
 - Releases need a maintainer approval, are built in CI with an SBOM and signed build provenance.
   Verify an image before you run it: `gh attestation verify oci://ghcr.io/seattlespicybite/grc-pal:<version> --owner seattlespicybite`
+
+## Security scanning in CI
+
+The workflow `.github/workflows/security-scan.yml` runs on every pull request, every night (06:17 UTC) and
+on demand (Actions > Security scan > Run workflow). It only reads the repository (`permissions: contents:
+read`), its actions are pinned to commit hashes, and the scanners it downloads are pinned to a version
+and checked against a SHA-256 before they run. Its configuration lives in `.github/security/`. This is
+automated scanning, not a penetration test.
+
+| Check | What it looks at | Fails the run when | Results |
+| --- | --- | --- | --- |
+| bandit | Python code in `grcpal/` | a medium or high finding that is not in the baseline | job log |
+| pip-audit | every package installed with `grc-pal[all]` (what the image ships) | any package has a known vulnerability | job log |
+| Trivy | the image built from `Dockerfile` (OS and Python packages) | a high or critical vulnerability that has a fixed version | job log; full JSON report in the `image-scan-and-sbom` artifact |
+| SBOM | the same image, CycloneDX format | never | `grc-pal-sbom.cdx.json` in the `image-scan-and-sbom` artifact |
+| ZAP baseline (nightly and manual only) | a demo container on the runner (`GRCPAL_ENV=dev`, dev sign-in, sample data), crawled as the demo admin through the `X-Dev-Principal` header; passive rules only, no attacks, no form posts | any High alert | HTML and JSON reports plus the portal log in the `zap-baseline` artifact |
+
+Artifacts are kept 30 days (Actions > the run > Artifacts). Release images also carry their own SBOM and
+signed provenance (see above).
+
+Run the same checks on your computer:
+
+```
+python -m venv /tmp/tools && /tmp/tools/bin/pip install --require-hashes -r .github/security/requirements.txt
+/tmp/tools/bin/bandit -r grcpal --severity-level medium -b .github/security/bandit-baseline.json
+PIPAPI_PYTHON_LOCATION=$(which python) /tmp/tools/bin/pip-audit --skip-editable   # in your dev environment
+grcpal serve --demo   # then, in another terminal, with ZAP installed:
+TARGET_URL=http://127.0.0.1:8000 REPORT_DIR=$PWD/reports ZAP_AUTH_HEADER=X-Dev-Principal \
+  ZAP_AUTH_HEADER_VALUE='{"email":"alex.admin@example.com"}' ZAP_AUTH_HEADER_SITE=127.0.0.1 \
+  zap.sh -cmd -autorun .github/security/zap-baseline.yaml
+```
+
+### Suppressing a finding
+
+Fix the finding when you can. When it does not apply, suppress it in the file below with a reason
+(why it does not apply, or why it can wait) and a review date, in the same pull request, so the owner
+reviews it like any other change.
+
+| Scanner | Where | Reason and review date |
+| --- | --- | --- |
+| bandit | Regenerate `.github/security/bandit-baseline.json` (`bandit -r grcpal --severity-level medium -f json -o ...`) and add a row to the table below. Prefer this to `# nosec` in the code. | in the table below |
+| pip-audit | `--ignore-vuln <ID>` on the pip-audit step | comment on the same line |
+| Trivy | `.github/security/trivyignore.yaml` | `statement` and `expired_at` (Trivy reports the finding again after that date) |
+| ZAP | `rules:` in `.github/security/zap-baseline.yaml` (`threshold: "off"` for one rule) | comment on the same line |
+
+Current bandit baseline (review by 2027-04-23):
+
+| File | Rule | Why it is accepted |
+| --- | --- | --- |
+| `grcpal/catalog.py` | B506 yaml_load | False positive: the loader is `CSafeLoader`/`SafeLoader`, never the full loader. |
+| `grcpal/xlsx.py` | B314 xml fromstring | Uploaded workbooks are untrusted, so the reader refuses any DOCTYPE or entity declaration before parsing and caps part size, total unpacked size and entry count (zip bombs). The parser is the standard library's expat, which does not fetch external entities. |
+| `grcpal/configbundle.py` | B108 /tmp path | Default extract folder for a published catalog when `GRCPAL_CONFIG_DIR` is not set. Inside the container `/tmp` belongs to the app user alone. On a shared host, set `GRCPAL_CONFIG_DIR`. |
+
+Updating the scanners: Dependabot proposes new bandit and pip-audit versions (`.github/security/requirements.txt`).
+Trivy and ZAP are updated by hand: change `TRIVY_VERSION`/`ZAP_VERSION` in the workflow and the matching
+SHA-256 from the Trivy release's checksums file or ZAP's `ZapVersions.xml`, after checking it matches the
+file you downloaded. Do not use `aquasecurity/trivy-action` or `setup-trivy`: their tags were hijacked in
+March 2026 (GHSA-69fq-xp46-6x23).
 
 ## Your responsibilities (complementary controls)
 

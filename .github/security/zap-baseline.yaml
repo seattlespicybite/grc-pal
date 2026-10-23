@@ -1,0 +1,60 @@
+# ZAP baseline scan of a demo container (passive only: spider + passive rules, no attacks).
+# Used by .github/workflows/security-scan.yml (nightly and manual runs). See docs/security.md.
+# Run it yourself against `grcpal serve --demo`:
+#   ZAP_AUTH_HEADER=X-Dev-Principal ZAP_AUTH_HEADER_VALUE='{"email":"alex.admin@example.com"}' \
+#   ZAP_AUTH_HEADER_SITE=127.0.0.1 zap.sh -cmd -autorun .github/security/zap-baseline.yaml
+# Signed-in context: ZAP adds the X-Dev-Principal header (dev sign-in, demo admin) to every request
+# through the ZAP_AUTH_HEADER* environment variables, so the spider sees the admin pages.
+env:
+  contexts:
+    - name: grcpal-demo
+      urls:
+        - ${TARGET_URL}
+      includePaths:
+        - ${TARGET_URL}.*
+      excludePaths:
+        - ${TARGET_URL}/dev/logout.*   # would only clear the dev cookie; skip to keep the crawl signed in
+        - ${TARGET_URL}/logout.*
+  parameters:
+    failOnError: true
+    failOnWarning: false
+    progressToStdout: true
+jobs:
+  - type: passiveScan-config
+    parameters:
+      maxAlertsPerRule: 10
+      scanOnlyInScope: true
+    # Suppressions: each needs a reason and a review date (docs/security.md, "Suppressing a finding").
+    # Format:
+    #   rules:
+    #     - id: 10096          # rule ID from the report
+    #       name: Timestamp Disclosure
+    #       threshold: "off"   # reason: ...; review by YYYY-MM-DD
+    rules: []
+  - type: spider
+    parameters:
+      context: grcpal-demo
+      maxDuration: 5          # minutes
+      maxDepth: 6
+      postForm: false         # never submit POST forms: the crawl stays read-only and repeatable
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 10
+  - type: report
+    parameters:
+      template: traditional-html
+      reportDir: ${REPORT_DIR}
+      reportFile: zap-report.html
+      reportTitle: GRC-pal ZAP baseline (demo container)
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: ${REPORT_DIR}
+      reportFile: zap-report.json
+  - type: exitStatus
+    parameters:
+      errorLevel: High          # any High alert fails the run
+      warnLevel: Medium
+      okExitValue: 0
+      warnExitValue: 0          # Medium and Low are reported, not blocking
+      errorExitValue: 1

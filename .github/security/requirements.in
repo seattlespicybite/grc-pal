@@ -1,0 +1,4 @@
+# Pinned scanner tools for .github/workflows/security-scan.yml (not app dependencies).
+# Regenerate: uv pip compile --generate-hashes --python-version 3.12 requirements.in -o requirements.txt
+bandit[toml]
+pip-audit
