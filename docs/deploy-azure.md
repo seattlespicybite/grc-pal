@@ -77,6 +77,22 @@ you passed to `--admins`. You are an admin.
 - Only accounts from your Entra directory can sign in (`GRCPAL_ALLOWED_TENANT_IDS`). With
   `--require-assignment`, only people or groups assigned to the enterprise app can even get a token.
   Add Conditional Access next.
+- Each person is linked to their Entra account at first sign-in. If an email address later signs in from a
+  different Entra account, GRC-pal refuses it until an admin clicks **Unlink Entra account** on Users and roles.
+
+**Check the sign-in edge after every deploy** (from any computer, replace the URL). Each line must print a
+redirect to `login.microsoftonline.com` (302), never `200`:
+
+```bash
+URL=https://grcpal-acme.example.azurecontainerapps.io
+P=$(printf '{"claims":[{"typ":"preferred_username","val":"admin@example.com"}]}' | base64 -w0)
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' -H "X-MS-CLIENT-PRINCIPAL: $P" "$URL/"         # V-1 forged identity
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' "$URL/dev/login" "$URL/login"                    # V-3
+curl -sI "$URL/healthz" | grep -iE 'content-security-policy|strict-transport-security|^server:'            # V-4: no server line
+```
+
+Then sign in, send a forged address (`curl -H "X-Forwarded-For: 6.6.6.6" ...` with your session) and check
+**Audit log**: your real address is shown, not 6.6.6.6 (V-2).
 
 ## Step 3b. Allow only your staff, on managed devices (Conditional Access)
 

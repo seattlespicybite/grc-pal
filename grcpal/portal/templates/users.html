@@ -32,6 +32,8 @@ description, evidence wanted and framework mappings. Other admins run the progra
 <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small ghost" type="submit">{{ 'Reset password' if u.password_hash else 'Password link' }}</button></form>{% endif %}
 {% if u.role == 'admin' and u.active and u.RowKey != library_owner and (not library_owner or user.email == library_owner) %}<form method="post" action="/users/{{ u.RowKey|urlencode }}/library-owner" data-confirm="Make {{ u.RowKey }} the control library owner? {{ 'You will no longer be able to change control definitions.' if library_owner else 'Only this person will be able to change control definitions.' }}">
 <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small ghost" type="submit">{{ 'Hand over control library' if library_owner else 'Make control library owner' }}</button></form>{% endif %}
+{% if u.entra_oid %}<form method="post" action="/users/{{ u.RowKey|urlencode }}/identity" data-confirm="Unlink {{ u.RowKey }} from its Microsoft Entra account? Do this only after checking who now holds this email address: the next person to sign in with it will be linked.">
+<input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ghost small" type="submit">Unlink Entra account</button></form>{% endif %}
 <form method="post" action="/users/{{ u.RowKey|urlencode }}/active" {% if u.active %}data-confirm="Disable {{ u.RowKey }}? They will lose access immediately."{% endif %}>
 <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="active" value="{{ '0' if u.active else '1' }}">
 <button class="btn small {{ 'ghost' if u.active else '' }}" type="submit">{{ 'Disable' if u.active else 'Enable' }}</button></form></div></td></tr>{% endfor %}

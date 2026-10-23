@@ -6,9 +6,13 @@ Sign-in modes:
     live on the server (see accounts.py). Meant for a VM on an internal network.
   * easyauth: Azure Container Apps / App Service built-in authentication. The platform
     signs the user in (Microsoft Entra ID, or any OIDC provider it supports) and injects the
-    X-MS-CLIENT-PRINCIPAL header. Requests without it are rejected.
+    X-MS-CLIENT-PRINCIPAL header. Requests without it are rejected. In production the tenant allow-list
+    (GRCPAL_ALLOWED_TENANT_IDS) is required, and each person is bound to their Entra object ID at first
+    sign-in (Portal.resolve), because an email address can be reused or renamed and an object ID cannot.
   * proxy: a trusted reverse proxy (oauth2-proxy, Pomerium, Caddy forward_auth) signs the user
-    in and sets X-Forwarded-Email. Only safe when the app is reachable through that proxy alone.
+    in and sets X-Forwarded-Email. Anyone who reaches the app directly could send that header too, so the
+    proxy must also send X-GRCPAL-Proxy-Secret with the value of GRCPAL_PROXY_SECRET; requests without it
+    are refused.
   * dev: local development and demos. The user comes from a cookie set on /dev/login, the
     X-Dev-Principal header or GRCPAL_DEV_PRINCIPAL. Anyone can pick any user, so it is allowed only
     when GRCPAL_ENV=dev (or development) is set explicitly (`grcpal serve --demo` sets it and listens on this
@@ -20,6 +24,7 @@ exactly one role per person (see ROLES); the service resolves an Identity to a U
 from __future__ import annotations
 
 import base64
+import hmac
 import json
 import os
 import re
@@ -45,6 +50,9 @@ _EMAIL_CLAIMS = ("preferred_username", "email", "upn",
 _NAME_CLAIMS = ("name", "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")
 _GROUP_CLAIMS = ("groups", "http://schemas.microsoft.com/ws/2008/06/identity/claims/groups")
 _TENANT_CLAIMS = ("tid", "http://schemas.microsoft.com/identity/claims/tenantid")
+_OBJECT_ID_CLAIMS = ("oid", "http://schemas.microsoft.com/identity/claims/objectidentifier")
+PROXY_SECRET_HEADER = "x-grcpal-proxy-secret"
+PROXY_SECRET_MIN = 32
 
 
 class AuthError(Exception):
@@ -62,6 +70,7 @@ class Identity:
     name: str
     groups: frozenset = field(default_factory=frozenset)
     tenant_id: str = ""
+    object_id: str = ""   # Microsoft Entra object ID (easyauth); empty when the sign-in layer has none
 
 
 @dataclass(frozen=True)
@@ -105,6 +114,13 @@ def auth_mode() -> str:
         # Fail closed: a missing or mistyped GRCPAL_ENV must never open the password-free sign-in page.
         raise RuntimeError("GRCPAL_AUTH_MODE=dev lets anyone sign in as anyone; it needs GRCPAL_ENV=dev, set "
                            "explicitly (grcpal serve --demo and docker compose do this). Use local, easyauth or proxy otherwise.")
+    if mode == "proxy" and len(os.getenv("GRCPAL_PROXY_SECRET", "").strip()) < PROXY_SECRET_MIN:
+        raise RuntimeError(f"GRCPAL_AUTH_MODE=proxy needs GRCPAL_PROXY_SECRET (at least {PROXY_SECRET_MIN} characters, "
+                           "e.g. openssl rand -hex 32), sent by the proxy as X-GRCPAL-Proxy-Secret on every request, "
+                           "so a request that bypasses the proxy cannot claim to be anyone")
+    if mode == "easyauth" and os.getenv("GRCPAL_ENV", "").lower() == "production" and not _csv_env("GRCPAL_ALLOWED_TENANT_IDS"):
+        raise RuntimeError("GRCPAL_AUTH_MODE=easyauth in production needs GRCPAL_ALLOWED_TENANT_IDS (your Entra tenant "
+                           "ID), so people from other organizations' directories cannot sign in")
     return mode
 
 
@@ -161,6 +177,10 @@ def identity_from_request(headers, cookies=None) -> Identity:
                         tenant_id=d.get("tid", ""))
 
     if mode == "proxy":
+        expected = os.getenv("GRCPAL_PROXY_SECRET", "").strip()
+        sent = headers.get(PROXY_SECRET_HEADER) or ""
+        if not hmac.compare_digest(sent.encode(), expected.encode()):
+            raise AuthError("this request did not come through the sign-in proxy", 403)
         email = headers.get(os.getenv("GRCPAL_PROXY_EMAIL_HEADER", "x-forwarded-email"))
         if not email:
             raise AuthError("not signed in")
@@ -178,4 +198,5 @@ def identity_from_request(headers, cookies=None) -> Identity:
     if allowed and tid not in allowed:
         raise AuthError("your organization's directory is not allowed to use this GRC-pal instance", 403)
     groups = frozenset(c["val"].lower() for c in claims if c.get("typ") in _GROUP_CLAIMS and c.get("val"))
-    return Identity(email=email, name=get(_NAME_CLAIMS) or email, groups=groups, tenant_id=tid)
+    oid = (get(_OBJECT_ID_CLAIMS) or "").strip().lower()
+    return Identity(email=email, name=get(_NAME_CLAIMS) or email, groups=groups, tenant_id=tid, object_id=oid)

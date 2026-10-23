@@ -60,6 +60,16 @@ All notable changes are listed here. The project follows [semantic versioning](h
   No data model change (the new field is read with a default).
 
 ### Security
+- **Entra accounts are linked at first sign-in.** On Azure (easyauth) each person's Entra object ID and tenant
+  are stored the first time they sign in; the same email from another Entra account is refused and logged as a
+  security event until an admin clicks **Unlink Entra account** on Users and roles. In production the tenant
+  allow-list (`GRCPAL_ALLOWED_TENANT_IDS`) is now required; the Azure template already sets it.
+- **Proxy mode needs a shared secret.** `GRCPAL_AUTH_MODE=proxy` now requires `GRCPAL_PROXY_SECRET` (32+
+  characters), which the proxy sends as `X-GRCPAL-Proxy-Secret`; a request that reaches the app without it is
+  refused, so nobody can claim to be someone by sending `X-Forwarded-Email` directly. **Action for proxy users:**
+  set the secret on both sides before upgrading (examples in docs/configuration.md).
+- **Request logs name the person and hide password-link tokens.** Every request line now carries the signed-in
+  `actor` (it was always "-"), and `/account/password/<token>` is logged as `/account/password/[redacted]`.
 - **Backup files and the recovery kit are no longer downloadable from the web page in production.** One stolen
   admin session could take every record plus the keys that open them and the saved integration credentials.
   Operators get the kit on the command line: `grcpal backup kit` (VM) or the new `deploy.sh --kit-out FILE`
