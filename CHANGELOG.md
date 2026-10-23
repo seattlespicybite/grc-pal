@@ -4,6 +4,28 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Added
+- **Control matrix: export, bulk edit and import back.** **Controls > Control matrix** downloads a data file
+  (.xlsx, one row per control, a column per framework switched on). The control library owner edits it and
+  uploads it: a **preview** shows every change (old and new) and every problem before anything is saved, then
+  **Apply** (with a reason) or **Discard**. Rows go through the same rules as **Edit control** and **New
+  control**, so each change has its own history version and audit entry. New IDs create custom controls,
+  Status `retired` retires a custom control, and rows left out of the file are never deleted. Files from
+  another organization, rows changed in GRC-pal after the download (conflicts) and changes made between the
+  preview and the apply are refused. The uploaded file and the result are kept as write-once evidence
+  (`control_matrix_import/`, `control_matrix_apply/`). Admins and auditors can download; only the library
+  owner imports.
+- **Control matrix report** for leadership and auditors: every control with description, owners, mappings,
+  points of focus and evidence, plus a cross-reference per framework. Print or save as PDF from the browser,
+  or download Word (.docx). Written with the standard library, no new dependency.
+
+### Security
+- GRC-pal now reads one kind of uploaded spreadsheet (the control matrix). The reader in `grcpal/xlsx.py` is
+  standard library only and refuses large or zip-bomb files, DOCTYPE and entities, formulas and password-protected
+  files; it opens only the workbook, shared text and worksheet parts.
+
+New table `matriximports` (no migration needed). No other data model change.
+
 ### Fixed
 - **Program repository knowledge articles and frameworks now reach Azure portals.** `grcpal publish-config`
   sent only `catalog/`, `registers/` and `policies/`, so your own `kb/` articles and `frameworks/` files worked
