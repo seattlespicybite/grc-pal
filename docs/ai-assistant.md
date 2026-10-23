@@ -20,7 +20,7 @@ status, summaries and CSV excerpts of the latest collector runs, check results, 
 | Provider | Setting | Notes |
 | --- | --- | --- |
 | Claude | `anthropic`, model e.g. `claude-sonnet-5-5` or `claude-opus-5-5`, API key | Reads screenshots and PDFs when file contents are allowed |
-| Self-hosted | `openai_compatible`, endpoint e.g. `http://ollama:11434/v1`, model name | Ollama, vLLM, LM Studio: evidence never leaves your network |
+| Self-hosted | `openai_compatible`, endpoint e.g. `http://ollama:11434/v1`, model name | Ollama, vLLM, LM Studio: evidence never leaves your network. A private address needs `GRCPAL_AI_ALLOW_PRIVATE=1` in the deployment environment |
 | Other hosted | `openai_compatible` | Azure OpenAI, OpenAI or any compatible gateway |
 | Demo | `demo` | Offline rules for trying the workflow; not an AI |
 

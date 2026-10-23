@@ -16,7 +16,9 @@ import uuid
 from grcpal import checks as checks_mod
 from grcpal import frameworks as fw_mod
 from grcpal.evidence import utcnow
-from grcpal.settings import FIELDS, SECTIONS, NoKey, Settings, SettingsStore, section_status
+from grcpal.portal import notify
+from grcpal.settings import (ENDPOINT_SECRETS, FIELDS, SECTIONS, NoKey, Settings, SettingsStore, blocked_secrets,
+                             is_cleared, section_status)
 
 CONTROL_ID = re.compile(r"^[A-Z0-9][A-Z0-9.-]{1,23}$")
 FREQUENCIES = ("continuous", "daily", "weekly", "monthly", "quarterly", "annual", "event")
@@ -310,6 +312,7 @@ class FeaturesMixin:
         self._admin(actor)
         if section_id not in SECTIONS:
             raise self._invalid("Unknown configuration section")
+        old = self.settings
         try:
             changed, errors = self.settings_store.save(section_id, form, actor.email)
         except NoKey as exc:
@@ -317,11 +320,21 @@ class FeaturesMixin:
         if errors:
             raise self._invalid("; ".join(errors))
         if changed:
+            stored = self.settings_store.row(section_id).get("secrets") or {}
             safe = [k for k in changed if not FIELDS[k].secret]
             secrets = [k for k in changed if FIELDS[k].secret]
-            self.audit(actor, "config.save", section_id, {"fields": safe, "secrets_changed": secrets})
+            cleared = [k for k in secrets if is_cleared(stored.get(k))]
+            new = self.settings
+            endpoints = {k: (old.get(k), new.get(k)) for k in ENDPOINT_SECRETS if k in safe}
+            self.audit(actor, "config.save", section_id, {"fields": safe, "secrets_changed": secrets,
+                                                          "secrets_cleared": cleared,
+                                                          "endpoints": {k: v[1] for k, v in endpoints.items()}})
             self.events.info("config", f"Configuration saved: {SECTIONS[section_id].title}", actor=actor.email,
                              section=section_id, fields=changed)
+            # Every admin hears about it, the actor included, before a new mailer (maybe a new SMTP host) applies.
+            self._notify("config_change", self.active_emails("admin"), actor,
+                         notify.config_changed(self, SECTIONS[section_id], changed, cleared, endpoints, actor),
+                         include_actor=True)
             self.apply_settings()
         return changed
 
@@ -345,7 +358,7 @@ class FeaturesMixin:
                 elif f.key in form:
                     values[f.key] = form.get(f.key, "").strip()
             try:
-                s = s.overlay(values, secrets)
+                s = s.overlay(values, secrets, blocked_secrets(s, SECTIONS[section_id], values, set(secrets)))
             except NoKey as exc:
                 raise self._invalid(str(exc)) from exc
         started = time.perf_counter()

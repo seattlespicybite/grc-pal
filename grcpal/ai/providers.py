@@ -5,6 +5,10 @@
   demo               offline, rule-based reviewer for trials and tests; sends nothing anywhere
 
 Adding a provider: subclass Provider, implement complete(), register it in from_settings().
+
+Every call goes through checks.safe_request: public addresses only, each redirect re-checked, the API key dropped if a
+redirect leaves the endpoint's host. A self-hosted model on a private address (Ollama, vLLM) needs the operator
+setting GRCPAL_AI_ALLOW_PRIVATE=1 in the environment; it cannot be turned on from the portal.
 """
 from __future__ import annotations
 
@@ -12,9 +16,10 @@ import json
 import time
 from dataclasses import dataclass
 
-import requests
+from grcpal import checks
 
 RETRY = {408, 429, 500, 502, 503, 504, 529}
+MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 
 
 @dataclass
@@ -42,14 +47,32 @@ class Provider:
 
     @staticmethod
     def _post(url: str, headers: dict, body: dict, timeout: int = 180) -> dict:
+        payload = json.dumps(body)
         for attempt in range(4):
-            r = requests.post(url, headers=headers, json=body, timeout=timeout)
-            if r.status_code in RETRY and attempt < 3:
-                time.sleep(min(float(r.headers.get("retry-after", 2 ** (attempt + 1))), 30))
+            try:
+                r = checks.safe_request("POST", url, headers=headers, body=payload, timeout=timeout,
+                                        max_bytes=MAX_RESPONSE_BYTES, user_agent="GRC-pal-ai/1",
+                                        allow_private=checks.private_allowed("GRCPAL_AI_ALLOW_PRIVATE"))
+            except checks.Blocked as exc:
+                raise ProviderError(f"AI endpoint blocked: {exc}. A self-hosted model on a private address needs "
+                                    "GRCPAL_AI_ALLOW_PRIVATE=1 in the deployment environment.") from exc
+            except (OSError, ValueError) as exc:
+                raise ProviderError(f"cannot reach the AI endpoint: {exc}") from exc
+            if r.status in RETRY and attempt < 3:
+                try:
+                    wait = float(r.headers.get("retry-after", 2 ** (attempt + 1)))
+                except ValueError:
+                    wait = 2 ** (attempt + 1)
+                time.sleep(min(wait, 30))
                 continue
-            if r.status_code >= 400:
-                raise ProviderError(f"HTTP {r.status_code}: {r.text[:300]}")
-            return r.json()
+            if r.status >= 400:
+                raise ProviderError(f"HTTP {r.status}: {r.text()[:300]}")
+            if r.truncated:
+                raise ProviderError("the AI endpoint sent a response larger than 8 MB")
+            try:
+                return r.json()
+            except ValueError as exc:
+                raise ProviderError("the AI endpoint did not answer with JSON") from exc
         raise ProviderError("provider kept returning errors")
 
 

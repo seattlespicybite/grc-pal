@@ -22,6 +22,20 @@ There are two layers:
 | `GRCPAL_LOG_RETENTION_DAYS` | Days of system events kept for the Logs page (default 90) |
 | `GRCPAL_JOBS_SYNC` | `1` runs background jobs inline (tests, scripts) |
 | `GRCPAL_CHECKS_ALLOW_PRIVATE` | `1` lets checks reach private addresses. Only for internal-only, self-hosted deployments |
+| `GRCPAL_AI_ALLOW_PRIVATE` | `1` lets the AI assistant reach a model on a private address (Ollama, vLLM, LM Studio on your network). Without it, AI calls go to public addresses only |
+| `GRCPAL_GITHUB_ALLOW_PRIVATE` | `1` lets GitHub calls reach GitHub Enterprise Server on a private address |
+
+Each switch opens only its own kind of call and can only be set in the deployment environment, not on the
+Configuration page. The AI and GitHub switches never open link-local addresses (cloud metadata such as
+169.254.169.254). Leave all three off on Azure.
+
+### Secrets follow their server
+
+Changing **Endpoint URL** (AI assistant), **API URL** (GitHub) or **SMTP server** (Email) clears that section's
+saved secret (API key, token, SMTP password) unless you type a new one in the same save. A secret set by the
+deployment, such as the SMTP password from `deploy.sh`, is blocked the same way until you enter a password or
+switch back to the original server. "Test without saving" with a changed address does not use the saved secret.
+Every Configuration save is in the audit log and is emailed to all admins (the person who saved included).
 
 ## Core
 

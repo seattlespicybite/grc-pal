@@ -265,6 +265,30 @@ OPTION_LABELS = {
 SECTIONS = {s.id: s for s in SCHEMA}
 FIELDS = {f.key: f for s in SCHEMA for f in s.fields}
 
+# Endpoint field -> the secrets that may only be sent to that endpoint. Changing the endpoint on the Configuration
+# page clears these unless a new value is entered in the same save, so a saved (or deployment-provided) secret
+# cannot be redirected to another server by someone who cannot read it.
+ENDPOINT_SECRETS = {
+    "GRCPAL_AI_BASE_URL": ("GRCPAL_AI_API_KEY",),
+    "GRCPAL_GITHUB_API_URL": ("GRCPAL_GITHUB_TOKEN",),
+    "GRCPAL_SMTP_HOST": ("GRCPAL_SMTP_PASSWORD",),
+}
+
+
+def _endpoint(value) -> str:
+    return str(value or "").strip().rstrip("/").lower()
+
+
+def _effective(values: dict, key: str) -> str:
+    """What Settings.get would return for a non-secret field with these saved values."""
+    return _endpoint(values.get(key) or os.getenv(key) or FIELDS[key].default)
+
+
+def is_cleared(entry) -> bool:
+    """A stored secret entry that is a 'cleared because the endpoint changed' marker. It hides any value from
+    the environment until a new secret is entered or the endpoint returns to the one the secret was meant for."""
+    return isinstance(entry, dict) and not entry.get("enc") and bool(entry.get("cleared_at"))
+
 
 def section_of(key: str) -> Section:
     return next(s for s in SCHEMA if any(f.key == key for f in s.fields))
@@ -345,7 +369,7 @@ class Settings:
         if key in self._values and self._values[key] not in ("", None):
             return "saved"
         if key in self._secrets:
-            return "saved"
+            return "cleared" if is_cleared(self._secrets[key]) else "saved"
         if self._env and os.getenv(key):
             return "environment"
         return "default"
@@ -362,13 +386,19 @@ class Settings:
         return str(value)
 
     def secret(self, key: str) -> str:
-        token = self._secrets.get(key, {}).get("enc") if isinstance(self._secrets.get(key), dict) else None
+        entry = self._secrets.get(key)
+        token = entry.get("enc") if isinstance(entry, dict) else None
         if token:
             return self._box_fn().open(token, f"{self.tenant}|{key}")
+        if is_cleared(entry):
+            return ""
         return os.getenv(key, "") if self._env else ""
 
     def has_secret(self, key: str) -> bool:
-        return bool(self._secrets.get(key)) or (self._env and bool(os.getenv(key)))
+        entry = self._secrets.get(key)
+        if is_cleared(entry):
+            return False
+        return bool(entry) or (self._env and bool(os.getenv(key)))
 
     def secret_info(self, key: str) -> dict:
         return {k: v for k, v in (self._secrets.get(key) or {}).items() if k != "enc"}
@@ -397,10 +427,13 @@ class Settings:
     def values(self) -> dict:
         return {k: self.get(k) for k, f in FIELDS.items() if not f.secret}
 
-    def overlay(self, values: dict, secrets: dict) -> "Settings":
-        """A copy with unsaved form values applied (secrets given in plaintext), for testing before saving."""
+    def overlay(self, values: dict, secrets: dict, blocked=()) -> "Settings":
+        """A copy with unsaved form values applied (secrets given in plaintext), for testing before saving.
+        `blocked` secrets are hidden, as a save would clear them (see blocked_secrets)."""
         box = self._box_fn
         sealed = dict(self._secrets)
+        for k in blocked:
+            sealed[k] = {"cleared_at": "unsaved test"}
         if secrets:
             b = box()
             for k, v in secrets.items():
@@ -438,11 +471,14 @@ class SettingsStore:
         values = dict(current.get("values") or {})
         secrets = dict(current.get("secrets") or {})
         merged_view = {**self.load().values(), **values}
-        changed, errors = [], []
+        before = {ep: _effective(values, ep) for ep in ENDPOINT_SECRETS if ep in FIELDS}
+        changed, errors, entered, cleared = [], [], set(), []
         for f in section.fields:
             if f.secret:
                 raw = form.get(f.key, "")
                 if raw == "__clear__":
+                    if is_cleared(secrets.get(f.key)):
+                        continue        # removing the marker would re-open a deployment secret to the new endpoint
                     if f.key in secrets:
                         secrets.pop(f.key)
                         changed.append(f.key)
@@ -450,6 +486,7 @@ class SettingsStore:
                     secrets[f.key] = {"enc": self._box_fn().seal(raw.strip(), f"{self.tenant}|{f.key}"),
                                       "set_at": _now(), "set_by": actor}
                     changed.append(f.key)
+                    entered.add(f.key)
                 continue
             if f.kind == "bool":
                 new = "true" if form.get(f.key) in ("true", "on", "1") else "false"
@@ -473,10 +510,33 @@ class SettingsStore:
                 values[f.key] = new
                 changed.append(f.key)
             merged_view[f.key] = new
+        for ep, keys in ENDPOINT_SECRETS.items():
+            if ep not in {f.key for f in section.fields}:
+                continue
+            now = _effective(values, ep)
+            for key in keys:
+                entry = secrets.get(key)
+                if key in entered:
+                    continue
+                if is_cleared(entry) and entry.get("for_endpoint") == now:
+                    secrets.pop(key)        # back on the endpoint the secret was meant for
+                    changed.append(key)
+                elif now != before[ep] and not is_cleared(entry) and (entry or os.getenv(key)):
+                    secrets[key] = {"cleared_at": _now(), "cleared_by": actor, "for_endpoint": before[ep],
+                                    "reason": f"{FIELDS[ep].label} changed"}
+                    changed.append(key)
+                    cleared.append(key)
         for f in section.fields:
             if required(f, merged_view):
-                has = (f.key in secrets or os.getenv(f.key)) if f.secret else (merged_view.get(f.key) or os.getenv(f.key))
-                if not has:
+                entry = secrets.get(f.key)
+                if f.secret:
+                    has = (entry or {}).get("enc") or (f.key not in secrets and os.getenv(f.key))
+                else:
+                    has = merged_view.get(f.key) or os.getenv(f.key)
+                if not has and f.key in cleared:
+                    ep = next(e for e, ks in ENDPOINT_SECRETS.items() if f.key in ks)
+                    errors.append(f"{FIELDS[ep].label} changed, so the saved {f.label} no longer applies; enter it again")
+                elif not has:
                     errors.append(f"{f.label} is required for this option")
         if errors:
             return [], errors
@@ -506,6 +566,18 @@ class SettingsStore:
 
     def set_state(self, key: str, value) -> None:
         self.store.upsert("config", {"PartitionKey": "state", "RowKey": key, "json": json.dumps(value)})
+
+
+def blocked_secrets(settings: Settings, section: Section, values: dict, entered) -> set:
+    """Secrets a save of these form values would clear: used so 'Test without saving' never sends a saved secret
+    to a changed endpoint."""
+    out = set()
+    current = {k: settings.get(k) for k in ENDPOINT_SECRETS if k in FIELDS}
+    for ep, keys in ENDPOINT_SECRETS.items():
+        if ep in values and ep in {f.key for f in section.fields} and \
+                _effective(values, ep) != _effective(current, ep):
+            out |= {k for k in keys if k not in entered}
+    return out
 
 
 def section_status(store: SettingsStore, settings: Settings, section: Section) -> str:

@@ -8,6 +8,11 @@ HTTP and TLS checks can be created by admins in the portal. They run with these 
   * time limit, response size limit, and secret header values stored encrypted and redacted in evidence.
 GRCPAL_CHECKS_ALLOW_PRIVATE=1 lifts the address rule for self-hosted, internal-only deployments.
 
+The same guard (`safe_request`) carries the AI provider, GitHub and Microsoft Graph calls. Those callers pass their
+own opt-in (`GRCPAL_AI_ALLOW_PRIVATE`, `GRCPAL_GITHUB_ALLOW_PRIVATE`) so lifting one does not lift the others.
+When a redirect leaves the original scheme/host/port, credential headers (Authorization, Cookie and any header whose
+name contains auth, token, key, secret or cookie) are dropped, so a token is only ever sent to the host it was meant for.
+
 Command checks run a program and test its output. They can only be defined in catalog/checks.yaml in the
 program repository (so every change is a reviewed pull request) and only the command line runs them
 (`grcpal checks run`, the collect job, CI). The web portal never executes commands.
@@ -52,12 +57,51 @@ class Response:
     def text(self) -> str:
         return self.body.decode("utf-8", "replace")
 
+    @property
+    def status_code(self) -> int:
+        return self.status
+
+    def json(self):
+        return json.loads(self.body.decode("utf-8") or "null")
+
+    @property
+    def links(self) -> dict:
+        """RFC 8288 Link header as {rel: {"url": ...}}, like requests.Response.links (used for GitHub paging)."""
+        out = {}
+        for part in (self.headers.get("link") or "").split(","):
+            m = re.match(r'\s*<([^>]*)>(.*)', part)
+            if not m:
+                continue
+            rel = re.search(r'rel="?([^";]+)"?', m.group(2))
+            if rel:
+                for name in rel.group(1).split():
+                    out[name] = {"url": m.group(1), "rel": name}
+        return out
+
 
 def _allow_private() -> bool:
     return os.getenv("GRCPAL_CHECKS_ALLOW_PRIVATE") == "1"
 
 
-def resolve_public(host: str, port: int) -> str:
+def private_allowed(env_var: str) -> bool:
+    """Opt-in switch for one kind of outbound call, e.g. private_allowed("GRCPAL_AI_ALLOW_PRIVATE")."""
+    return os.getenv(env_var) == "1"
+
+
+_CREDENTIAL_HINTS = ("auth", "token", "key", "secret", "cookie")
+
+
+def _credential_header(name: str) -> bool:
+    low = name.lower()
+    return any(h in low for h in _CREDENTIAL_HINTS)
+
+
+def _origin(url: str) -> tuple:
+    parts = urlsplit(url)
+    return parts.scheme, (parts.hostname or "").lower(), parts.port or (443 if parts.scheme == "https" else 80)
+
+
+def resolve_public(host: str, port: int, allow_private: bool | None = None) -> str:
     try:
         infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except socket.gaierror as exc:
@@ -65,7 +109,11 @@ def resolve_public(host: str, port: int) -> str:
     addresses = []
     for info in infos:
         ip = ipaddress.ip_address(info[4][0])
-        if not _allow_private() and (not ip.is_global or ip.is_multicast):
+        allowed = _allow_private() if allow_private is None else allow_private
+        if allow_private is True and ip.is_link_local:
+            # Integration opt-ins (AI, GitHub) open private networks, never cloud metadata (169.254.0.0/16, fe80::/10).
+            raise Blocked(f"{host} resolves to a link-local address ({ip}); cloud metadata is always blocked")
+        if not allowed and (not ip.is_global or ip.is_multicast):
             raise Blocked(f"{host} resolves to a non-public address ({ip}); requests to internal networks and "
                           "cloud metadata are blocked")
         addresses.append(str(ip))
@@ -94,8 +142,12 @@ class _PinnedHTTP(http.client.HTTPConnection):
 
 
 def safe_request(method: str, url: str, headers: dict | None = None, body: str | bytes | None = None,
-                 timeout: float = 15, max_bytes: int = MAX_BYTES, redirects: int = 3) -> Response:
+                 timeout: float = 15, max_bytes: int = MAX_BYTES, redirects: int = 3,
+                 allow_private: bool | None = None, user_agent: str = "GRC-pal-check/1") -> Response:
+    """allow_private=None follows GRCPAL_CHECKS_ALLOW_PRIVATE; other callers pass their own opt-in."""
     method = method.upper()
+    headers = dict(headers or {})
+    first_origin = _origin(url)
     if method not in METHODS:
         raise Blocked(f"method {method} is not allowed; use {', '.join(METHODS)}")
     started = time.perf_counter()
@@ -106,13 +158,16 @@ def safe_request(method: str, url: str, headers: dict | None = None, body: str |
         if parts.username or parts.password:
             raise Blocked("put credentials in a header, not in the URL")
         port = parts.port or (443 if parts.scheme == "https" else 80)
-        address = resolve_public(parts.hostname, port)
+        address = (resolve_public(parts.hostname, port) if allow_private is None
+                   else resolve_public(parts.hostname, port, allow_private))
         if parts.scheme == "https":
             conn = _PinnedHTTPS(parts.hostname, address, port, timeout, ssl.create_default_context())
         else:
             conn = _PinnedHTTP(parts.hostname, address, port, timeout)
         path = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
-        hdrs = {"User-Agent": "GRC-pal-check/1", "Accept": "*/*", **(headers or {})}
+        if _origin(url) != first_origin:
+            headers = {k: v for k, v in headers.items() if not _credential_header(k)}
+        hdrs = {"User-Agent": user_agent, "Accept": "*/*", **headers}
         data = body.encode() if isinstance(body, str) else body
         try:
             conn.request(method, path, body=data, headers=hdrs)

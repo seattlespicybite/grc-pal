@@ -176,7 +176,7 @@ def test_gh_list_complete_refuses_to_stop_early(monkeypatch):
             return [{"login": "a"}]
     c = Clients()
     monkeypatch.setattr(c, "_github_headers", lambda: {})
-    monkeypatch.setattr(c, "_request", lambda *a, **k: Resp())
+    monkeypatch.setattr(c, "_gh", lambda *a, **k: Resp())   # GitHub transport (guarded, B3)
     assert len(c.gh_list("/orgs/x/members", max_pages=3)) == 3            # old behaviour unchanged
     with pytest.raises(RuntimeError, match="incomplete"):
         c.gh_list("/orgs/x/members", max_pages=3, complete=True)
