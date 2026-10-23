@@ -111,11 +111,128 @@ def test_easyauth_identity_tenant_allow_list(monkeypatch):
         auth.identity_from_request({})
 
 
+PROXY_SECRET = "proxy-shared-secret-0123456789abcdef"
+
+
 def test_proxy_mode(monkeypatch):
     monkeypatch.setenv("GRCPAL_AUTH_MODE", "proxy")
-    assert auth.identity_from_request({"x-forwarded-email": "Bo@Example.com"}).email == "bo@example.com"
+    monkeypatch.setenv("GRCPAL_PROXY_SECRET", PROXY_SECRET)
+    ok = {"x-forwarded-email": "Bo@Example.com", "x-grcpal-proxy-secret": PROXY_SECRET}
+    assert auth.identity_from_request(ok).email == "bo@example.com"
     with pytest.raises(auth.AuthError):
-        auth.identity_from_request({})
+        auth.identity_from_request({"x-grcpal-proxy-secret": PROXY_SECRET})
+
+
+@pytest.mark.parametrize("sent", [None, "", "wrong", PROXY_SECRET + "x", PROXY_SECRET[:-1]])
+def test_proxy_mode_ignores_identity_headers_that_did_not_come_through_the_proxy(monkeypatch, sent):
+    # Anyone who reaches the app directly can send X-Forwarded-Email; only the proxy knows the secret.
+    monkeypatch.setenv("GRCPAL_AUTH_MODE", "proxy")
+    monkeypatch.setenv("GRCPAL_PROXY_SECRET", PROXY_SECRET)
+    headers = {"x-forwarded-email": "admin@example.com"}
+    if sent is not None:
+        headers["x-grcpal-proxy-secret"] = sent
+    with pytest.raises(auth.AuthError) as exc:
+        auth.identity_from_request(headers)
+    assert exc.value.status == 403
+
+
+@pytest.mark.parametrize("secret", [None, "", "too-short"])
+def test_proxy_mode_needs_a_strong_shared_secret(monkeypatch, secret):
+    monkeypatch.setenv("GRCPAL_AUTH_MODE", "proxy")
+    if secret is None:
+        monkeypatch.delenv("GRCPAL_PROXY_SECRET", raising=False)
+    else:
+        monkeypatch.setenv("GRCPAL_PROXY_SECRET", secret)
+    with pytest.raises(RuntimeError, match="GRCPAL_PROXY_SECRET"):
+        auth.auth_mode()
+
+
+def _principal(email, oid="", tid="tenant-a", name=""):
+    claims = [{"typ": "preferred_username", "val": email}, {"typ": "tid", "val": tid}]
+    if oid:
+        claims.append({"typ": "http://schemas.microsoft.com/identity/claims/objectidentifier", "val": oid})
+    if name:
+        claims.append({"typ": "name", "val": name})
+    return base64.b64encode(json.dumps({"claims": claims}).encode()).decode()
+
+
+def test_easyauth_in_production_needs_the_tenant_allow_list(monkeypatch):
+    monkeypatch.setenv("GRCPAL_AUTH_MODE", "easyauth")
+    monkeypatch.setenv("GRCPAL_ENV", "production")
+    monkeypatch.delenv("GRCPAL_ALLOWED_TENANT_IDS", raising=False)
+    with pytest.raises(RuntimeError, match="GRCPAL_ALLOWED_TENANT_IDS"):
+        auth.auth_mode()
+    monkeypatch.setenv("GRCPAL_ALLOWED_TENANT_IDS", " , ")
+    with pytest.raises(RuntimeError, match="GRCPAL_ALLOWED_TENANT_IDS"):
+        auth.auth_mode()
+    monkeypatch.setenv("GRCPAL_ALLOWED_TENANT_IDS", "tenant-a")
+    assert auth.auth_mode() == "easyauth"
+
+
+def test_easyauth_identity_carries_the_entra_object_id(monkeypatch):
+    monkeypatch.setenv("GRCPAL_AUTH_MODE", "easyauth")
+    ident = auth.identity_from_request({"x-ms-client-principal": _principal("Jo@Example.com", "OID-1")})
+    assert ident.object_id == "oid-1" and ident.tenant_id == "tenant-a"
+    short = base64.b64encode(json.dumps({"claims": [{"typ": "preferred_username", "val": "jo@example.com"},
+                                                    {"typ": "oid", "val": "OID-2"}]}).encode()).decode()
+    assert auth.identity_from_request({"x-ms-client-principal": short}).object_id == "oid-2"
+
+
+def test_entra_identity_is_bound_at_first_sign_in_and_a_lookalike_is_refused(env):
+    # The email claim can be reused (a leaver's address given to someone new, a renamed account); the Entra
+    # object ID cannot. After the first sign-in, the same email from another object ID is refused.
+    portal, _ = env
+    first = portal.resolve(Identity(CONTRIB.email, "Casey", tenant_id="tenant-a", object_id="oid-1"))
+    assert first.role == "contributor"
+    row = portal.user_row(CONTRIB.email)
+    assert row["entra_oid"] == "oid-1" and row["entra_tid"] == "tenant-a"
+    assert "user.identity_bound" in [r["action"] for r in portal.log.records()]
+    assert portal.resolve(Identity(CONTRIB.email, "Casey", tenant_id="tenant-a", object_id="oid-1")).role == "contributor"
+    for other in (Identity(CONTRIB.email, "X", tenant_id="tenant-a", object_id="oid-2"),
+                  Identity(CONTRIB.email, "X", tenant_id="tenant-b", object_id="oid-1")):
+        with pytest.raises(auth.AuthError) as exc:
+            portal.resolve(other)
+        assert exc.value.status == 403
+    assert any("different Microsoft Entra account" in e["message"] for e in portal.events.search(category="security"))
+    # a sign-in layer without object IDs (proxy, dev) keeps working as before
+    assert portal.resolve(Identity(CONTRIB.email, "Casey")).role == "contributor"
+
+
+def test_new_users_are_bound_from_their_first_sign_in(env, monkeypatch):
+    portal, _ = env
+    monkeypatch.setenv("GRCPAL_BOOTSTRAP_ADMINS", "boss@example.com")
+    portal.resolve(Identity("boss@example.com", "Boss", tenant_id="tenant-a", object_id="oid-9"))
+    assert portal.user_row("boss@example.com")["entra_oid"] == "oid-9"
+
+
+def test_admin_can_clear_an_identity_binding(env):
+    portal, client = env
+    portal.resolve(Identity(CONTRIB.email, "Casey", tenant_id="tenant-a", object_id="oid-1"))
+    with pytest.raises(Forbidden):
+        portal.reset_identity_binding(CONTRIB, CONTRIB.email)
+    as_(client, ADMIN)
+    page = client.get("/users").text
+    assert f'action="/users/{CONTRIB.email.replace("@", "%40")}/identity"' in page
+    r = client.post(f"/users/{CONTRIB.email}/identity", data={"csrf": csrf(client, "/users")}, follow_redirects=False)
+    assert r.status_code == 303
+    assert not portal.user_row(CONTRIB.email).get("entra_oid")
+    assert "user.identity_reset" in [x["action"] for x in portal.log.records()]
+    portal.resolve(Identity(CONTRIB.email, "Casey", tenant_id="tenant-a", object_id="oid-2"))  # the new account binds
+    assert portal.user_row(CONTRIB.email)["entra_oid"] == "oid-2"
+
+
+def test_request_log_names_the_user_and_hides_reset_tokens(env, caplog):
+    import logging
+
+    _, client = env
+    with caplog.at_level(logging.INFO, logger="grcpal"):
+        as_(client, ADMIN).get("/")
+        client.get("/account/password/SECRET-TOKEN-abc123")
+    lines = [r for r in caplog.records if r.getMessage() == "request"]
+    home = [r for r in lines if r.fields.get("path") == "/"][-1]
+    assert home.fields["actor"] == ADMIN.email
+    assert not any("SECRET-TOKEN" in json.dumps(r.fields) for r in caplog.records)
+    assert any(r.fields.get("path") == "/account/password/[redacted]" for r in lines)
 
 
 def test_dev_mode_blocked_in_production(monkeypatch):

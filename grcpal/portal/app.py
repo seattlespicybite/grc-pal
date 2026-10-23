@@ -10,6 +10,7 @@ import datetime as dt
 import io
 import mimetypes
 import os
+import re
 import time
 import traceback
 from pathlib import Path
@@ -109,10 +110,10 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             response = await call_next(request)
         except Exception:  # noqa: BLE001 - render a safe error page with the reference
             try:
-                app.state.portal.events.error("system", f"Unexpected error on {request.method} {request.url.path}",
+                app.state.portal.events.error("system", f"Unexpected error on {request.method} {_log_path(request.url.path)}",
                                               reference=rid, trace=traceback.format_exc())
             except Exception:  # noqa: BLE001
-                event("unhandled error", 40, path=request.url.path, exc=traceback.format_exc(limit=8))
+                event("unhandled error", 40, path=_log_path(request.url.path), exc=traceback.format_exc(limit=8))
             response = templates.TemplateResponse(request, "error.html", {"request": request, "status": 500,
                                                   "message": "Unexpected error.", "user": None, "request_id": rid},
                                                   status_code=500)
@@ -122,8 +123,11 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         if request.url.path.startswith("/static/"):
             response.headers["Cache-Control"] = "public, max-age=3600"
         if request.url.path != "/healthz":
-            event("request", method=request.method, path=request.url.path, status=response.status_code,
-                  ms=round((time.perf_counter() - started) * 1000, 1), ip=ip_of(request))
+            # The signed-in person is set on request.state by current_user (it runs in a worker thread, so the
+            # context variable it also sets does not reach this point).
+            event("request", method=request.method, path=_log_path(request.url.path), status=response.status_code,
+                  ms=round((time.perf_counter() - started) * 1000, 1), ip=ip_of(request),
+                  actor=getattr(request.state, "actor", "-"))
         current_actor.reset(actor_token)
         request_id.reset(token)
         return response
@@ -143,6 +147,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             except AuthError as exc:
                 raise _HTTPError(exc.status, str(exc)) from exc
             current_actor.set(user.email)
+            request.state.actor = user.email
             return user
         try:
             identity = identity_from_request(request.headers, request.cookies)
@@ -157,6 +162,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                                 ip=ip_of(request))
             raise _HTTPError(exc.status, str(exc)) from exc
         current_actor.set(user.email)
+        request.state.actor = user.email
         return user
 
     def need(user: User, *roles: str) -> None:
@@ -795,6 +801,15 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             return back("/users", err=str(exc))
         return back("/users", msg=f"{email} is now the control library owner")
 
+    @app.post("/users/{email}/identity")
+    def reset_identity(request: Request, email: str, csrf: str = Form(""), user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        try:
+            p().reset_identity_binding(user, email)
+        except (Invalid, Forbidden) as exc:
+            return back("/users", err=str(exc))
+        return back("/users", msg=f"{email} is no longer linked to a Microsoft Entra account; their next sign-in links one")
+
     @app.post("/users/{email}/active")
     def set_active(request: Request, email: str, active: str = Form(...), csrf: str = Form(""),
                    user: User = Depends(current_user)):
@@ -986,6 +1001,14 @@ def _remind_msg(r: dict) -> str:
     if r["skipped"]:
         msg += f" · skipped (already reminded in the last 12 hours): {', '.join(r['skipped'])}"
     return msg
+
+
+_SECRET_PATHS = re.compile(r"^(/account/password/)[^/]+")
+
+
+def _log_path(path: str) -> str:
+    """A request path safe to log: one-time password-link tokens are replaced (they work as a password)."""
+    return _SECRET_PATHS.sub(r"\1[redacted]", path)
 
 
 def _attachment(filename: str, data: bytes) -> Response:

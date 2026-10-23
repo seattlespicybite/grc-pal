@@ -44,15 +44,30 @@ There are two layers:
 | --- | --- | --- |
 | `GRCPAL_AUTH_MODE` | `local` | `local` (GRC-pal accounts with passwords, for a VM), `easyauth` (Azure Container Apps / App Service), `proxy` (trusted reverse proxy) or `dev` |
 | `GRCPAL_BOOTSTRAP_ADMINS` | (empty) | Comma-separated emails created as admins at first sign-in |
-| `GRCPAL_ALLOWED_TENANT_IDS` | (empty = any) | Entra directory IDs allowed to sign in (easyauth) |
+| `GRCPAL_ALLOWED_TENANT_IDS` | (empty = any) | Entra directory IDs allowed to sign in (easyauth). Required in production (the Azure template sets your tenant) |
 | `GRCPAL_GROUP_ADMIN` / `_CONTRIBUTOR` / `_AUDITOR` | (empty) | Optional group object IDs that create a user with that role at first sign-in |
+| `GRCPAL_PROXY_SECRET` | (none) | proxy mode, required: a random value of at least 32 characters (`openssl rand -hex 32`) that the proxy sends as `X-GRCPAL-Proxy-Secret` on every request. Requests without it are refused |
 | `GRCPAL_PROXY_EMAIL_HEADER` | `x-forwarded-email` | proxy mode: header carrying the signed-in email |
 | `GRCPAL_PROXY_NAME_HEADER` | `x-forwarded-preferred-username` | proxy mode: display name header |
 | `GRCPAL_LOGOUT_URL` | `/oauth2/sign_out` | proxy mode: sign-out link |
 | `GRCPAL_DEV_PRINCIPAL` | (empty) | dev mode: default user as JSON, e.g. `{"email":"me@example.com"}` |
 
-`proxy` mode trusts a header, so the app must be reachable only through the proxy (for example
-oauth2-proxy or Pomerium in front, the app on a private network).
+`proxy` mode reads the signed-in email from a header, which anyone who reaches the app directly could also
+send. So the proxy must add a shared secret to every request, and the app should still listen only where the
+proxy can reach it (for example on 127.0.0.1 or a private network):
+
+- Caddy (`forward_auth` to oauth2-proxy, then): `reverse_proxy 127.0.0.1:8000 { header_up X-GRCPAL-Proxy-Secret {env.GRCPAL_PROXY_SECRET} }`
+- nginx: `proxy_set_header X-GRCPAL-Proxy-Secret "<the secret>";`
+- oauth2-proxy (alpha config): an `injectRequestHeaders` entry named `X-GRCPAL-Proxy-Secret` whose value comes from the secret.
+
+The proxy must also remove any `X-Forwarded-Email` the browser sent (Caddy's `forward_auth` with `copy_headers`,
+and oauth2-proxy, both overwrite it).
+
+**Microsoft Entra accounts are linked at first sign-in (easyauth).** Each person's row records their Entra
+object ID and tenant the first time they sign in. Later, the same email from a different Entra account (an
+address given to a new employee, a deleted and recreated account) is refused and logged as a security event.
+After checking who now holds the address, an admin clicks **Unlink Entra account** on Users and roles; the next
+sign-in links the new account. Both steps are in the audit log (`user.identity_bound`, `user.identity_reset`).
 
 ## Storage
 

@@ -128,6 +128,7 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Vendors
         row = self.user_row(identity.email)
         if row:
             self._check_access(row)
+            row = self._check_identity_binding(row, identity)
             if (row.get("last_seen") or "") < (utcnow() - dt.timedelta(hours=1)).isoformat():
                 fields = {"last_seen": _now()}
                 if identity.name and identity.name != identity.email:
@@ -144,7 +145,40 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Vendors
         if not role:
             raise AuthError("you have not been given access to GRC-pal yet; ask an admin to add you", 403)
         self._create_user(identity.email, identity.name, role, source, SYSTEM.email)
+        self._check_identity_binding(self.user_row(identity.email), identity)
         return User(email=identity.email, name=identity.name, role=role)
+
+    def _check_identity_binding(self, row: dict, identity: Identity) -> dict:
+        """Tie a person to their Microsoft Entra object ID (and tenant) at their first sign-in that carries one.
+        An email address can be given to someone else or renamed; the object ID never changes. A later sign-in
+        with the same email but another object ID is refused until an admin clears the binding."""
+        if not identity.object_id:
+            return row  # this sign-in layer (proxy, dev) has no object IDs
+        bound_oid, bound_tid = row.get("entra_oid") or "", row.get("entra_tid") or ""
+        if not bound_oid:
+            row = self.store.update("users", "u", row["RowKey"],
+                                    {"entra_oid": identity.object_id, "entra_tid": identity.tenant_id})
+            self.audit(SYSTEM, "user.identity_bound", row["RowKey"],
+                       {"entra_oid": identity.object_id, "entra_tid": identity.tenant_id})
+            return row
+        if (bound_oid, bound_tid) != (identity.object_id, identity.tenant_id):
+            self.events.security(f"Sign-in refused for {row['RowKey']}: a different Microsoft Entra account "
+                                 "used this email address", actor=row["RowKey"], bound_oid=bound_oid,
+                                 bound_tid=bound_tid, oid=identity.object_id, tid=identity.tenant_id)
+            raise AuthError("this email address belongs to a different Microsoft Entra account in GRC-pal; ask an "
+                            "admin to check it and clear the old link on Users and roles", 403)
+        return row
+
+    def reset_identity_binding(self, actor: User, email: str) -> None:
+        """Admin: forget the Entra object ID linked to this person, so their next sign-in links a new one (for
+        example after their Entra account was deleted and created again)."""
+        self._admin(actor)
+        row = self.user_row(email)
+        if not row:
+            raise Invalid("User not found")
+        old = {"entra_oid": row.get("entra_oid") or "", "entra_tid": row.get("entra_tid") or ""}
+        self.store.update("users", "u", row["RowKey"], {"entra_oid": "", "entra_tid": ""})
+        self.audit(actor, "user.identity_reset", row["RowKey"], old)
 
     def _create_user(self, email: str, name: str, role: str, source: str, by: str) -> dict:
         row = {"PartitionKey": "u", "RowKey": email, "name": name or email, "role": role, "active": True,

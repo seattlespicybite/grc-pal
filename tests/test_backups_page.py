@@ -115,8 +115,10 @@ def _production(monkeypatch, portal, who=ADMIN):
     monkeypatch.setenv("GRCPAL_ENV", "production")
     monkeypatch.setenv("GRCPAL_AUTH_MODE", "easyauth")
     monkeypatch.setenv("GRCPAL_SECRET", "test-secret-0123456789abcdef0123456789abcdef")
+    monkeypatch.setenv("GRCPAL_ALLOWED_TENANT_IDS", "tenant-a")
     client = TestClient(create_app(portal), base_url="https://grc.example.com")
-    claims = {"claims": [{"typ": "preferred_username", "val": who.email}, {"typ": "name", "val": who.name}]}
+    claims = {"claims": [{"typ": "preferred_username", "val": who.email}, {"typ": "name", "val": who.name},
+                         {"typ": "tid", "val": "tenant-a"}]}
     client.headers["X-MS-CLIENT-PRINCIPAL"] = base64.b64encode(json.dumps(claims).encode()).decode()
     return client
 

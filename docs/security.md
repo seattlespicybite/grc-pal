@@ -33,7 +33,9 @@ remains your responsibility. To report a vulnerability, see [SECURITY.md](../SEC
 | Losing the last admin | `grcpal create-admin` on the server creates or restores a local admin (break-glass); it needs shell access to the VM and is in the audit log |
 | Development shortcuts reaching production | `dev` sign-in runs only with `GRCPAL_ENV=dev` set explicitly (a missing or mistyped value refuses it); `grcpal serve --demo` listens on 127.0.0.1 only; production requires `GRCPAL_SECRET` |
 | One stolen admin session taking everything | In production the Backups page offers neither backup files nor the recovery kit (the keys that open backups and saved credentials); operators get them on the command line. `GRCPAL_WEB_BACKUP_DOWNLOAD=on` brings them back, and every download is then emailed to all admins |
-| Forged caller address in logs | Only the address added by our own proxy (`GRCPAL_TRUSTED_PROXY_HOPS`) is recorded in sign-in events, the audit log and request logs; a client-sent `X-Forwarded-For` is ignored |
+| Someone else signing in with a reused or renamed email address | On Azure each person is linked to their Entra object ID and tenant at first sign-in; another Entra account with the same email is refused and logged until an admin unlinks it. The tenant allow-list is required in production |
+| Requests that bypass the sign-in proxy (proxy mode) | The identity header is believed only with the proxy's shared secret (`GRCPAL_PROXY_SECRET`, compared in constant time); without it the request is refused |
+| Forged caller address in logs | Only the address added by our own proxy (`GRCPAL_TRUSTED_PROXY_HOPS`) is recorded in sign-in events, the audit log and request logs; a client-sent `X-Forwarded-For` is ignored. Request log lines name the signed-in person, and one-time password-link tokens are replaced by `[redacted]` |
 
 ## Data handled
 
