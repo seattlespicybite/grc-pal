@@ -4,12 +4,34 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+feature/access-review-sources
+feature/access-review-sources
+### Added
+- **Access reviews read the accounts themselves** (Access reviews > Applications). Admins list each in-scope application
+  once and choose its source: Microsoft Entra ID / Microsoft 365 (users, guests, last sign-in, MFA, admin roles, license),
+  an Entra enterprise (SSO) application (assigned users, groups expanded; refused when “assignment required” is off), Azure
+  role assignments (groups expanded, service principals and deleted identities listed), a GitHub organization (owners,
+  members, outside collaborators, two-factor status), a **custom application's REST API** (URL, token, paging, field map;
+  ready-made settings for monday.com and WorkOS), GRC-pal itself, or a CSV. Starting a review reads the chosen
+  applications in the background and takes managers from Entra ID direct reports; if one application cannot be read
+  completely, nothing is created. Accounts without a manager go to the application owner, never to the account holder.
+  An identity map per application links accounts without a work email (GitHub logins) to people. A Test button shows
+  counts only. The reviewed list is stored write-once as `population.csv` (its SHA-256 is the review's), next to each
+  source's accounts. New table `arapps` (no migration needed). Microsoft Graph permission **GroupMember.Read.All** is
+  added to `deploy/azure/grant-permissions.ps1`; run it again before reviewing applications or Azure access granted to groups.
+
+### Security
+- Custom application tokens are encrypted per organization and application, never shown, logged or audited, and only sent
+  to that application's host: no redirects, next-page links must stay on the same host, internal and metadata addresses
+  are blocked. `Clients.gh_list(..., complete=True)` raises instead of silently returning a partial list.
+=======
 Update-button-fixed2
 Update-button-fixed2
 ### Added
 - **Updates page manual check**: Admins can manually trigger an update check with the **Check for updates** button, receiving immediate confirmation of whether newer releases are available or the instance is up to date, protected by a request cooldown.
 - **Tenant installation verification**: Added **Verify installation** on the Updates page to validate the signed-in tenant's data model version, audit log hash chain, and evidence digests via a background job.
 - **Activity log table**: Enhanced the Updates page history table with status indicators and audit log fallback.
+ main
 =======
 ### Changed
 - **Evidence uploaded by an admin is approved on upload.** Admins own the program and upload evidence that

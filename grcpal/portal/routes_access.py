@@ -6,6 +6,7 @@ from __future__ import annotations
 from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse
 
+from grcpal import accesssources as src
 from grcpal.portal import accessreview as ar
 from grcpal.portal.auth import User
 from grcpal.portal.security import MAX_UPLOAD_BYTES
@@ -39,9 +40,12 @@ def register(app, h) -> None:
     @app.get("/access-reviews", response_class=HTMLResponse)
     def reviews_page(request: Request, user: User = Depends(current_user)):
         portal = p()
+        apps = portal.access_apps(user, active_only=True) if user.is_admin else []
         return render(request, user, "access_reviews.html", nav_active="access", rows=portal.access_campaigns(user),
                       statuses=ar.STATUS, columns=ar.COLUMNS, max_accounts=ar.MAX_ACCOUNTS,
-                      max_mb=MAX_UPLOAD_BYTES // (1024 * 1024))
+                      max_mb=MAX_UPLOAD_BYTES // (1024 * 1024), apps=[a for a in apps if a["kind"] != "csv"],
+                      kinds=src.KINDS, jobs=portal.access_review_jobs(user),
+                      ms_on=portal.settings.flag("GRCPAL_MS_ENABLED"))
 
     @app.get("/access-reviews/template.csv")
     def reviews_template(user: User = Depends(current_user)):
@@ -51,11 +55,23 @@ def register(app, h) -> None:
     async def review_create(request: Request, user: User = Depends(current_user)):
         form = await posted(request, user)
         accounts = await read_file(form, "accounts")
+        people = await read_file(form, "people")
+        apps = [str(a) for a in form.getlist("apps")]
+        managers = str(form.get("entra_managers", "")) in ("on", "true", "1")
+        if apps or managers:  # pulling from applications runs in the background
+            try:
+                p().start_access_review(user, str(form.get("name", "")), str(form.get("due", "")), apps, accounts,
+                                        people, managers)
+            except Forbidden as exc:
+                raise h.HTTPError(403, str(exc)) from exc
+            except Invalid as exc:
+                return back("/access-reviews", err=str(exc))
+            return back("/access-reviews", msg="Reading the applications. The review appears here when it is ready")
         if accounts is None:
-            return back("/access-reviews", err="Choose the accounts CSV file")
+            return back("/access-reviews", err="Choose applications, or upload an accounts file")
         try:
             camp = p().create_access_campaign(user, str(form.get("name", "")), str(form.get("due", "")), accounts,
-                                              await read_file(form, "people"))
+                                              people)
         except Forbidden as exc:
             raise h.HTTPError(403, str(exc)) from exc
         except Invalid as exc:
@@ -66,6 +82,70 @@ def register(app, h) -> None:
             msg += (f" {len(warn)} manager{'s have' if len(warn) != 1 else ' has'} no portal account yet: "
                     "add them as Control owners so they can review.")
         return back(f"/access-reviews/{camp['RowKey']}", msg=msg)
+
+    # ---------------------------------------------------------------- applications
+    def app_options():
+        return dict(kinds=src.KINDS, presets={k: v["label"] for k, v in src.PRESETS.items()}, paging=src.PAGING,
+                    auth=src.AUTH, map_fields=src.MAP_FIELDS)
+
+    @app.get("/access-reviews/apps", response_class=HTMLResponse)
+    def apps_page(request: Request, user: User = Depends(current_user)):
+        try:
+            rows = p().access_apps(user)
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        return render(request, user, "access_apps.html", nav_active="access", rows=rows, **app_options())
+
+    @app.post("/access-reviews/apps/new")
+    async def app_create(request: Request, user: User = Depends(current_user)):
+        form = await posted(request, user)
+        try:
+            row = p().add_access_app(user, str(form.get("name", "")), str(form.get("kind", "")),
+                                     str(form.get("owner_email", "")), str(form.get("preset", "")))
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back("/access-reviews/apps", err=str(exc))
+        return back(f"/access-reviews/apps/{row['RowKey']}", msg="Application added. Fill in its settings, then test it")
+
+    @app.get("/access-reviews/apps/{aid}", response_class=HTMLResponse)
+    def app_page(request: Request, aid: str, user: User = Depends(current_user)):
+        try:
+            row = p().access_app(user, aid)
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            raise h.HTTPError(404, str(exc)) from exc
+        return render(request, user, "access_app.html", nav_active="access", a=row, **app_options())
+
+    @app.post("/access-reviews/apps/{aid}")
+    async def app_save(request: Request, aid: str, user: User = Depends(current_user)):
+        form = await posted(request, user)
+        fields = {k: str(v) for k, v in form.items() if k not in ("csrf", "token", "clear_token")}
+        fields["active"] = "true" if form.get("active") else "false"
+        return run(f"/access-reviews/apps/{aid}", "Saved", p().update_access_app, user, aid, fields,
+                   str(form.get("token", "")), bool(form.get("clear_token")))
+
+    @app.post("/access-reviews/apps/{aid}/identities")
+    async def app_identities(request: Request, aid: str, user: User = Depends(current_user)):
+        form = await posted(request, user)
+        data = await read_file(form, "identities")
+        if data is None:
+            return back(f"/access-reviews/apps/{aid}", err="Choose the identity map CSV file")
+        return run(f"/access-reviews/apps/{aid}", "Identity map saved", p().set_access_app_identities, user, aid, data)
+
+    @app.post("/access-reviews/apps/{aid}/test")
+    async def app_test(request: Request, aid: str, user: User = Depends(current_user)):
+        await posted(request, user)
+        try:
+            result = p().test_access_app(user, aid)
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(f"/access-reviews/apps/{aid}", err=str(exc))
+        if not result["ok"]:
+            return back(f"/access-reviews/apps/{aid}", err="Test failed. See the result below")
+        return back(f"/access-reviews/apps/{aid}", msg=f"Test passed: {result['records']} accounts read")
 
     @app.get("/access-reviews/{cid}", response_class=HTMLResponse)
     def review_page(request: Request, cid: str, user: User = Depends(current_user)):

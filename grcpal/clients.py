@@ -119,7 +119,9 @@ class Clients:
                 return rows
 
     # ---------------- GitHub ----------------
-    def gh_list(self, path: str, params: dict | None = None, max_pages: int = 50) -> list[dict]:
+    def gh_list(self, path: str, params: dict | None = None, max_pages: int = 50, complete: bool = False) -> list[dict]:
+        """All pages up to max_pages. complete=True raises instead of silently stopping when more pages remain
+        (used where a partial list would be wrong evidence, such as access review populations)."""
         url = path if path.startswith("http") else self.github_api + path
         params = dict(params or {}, per_page=100)
         items: list[dict] = []
@@ -129,8 +131,10 @@ class Clients:
             items.extend(data if isinstance(data, list) else data.get("items", []))
             nxt = resp.links.get("next", {}).get("url")
             if not nxt:
-                break
+                return items
             url, params = nxt, None
+        if complete:
+            raise RuntimeError(f"More than {max_pages} pages from {path}; refusing an incomplete list")
         return items
 
     def gh_get(self, path: str, allow_404: bool = False) -> dict | None:

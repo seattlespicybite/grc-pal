@@ -43,7 +43,8 @@ MAX_ACCOUNTS = 2000          # per campaign: every account is one stored row
 MAX_PEOPLE = 20000
 INACTIVE_DAYS = 90
 MAX_PROBLEMS_SHOWN = 10
-DISABLED_WORDS = {"disabled", "suspended", "deactivated", "inactive", "deprovisioned", "locked", "blocked"}
+DISABLED_WORDS = {"disabled", "suspended", "deactivated", "inactive", "deprovisioned", "locked", "blocked", "deleted",
+                  "orphaned"}
 YES = {"yes", "y", "true", "1", "enabled", "on"}
 NO = {"no", "n", "false", "0", "disabled", "off"}
 PRIVILEGED = re.compile(r"admin|owner|root|superuser|super user|maintain|full control|global", re.I)
@@ -107,9 +108,10 @@ def parse_people(data: bytes) -> dict[str, str]:
     return out
 
 
-def parse_accounts(data: bytes, people: bytes | None, today: dt.date) -> list[dict]:
+def parse_accounts(data: bytes, people: bytes | None, today: dt.date, managers: dict | None = None) -> list[dict]:
     """Validate the accounts CSV and return one normalized record per account. Raises CsvProblem listing the first
-    problems; nothing is imported unless every row is valid."""
+    problems; nothing is imported unless every row is valid. Managers come from the manager_email column first, then
+    the people file, then `managers` (for example Entra ID direct reports)."""
     names, rows = _read_csv(data, "accounts")
     missing = [c for c in ("app", "account_id") if c not in names]
     if missing:
@@ -120,7 +122,7 @@ def parse_accounts(data: bytes, people: bytes | None, today: dt.date) -> list[di
     if len(rows) > MAX_ACCOUNTS:
         raise CsvProblem(f"The accounts file has {len(rows)} rows; the limit is {MAX_ACCOUNTS} per campaign. "
                          "Split it by application.")
-    managers = parse_people(people) if people else {}
+    managers = {**(managers or {}), **(parse_people(people) if people else {})}
     problems: list[str] = []
     seen: set[tuple[str, str]] = set()
     out: list[dict] = []
@@ -176,7 +178,7 @@ def parse_accounts(data: bytes, people: bytes | None, today: dt.date) -> list[di
         if not reviewer:
             flags.append("no_reviewer")
         out.append({"app": app, "account_id": account, "email": email, "name": row.get("name", "")[:120],
-                    "status": status, "role": row.get("role", "")[:120], "last_login": last_date.isoformat() if last_date else "",
+                    "status": status, "role": row.get("role", "")[:300], "last_login": last_date.isoformat() if last_date else "",
                     "mfa": "yes" if mfa in YES else ("no" if mfa in NO else ""), "service": service,
                     "manager_email": manager, "reviewer": reviewer, "flags": flags})
     if problems:
@@ -197,6 +199,19 @@ def pack_csv(campaign_id: str, entries: list[dict]) -> bytes:
             ";".join(e.get("flags") or []), e.get("reviewer", ""), e.get("decision", ""), e.get("comment", ""),
             e.get("decided_by", ""), e.get("decided_at", ""), e.get("remediation", ""), e.get("remediation_note", ""),
             e.get("remediated_by", ""), e.get("remediated_at", ""))])
+    return buf.getvalue().encode("utf-8")
+
+
+def population_csv(rows: list[dict]) -> bytes:
+    """The exact list a campaign reviews (every source together), formula-safe. Its SHA-256 is the campaign's."""
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\r\n")
+    writer.writerow(COLUMNS + ("reviewer", "flags"))
+    for r in rows:
+        writer.writerow([csv_cell(v) for v in (
+            r["app"], r["account_id"], r.get("email", ""), r.get("name", ""), r.get("status", ""), r.get("role", ""),
+            r.get("last_login", ""), r.get("mfa", ""), "yes" if r.get("service") else "no", r.get("manager_email", ""),
+            r.get("reviewer", ""), ";".join(r.get("flags") or []))])
     return buf.getvalue().encode("utf-8")
 
 
@@ -251,27 +266,44 @@ class AccessReviewMixin:
                 if u.get("active", True) and u["role"] in ("admin", "contributor")]
 
     # ------------------------------------------------------------------ start a campaign
-    def create_access_campaign(self, actor, name: str, due: str, accounts: bytes, people: bytes | None = None) -> dict:
-        self._ar_admin(actor, "start an access review")
+    def _ar_check_start(self, name: str, due: str) -> tuple[str, str]:
         name = (name or "").strip()
         if not name or len(name) > 120:
             raise self._invalid("Give the review a name (up to 120 characters), for example “Q4 2026 user access review”")
         if not DATE_RE.match(due or "") or dt.date.fromisoformat(due) < self.today:
             raise self._invalid("The due date must be today or later (YYYY-MM-DD)")
+        return name, due
+
+    def create_access_campaign(self, actor, name: str, due: str, accounts: bytes, people: bytes | None = None) -> dict:
+        """Start a review from an uploaded CSV only (applications pulled automatically: start_access_review)."""
+        self._ar_admin(actor, "start an access review")
+        name, due = self._ar_check_start(name, due)
         try:
             rows = parse_accounts(accounts, people or None, self.today)
         except CsvProblem as exc:
             raise self._invalid(str(exc)) from exc
+        return self._ar_create(actor, name, due, rows, {"accounts.csv": accounts, "people.csv": people})
+
+    def _ar_create(self, actor, name: str, due: str, rows: list[dict], files: dict, pulled: dict | None = None,
+                   owners: dict | None = None, notes: list[str] | None = None) -> dict:
+        """Store the reviewed list write-once and create the campaign. `owners` (application name -> owner email) gives
+        accounts without a manager to the application owner, never to the account holder."""
+        for r in rows:
+            owner = (owners or {}).get(r["app"], "")
+            if not r["reviewer"] and owner and owner != r["email"] and self._ar_can_review(owner):
+                r["reviewer"] = owner
+                r["flags"] = [f for f in r["flags"] if f != "no_reviewer"]
         cid = f"{self.today:%Y%m%d}-{uuid.uuid4().hex[:6]}"
         run = self.evidence.new_run("access_review_snapshot", CONTROLS,
                                     {"campaign": cid, "campaign_name": name, "created_by": actor.email,
-                                     "records": len(rows)})
+                                     "records": len(rows), "sources": pulled or {}, "notes": notes or []})
         taken = set(self.evidence.list_runs("access_review_snapshot"))
         while run.prefix.split("/", 1)[1] in taken:  # one folder per second
             run.started += dt.timedelta(seconds=1)
-        run.add_bytes("accounts.csv", accounts)
-        if people:
-            run.add_bytes("people.csv", people)
+        run.add_bytes("population.csv", population_csv(rows))  # first file: its SHA-256 is the campaign's
+        for filename, data in files.items():
+            if data:
+                run.add_bytes(filename, data)
         manifest = run.finish([])
         sha = manifest["files"][0]["sha256"]
         apps: dict[str, int] = {}
@@ -280,7 +312,8 @@ class AccessReviewMixin:
         reviewers = sorted({r["reviewer"] for r in rows if r["reviewer"]})
         camp = {"PartitionKey": "c", "RowKey": cid, "name": name, "due": due, "status": "open",
                 "created_by": actor.email, "created_at": _now(), "snapshot_run": run.prefix, "snapshot_sha256": sha,
-                "records": len(rows), "summary": apps, "reviewers": reviewers, "attestations": {}}
+                "records": len(rows), "summary": apps, "reviewers": reviewers, "attestations": {},
+                "pulled": pulled or {}, "pull_notes": notes or []}
         self.store.insert("arcampaigns", camp)
         for i, r in enumerate(rows, start=1):
             self.store.insert("arentries", {"PartitionKey": cid, "RowKey": f"{i:05d}", **r, "decision": "", "comment": "",
@@ -288,6 +321,7 @@ class AccessReviewMixin:
                                             "remediated_by": "", "remediated_at": ""})
         self.audit(actor, "access_review.create", cid, {"name": name, "records": len(rows), "applications": len(apps),
                                                          "reviewers": len(reviewers), "snapshot_sha256": sha,
+                                                         "pulled": {k: v["records"] for k, v in (pulled or {}).items()},
                                                          "unassigned": sum(1 for r in rows if not r["reviewer"])})
         no_account = [e for e in reviewers if not self._ar_can_review(e)]
         return {**camp, "reviewers_without_account": no_account}
