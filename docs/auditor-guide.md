@@ -28,7 +28,7 @@ program repository for the audit period.
 | `vendor_register_history.csv` | Every version of every vendor record with author and reason |
 | `subservice_organizations.csv` | Vendors flagged as subservice organizations (carved out or inclusive), for the system description |
 | `questionnaire_versions.csv` | Every version of the vendor security questionnaire, one row per question, with the SOC 2 criteria each question supports |
-| `implementation_notes.csv` | Every version of each control's "How we meet this control" notes, with author and time; each save is also in the audit log with the SHA-256 of the text |
+| `implementation_notes.csv` | Every version of each control's "Control Implementation" notes, with author and time; each save is also in the audit log with the SHA-256 of the text |
 | `audit_chain_verification.json` | Result of recomputing the chain at export time |
 | `control_status.json` | Control health at export time, including the computed status behind any override |
 | `evidence/` | Every uploaded file |

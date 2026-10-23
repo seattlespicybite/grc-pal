@@ -73,9 +73,23 @@ shows only in-scope categories. Choosing a deferred category in the list filter 
 To add a category to the report, move it to `in_scope_categories` through a pull request; that
 history is scope-change evidence.
 
-## Implementation notes: "How we meet this control"
+## Control type: Automatic, Hybrid or Manual
 
-Every control page has a **How we meet this control** box for the organization's own explanation:
+The panel next to a control's status shows its type, with the current one highlighted:
+
+- **Automatic**: GRC-pal collects the evidence on a schedule (collectors, scans, checks); people act on findings.
+- **Hybrid**: part is collected automatically, part is done by people (for example an access review:
+  the account list is pulled from Entra ID, the manager sign-off is manual).
+- **Manual**: evidence comes from people (uploads, recurring tasks, meetings, documents).
+
+The type comes from the control library, adjusted to this organization: a control whose automatic
+sources are not connected is shown as Manual, and a manual control with an automated check added is
+shown as Hybrid. Hover over the highlighted type to see why. The **Evidence sources** box lists each
+source in two groups, *Collected automatically* and *Done by people*, with its status and date.
+
+## Implementation notes: "Control Implementation"
+
+Every control page has a **Control Implementation** box (formerly "How we meet this control") for the organization's own explanation:
 which policy section covers it, which system or procedure operates it, when it happens. For
 example: *"Covered by Information Security Policy section 6. Access reviews run in January, April,
 July and October."* It is written for the next person who runs the program and for the auditor.
@@ -178,7 +192,7 @@ one-off month.
 
 GRC-pal never marks anything Missed by itself. The same page can move the due date to any day; the
 original date stays on record (a moved cell shows `*`). Every save is a new entry in the history and in
-the audit log, nothing is overwritten. The page also links each control's "How we meet this control"
+the audit log, nothing is overwritten. The page also links each control's "Control Implementation"
 notes, its evidence guide and the evidence uploaded that month.
 
 **Automated activities** take their monthly status from real runs:

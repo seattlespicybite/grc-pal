@@ -82,7 +82,7 @@ def reminder(p, ctl: dict, assignments: list[dict], note: str, actor, status: st
         fields.append(("Due", due))
     if status:
         fields.append(("Current status", status))
-    sections = [("What this control does", [ctl["description"]]),
+    sections = [("Control description", [ctl["description"]]),
                 ("Evidence we are looking for", p.evidence_wanted([ctl["id"]]) + instructions),
                 ("Submitted this cycle", [f"{u['filename']} · {u['status']} · {u['uploaded_at'][:10]}" for u in current]
                  or ["Nothing submitted yet."])]

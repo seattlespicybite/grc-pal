@@ -101,8 +101,28 @@ def evidenced_by(control: dict, skip_sources: set[str]) -> dict:
             manual.append("Upload")
     uniq = lambda xs: list(dict.fromkeys(xs))  # noqa: E731
     sources, manual = uniq(sources), uniq(manual)
-    kind = control.get("type", "manual")
+    kind = catalog_kind = control.get("type", "manual")
+    reason = ""
     if kind != "manual" and not sources:
         kind = "manual"   # nothing automatic is connected for this client
+        reason = (f"{TYPE_LABELS.get(catalog_kind, catalog_kind)} in the control library; shown as Manual because "
+                  "none of its automatic sources are connected for this organization")
+    elif kind == "manual" and sources:
+        kind = "hybrid"   # an admin added an automated check to a manual control
+        reason = "Manual in the control library; shown as Hybrid because an automated check was added to it"
     return {"type": kind, "label": TYPE_LABELS.get(kind, kind.title()), "sources": sources, "manual": manual,
-            "hidden": [h for h in uniq(hidden) if h not in sources]}
+            "hidden": [h for h in uniq(hidden) if h not in sources], "reason": reason}
+
+
+AUTOMATIC_VIA = ("collector", "tool", "check")
+TYPE_HELP = {"automated": "Evidence is collected by GRC-pal on a schedule; people only act on findings",
+             "hybrid": "Part of the evidence is collected automatically, part is done and recorded by people",
+             "manual": "Evidence is produced by people: uploads, recurring tasks, meetings, documents"}
+
+
+def split_evidence(items: list[dict]) -> dict:
+    """Group a control's evidence status rows into what GRC-pal collects itself and what people do."""
+    out = {"automatic": [], "manual": []}
+    for i in items:
+        out["automatic" if str(i.get("via", "")).partition(":")[0] in AUTOMATIC_VIA else "manual"].append(i)
+    return out

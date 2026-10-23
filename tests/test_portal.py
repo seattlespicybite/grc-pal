@@ -905,7 +905,17 @@ def test_soc2_families_order_and_evidence_labels(env):
     how = soc2.evidenced_by(iam02, {"aws_iam"})
     assert how["label"] == "Automatic" and how["sources"] == ["Entra ID"] and how["hidden"] == ["AWS"]
     only_aws = {**iam02, "evidence": [{"artifact": "x", "via": "collector:aws_iam"}]}
-    assert soc2.evidenced_by(only_aws, {"aws_iam"})["type"] == "manual"   # nothing automatic is connected
+    downgraded = soc2.evidenced_by(only_aws, {"aws_iam"})
+    assert downgraded["type"] == "manual" and "none of its automatic sources" in downgraded["reason"]   # nothing automatic is connected
+    assert how["reason"] == ""                                                        # as the catalog says
+    manual = {**iam02, "type": "manual", "evidence": [{"artifact": "Minutes", "via": "task:x"},
+                                                      {"artifact": "Status page", "via": "check:status"}]}
+    upgraded = soc2.evidenced_by(manual, set())
+    assert upgraded["type"] == "hybrid" and "check" in upgraded["reason"]              # an admin added a check
+    groups = soc2.split_evidence([{"via": "collector:entra_users"}, {"via": "check:status"}, {"via": "task:x"},
+                                  {"via": "portal"}, {"via": "calendar"}, {"via": "git:policies/"}])
+    assert [i["via"] for i in groups["automatic"]] == ["collector:entra_users", "check:status"]
+    assert [i["via"] for i in groups["manual"]] == ["task:x", "portal", "calendar", "git:policies/"]
     assert soc2.worst(["ok", "findings", "not_started"]) == "findings" and soc2.worst([]) == "not_started"
 
 
@@ -1219,6 +1229,24 @@ def test_control_notes_versioned_audited_and_permissioned(env):
         portal.save_control_note(ADMIN, "IAM-02", "x" * 5001)
 
 
+def test_control_page_layout_type_panel_and_evidence_sources(env):
+    portal, client = env
+    as_(client, ADMIN)
+    page = client.get("/controls/IAM-02").text     # automatic in the catalog, Entra ID connected in tests
+    assert "Control Description" in page and "Control Implementation" in page and "What this control does" not in page
+    assert page.index("Control Description") < page.index("Control Implementation") < page.index('id="upload"')
+    assert 'class="ctl-desc"' in page                           # muted, smaller description text
+    assert 'aria-label="Control type"' in page
+    assert page.count('class="seg-i on"') == 1 and 'class="seg-i on" aria-current="true"' in page
+    seg = page[page.index('aria-label="Control type"'):][:1200]
+    assert seg.index("Automatic") < seg.index("Hybrid") < seg.index("Manual")
+    assert 'on" aria-current="true" title="' in seg and ">Automatic<" in seg.split('class="seg-i on"')[1][:600]
+    assert "Evidence sources" in page and "Automated evidence" not in page
+    manual = client.get("/controls/GOV-03").text    # a manual control: no automatic group, task shown as manual
+    assert "Evidence sources" in manual and "Collected automatically" not in manual and "Done by people" in manual
+    assert ">Manual<" in manual.split('class="seg-i on"')[1][:600]
+
+
 def test_control_notes_page_escapes_text_and_hides_form_from_auditors(env):
     portal, client = env
     as_(client, ADMIN)
@@ -1227,7 +1255,7 @@ def test_control_notes_page_escapes_text_and_hides_form_from_auditors(env):
                     follow_redirects=False)
     assert r.status_code == 303 and "msg=" in r.headers["location"]
     page = client.get("/controls/IAM-02").text
-    assert "How we meet this control" in page and "&lt;script&gt;alert(1)&lt;/script&gt; see policy §6" in page
+    assert "Control Implementation" in page and "&lt;script&gt;alert(1)&lt;/script&gt; see policy §6" in page
     assert "<script>alert(1)" not in page and 'action="/controls/IAM-02/note"' in page
     # a bad CSRF token is refused
     bad = client.post("/controls/IAM-02/note", data={"csrf": "x", "text": "y"}, follow_redirects=False)

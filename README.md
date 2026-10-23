@@ -21,7 +21,7 @@ License: [AGPL-3.0-or-later](LICENSE).
 - **Knowledge base:** evidence guidance for every Security, Availability and Confidentiality
   criterion and point of focus: what the auditor tests, what good evidence looks like, good
   examples, common mistakes and how often. Linked from controls, criteria and evidence requests.
-- **How we meet this control:** implementation notes on each control (for example "Covered by
+- **Control Implementation:** implementation notes on each control (for example "Covered by
   InfoSec Policy section 6; DR test every November"), versioned and audit-logged, so the next
   person inherits the program and the auditor gets your narrative in the export.
 - **SOC 2 view:** criteria grouped into families (CC1-CC9, then Availability, Confidentiality,
