@@ -126,7 +126,9 @@ grcpal backup verify acme-2026-10.grcbak
 - **Recovery kit.** One small file with the backup key and `GRCPAL_ENCRYPTION_KEY` (the app key that
   protects integration credentials saved in the portal). With a backup file and the kit, a clean machine
   can be rebuilt. Keep it in a password manager or safe, never next to the backups. Making a kit is
-  recorded in the audit log (`backup.kit_export`).
+  recorded in the audit log (`backup.kit_export`). In production, get it on the command line
+  (`grcpal backup kit --out FILE`, or `deploy.sh ... --kit-out FILE` on Azure): the Backups page does not offer
+  it, nor backup downloads, unless `GRCPAL_WEB_BACKUP_DOWNLOAD=on` (then every download is emailed to all admins).
 - **Where the key comes from.** `--key-file`, `--kit`, the `GRCPAL_BACKUP_KEY` environment variable
   (Azure: a Container Apps secret), or `keys/backup.key` next to the database. A key is never accepted
   on the command line, so it stays out of shell history. The app key is never put in a backup.
@@ -154,8 +156,10 @@ grcpal backup verify acme-2026-10.grcbak
   apply: backups are write-once, so each is kept `backupRetentionDays` (default 35) and then removed by
   the storage lifecycle rule.
 - Each backup shows where it is (the path on the server), its size and whether it passed its check.
-  **Check** re-verifies it; **Download** saves a copy (recorded in the audit log).
-- **Recovery kit**: a banner asks for it until an admin has downloaded it once.
+  **Check** re-verifies it; **Download** saves a copy (recorded in the audit log; outside production, or with
+  `GRCPAL_WEB_BACKUP_DOWNLOAD=on`).
+- **Recovery kit**: outside production, a banner asks for it until an admin has downloaded it once. In production
+  the page shows the command that writes it.
 - The page works only when the instance holds one organization (one instance per customer). With more,
   whole-instance backups stay on the command line, so no admin can download another organization's data.
 
@@ -217,7 +221,7 @@ Once a year (and after a major update), prove that a backup restores. Keep the o
 | Data deleted or changed by mistake | VM: Backups page → **Restore this backup** (today's data is kept aside). Azure: rebuild a new instance from the backup | Changes since that backup |
 | VM lost or its disk damaged | New Debian 13 VM, then `install.sh ... --restore <file> --kit recovery-kit.json` ([deploy-vm.md](deploy-vm.md#rebuild-on-a-new-vm)) | Since the last off-VM copy |
 | Azure resource group or region lost | `deploy.sh --name <new> --restore-from <file> --kit recovery-kit.json` ([deploy-azure.md](deploy-azure.md#rebuild-from-a-backup)) | Since the last backup copied outside that storage account |
-| Recovery kit lost | Download a new one from the Backups page while the instance still runs. Backups made with the old key still need the old kit | None while the instance runs |
+| Recovery kit lost | Write a new one while the instance still runs (`grcpal backup kit`, or `deploy.sh ... --kit-out` on Azure). Backups made with the old key still need the old kit | None while the instance runs |
 
 What to keep where: backups on a second location (network share, other storage); the recovery kit in a
 password manager; the installer kit or this repository at the version you run.

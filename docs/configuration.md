@@ -27,7 +27,9 @@ There are two layers:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `GRCPAL_ENV` | (empty) | `production` refuses development sign-in and requires `GRCPAL_SECRET` |
+| `GRCPAL_ENV` | (empty) | `production` requires `GRCPAL_SECRET` and keeps backup files and the recovery kit off the web page. `dev` (or `development`) is the only value that allows `GRCPAL_AUTH_MODE=dev`; `grcpal serve --demo` sets it |
+| `GRCPAL_TRUSTED_PROXY_HOPS` | `0` | How many proxies in front of GRC-pal add to `X-Forwarded-For` (Azure Container Apps ingress: `1`, set by the template; VM with Caddy: `1`, set by `install.sh`). Only the address those proxies added is recorded as the caller's in sign-in events, the audit log and request logs; anything the caller sent is ignored. `0` uses the connection's address |
+| `GRCPAL_WEB_BACKUP_DOWNLOAD` | (off) | `on` brings back **Download** for backup files and the recovery kit on the Backups page in production. Each download is audited and emailed to every admin. Leave it off and use `grcpal backup kit` or `deploy.sh --kit-out` |
 | `GRCPAL_TENANT` | `default` | Instance ID. Prefixes every portal record and evidence path. 1-40 lowercase letters, digits, hyphens |
 | `GRCPAL_SECRET` | random per process | Signs form tokens. Required in production (`openssl rand -hex 32`) |
 | `GRCPAL_PUBLIC_URL` | `http://localhost:8000` | Base for links in emails and for the cross-site request check |

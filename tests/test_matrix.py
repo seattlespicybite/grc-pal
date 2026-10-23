@@ -310,6 +310,7 @@ def client(portal, monkeypatch):
     monkeypatch.setenv("GRCPAL_AUTH_MODE", "dev")
     for var in ("GRCPAL_ENV", "GRCPAL_TENANT", "GRCPAL_BOOTSTRAP_ADMINS", "GRCPAL_PUBLIC_URL", "GRCPAL_DEV_PRINCIPAL"):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("GRCPAL_ENV", "dev")
     return TestClient(create_app(portal), base_url="https://grc.example.com")
 
 

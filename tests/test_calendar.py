@@ -31,6 +31,7 @@ def portal(tmp_path):
 @pytest.fixture()
 def client(portal, monkeypatch):
     monkeypatch.setenv("GRCPAL_AUTH_MODE", "dev")
+    monkeypatch.setenv("GRCPAL_ENV", "dev")
     monkeypatch.delenv("GRCPAL_PUBLIC_URL", raising=False)
     return TestClient(create_app(portal), base_url="https://grc.example.com")
 

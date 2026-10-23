@@ -83,6 +83,7 @@ def test_digests_and_alerts_are_tenant_scoped(tmp_path):
 
 def test_email_alerts_page(portal, monkeypatch):
     monkeypatch.setenv("GRCPAL_AUTH_MODE", "dev")
+    monkeypatch.setenv("GRCPAL_ENV", "dev")
     monkeypatch.delenv("GRCPAL_PUBLIC_URL", raising=False)
     client = TestClient(create_app(portal), base_url="https://grc.example.com")
     as_(client, ADMIN)

@@ -5,6 +5,7 @@ from fastapi import Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 
 from grcpal.portal.auth import User
+from grcpal.portal.backups import web_backup_download_allowed
 from grcpal.portal.service import Forbidden, Invalid
 
 DOWNLOAD_HEADERS = {"Content-Security-Policy": "default-src 'none'; sandbox", "Cache-Control": "no-store"}
@@ -55,6 +56,8 @@ def register(app, h) -> None:
                          user: User = Depends(current_user)):
         # POST (with CSRF) rather than a link: a download of all data must be a deliberate action
         h.check_csrf(request, user.email, csrf)
+        if not web_backup_download_allowed():
+            return Response("Not found", status_code=404, media_type="text/plain")
         try:
             stream, fname = p().backup_download(user, destination, name)
         except (Invalid, Forbidden) as exc:
@@ -70,6 +73,8 @@ def register(app, h) -> None:
     @app.post("/backups/kit")
     def backups_kit(request: Request, csrf: str = Form(""), user: User = Depends(current_user)):
         h.check_csrf(request, user.email, csrf)
+        if not web_backup_download_allowed():
+            return Response("Not found", status_code=404, media_type="text/plain")
         try:
             text = p().recovery_kit(user)
         except (Invalid, Forbidden) as exc:

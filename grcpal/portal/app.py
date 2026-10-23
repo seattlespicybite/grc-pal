@@ -29,7 +29,7 @@ from grcpal.portal.accounts import SESSION_COOKIE
 from grcpal.portal.auth import (DEV_COOKIE, ROLE_HELP, ROLE_LABELS, ROLES, AuthError, User, auth_mode,
                                 identity_from_request)
 from grcpal.portal.observability import configure_logging, current_actor, event, new_request_id, request_id
-from grcpal.portal.security import MAX_UPLOAD_BYTES, SECURITY_HEADERS, csrf_token, csrf_valid
+from grcpal.portal.security import MAX_UPLOAD_BYTES, SECURITY_HEADERS, client_ip, csrf_token, csrf_valid
 from grcpal.portal.service import Forbidden, Invalid, Portal
 
 HERE = Path(__file__).parent
@@ -123,12 +123,16 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             response.headers["Cache-Control"] = "public, max-age=3600"
         if request.url.path != "/healthz":
             event("request", method=request.method, path=request.url.path, status=response.status_code,
-                  ms=round((time.perf_counter() - started) * 1000, 1))
+                  ms=round((time.perf_counter() - started) * 1000, 1), ip=ip_of(request))
         current_actor.reset(actor_token)
         request_id.reset(token)
         return response
 
     # ------------------------------------------------------------------ helpers
+    def ip_of(request: Request) -> str:
+        """The caller's address, believing only our own proxies (GRCPAL_TRUSTED_PROXY_HOPS, see security.py)."""
+        return client_ip(request.headers, request.client.host if request.client else "")
+
     def p() -> Portal:
         return app.state.portal
 
@@ -144,12 +148,13 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             identity = identity_from_request(request.headers, request.cookies)
         except AuthError as exc:
             if exc.status == 403:
-                p().events.security(f"Sign-in refused: {exc}", path=request.url.path)
+                p().events.security(f"Sign-in refused: {exc}", path=request.url.path, ip=ip_of(request))
             raise _HTTPError(exc.status, str(exc)) from exc
         try:
             user = p().resolve(identity)
         except AuthError as exc:
-            p().events.security(f"Access refused for {identity.email}: {exc}", actor=identity.email, path=request.url.path)
+            p().events.security(f"Access refused for {identity.email}: {exc}", actor=identity.email, path=request.url.path,
+                                ip=ip_of(request))
             raise _HTTPError(exc.status, str(exc)) from exc
         current_actor.set(user.email)
         return user
@@ -889,7 +894,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                                routes_extra, routes_matrix, routes_vendors)
 
     if mode == "local":
-        routes_accounts.register(app, SimpleNamespace(p=p, templates=templates, HTTPError=_HTTPError,
+        routes_accounts.register(app, SimpleNamespace(p=p, templates=templates, HTTPError=_HTTPError, ip_of=ip_of,
                                                       check_csrf=check_csrf, safe_dest=safe_dest))
 
     routes_extra.register(app, SimpleNamespace(

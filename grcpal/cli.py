@@ -285,6 +285,13 @@ def cmd_serve(args) -> int:
     except ImportError:
         raise SystemExit('The portal needs extra packages: pip install "grc-pal[portal]"')
     os.environ.setdefault("GRCPAL_AUTH_MODE", "dev" if args.demo else "local")
+    if os.environ["GRCPAL_AUTH_MODE"] == "dev":
+        # Dev sign-in lets anyone pick any user: keep it on this computer unless the operator insists.
+        if args.host not in ("127.0.0.1", "localhost", "::1") and not getattr(args, "insecure_demo", False):
+            raise SystemExit(f"Refusing to serve the password-free demo sign-in on {args.host}: anyone who can reach "
+                             "it can sign in as an admin. Use --host 127.0.0.1, or add --insecure-demo for an "
+                             "isolated test network.")
+        os.environ.setdefault("GRCPAL_ENV", "dev")
     if args.demo:
         os.environ["GRCPAL_DEMO"] = "1"
         os.environ.setdefault("GRCPAL_SQLITE", ":memory:" if not args.db else args.db)
@@ -652,6 +659,8 @@ def main(argv: list[str] | None = None) -> int:
     sv.add_argument("--db", help="SQLite file for portal data (default grcpal.db)")
     sv.add_argument("--host", default="127.0.0.1")
     sv.add_argument("--port", type=int, default=8000)
+    sv.add_argument("--insecure-demo", action="store_true",
+                    help="allow the password-free demo sign-in on a non-local --host (isolated test networks only)")
     sv.set_defaults(fn=cmd_serve)
 
     i = sub.add_parser("init", help="create a program repository from the starter kit")

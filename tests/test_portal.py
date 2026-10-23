@@ -5,6 +5,7 @@ import csv
 import datetime as dt
 import io
 import json
+import os
 import re
 import shutil
 import zipfile
@@ -59,6 +60,7 @@ def env(tmp_path, monkeypatch):
     for var in ("GRCPAL_ENV", "GRCPAL_TENANT", "GRCPAL_BOOTSTRAP_ADMINS", "GRCPAL_EVIDENCE_ACCOUNT_URL",
                 "GRCPAL_ALLOWED_TENANT_IDS", "GRCPAL_PUBLIC_URL", "GRCPAL_DEV_PRINCIPAL"):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("GRCPAL_ENV", "dev")
     portal = make_portal(tmp_path)
     client = TestClient(create_app(portal), base_url="https://grc.example.com")
     return portal, client
@@ -118,9 +120,85 @@ def test_proxy_mode(monkeypatch):
 
 def test_dev_mode_blocked_in_production(monkeypatch):
     monkeypatch.setenv("GRCPAL_AUTH_MODE", "dev")
+    monkeypatch.setenv("GRCPAL_ENV", "dev")
     monkeypatch.setenv("GRCPAL_ENV", "production")
     with pytest.raises(RuntimeError):
         auth.auth_mode()
+
+
+@pytest.mark.parametrize("env_value", [None, "", "staging", "Production"])
+def test_dev_mode_fails_closed_without_explicit_dev_env(monkeypatch, env_value):
+    # One missing or mistyped variable must not open the password-free sign-in page.
+    monkeypatch.setenv("GRCPAL_AUTH_MODE", "dev")
+    monkeypatch.setenv("GRCPAL_ENV", "dev")
+    if env_value is None:
+        monkeypatch.delenv("GRCPAL_ENV", raising=False)
+    else:
+        monkeypatch.setenv("GRCPAL_ENV", env_value)
+    with pytest.raises(RuntimeError, match="GRCPAL_ENV=dev"):
+        auth.auth_mode()
+    for ok in ("dev", "development"):  # grcpal serve --demo / docker-compose.yml
+        monkeypatch.setenv("GRCPAL_ENV", ok)
+        assert auth.auth_mode() == "dev"
+
+
+def test_serve_demo_stays_on_this_computer(monkeypatch, tmp_path):
+    import argparse
+
+    import uvicorn
+
+    from grcpal import cli
+
+    started = []
+    monkeypatch.setattr(uvicorn, "run", lambda *a, **kw: started.append(kw["host"]))
+    for var in ("GRCPAL_AUTH_MODE", "GRCPAL_ENV", "GRCPAL_SQLITE", "GRCPAL_PUBLIC_URL", "GRCPAL_DEMO",
+                "GRCPAL_EVIDENCE_DIR", "GRCPAL_BASE"):
+        monkeypatch.setenv(var, "")  # recorded first, so cmd_serve's changes are undone after the test
+        monkeypatch.delenv(var)
+
+    def args(host, insecure=False):
+        return argparse.Namespace(demo=True, db=None, host=host, port=8000, evidence=str(tmp_path / "ev"), base=None,
+                                  insecure_demo=insecure)
+    with pytest.raises(SystemExit, match="--insecure-demo"):
+        cli.cmd_serve(args("0.0.0.0"))
+    assert not started
+    cli.cmd_serve(args("127.0.0.1"))
+    assert started == ["127.0.0.1"] and os.environ["GRCPAL_ENV"] == "dev" and os.environ["GRCPAL_AUTH_MODE"] == "dev"
+    monkeypatch.setenv("GRCPAL_ENV", "production")  # an explicit production setting is never overridden
+    cli.cmd_serve(args("::1"))
+    assert os.environ["GRCPAL_ENV"] == "production"
+    cli.cmd_serve(args("0.0.0.0", insecure=True))
+    assert started[-1] == "0.0.0.0"
+
+
+@pytest.mark.parametrize("hops,xff,peer,expected", [
+    ("0", "6.6.6.6", "198.51.100.7", "198.51.100.7"),            # no proxy trusted: the header is ignored
+    ("1", "203.0.113.9", "10.0.0.4", "203.0.113.9"),             # the platform's proxy added the real address
+    ("1", "6.6.6.6, 203.0.113.9", "10.0.0.4", "203.0.113.9"),   # a client-sent value on the left is ignored
+    ("2", "6.6.6.6, 203.0.113.9, 10.1.2.3", "10.0.0.4", "203.0.113.9"),
+    ("1", "", "198.51.100.7", "198.51.100.7"),                  # no header: the connection's address
+    ("1", "6.6.6.6, not-an-ip", "10.0.0.4", ""),                # garbage is never recorded as an address
+    ("1", "[2001:db8::5]:443", "10.0.0.4", "2001:db8::5"),
+    ("1", "203.0.113.9:51515", "10.0.0.4", "203.0.113.9"),
+    ("x", "6.6.6.6", "198.51.100.7", "198.51.100.7"),            # a bad setting means: trust no proxy
+])
+def test_client_ip_trusts_only_the_configured_proxy_hops(monkeypatch, hops, xff, peer, expected):
+    from grcpal.portal import security
+
+    monkeypatch.setenv("GRCPAL_TRUSTED_PROXY_HOPS", hops)
+    headers = {"x-forwarded-for": xff} if xff else {}
+    assert security.client_ip(headers, peer) == expected
+
+
+def test_request_log_records_the_real_client_ip(env, monkeypatch, caplog):
+    import logging
+
+    _, client = env
+    monkeypatch.setenv("GRCPAL_TRUSTED_PROXY_HOPS", "1")
+    with caplog.at_level(logging.INFO, logger="grcpal"):
+        as_(client, ADMIN).get("/", headers={"X-Forwarded-For": "6.6.6.6, 203.0.113.9"})
+    lines = [r for r in caplog.records if r.getMessage() == "request" and r.fields.get("path") == "/"]
+    assert lines and lines[-1].fields["ip"] == "203.0.113.9"
 
 
 def test_provisioning_rules(env, monkeypatch):
@@ -142,6 +220,7 @@ def test_provisioning_rules(env, monkeypatch):
 
 def test_dev_login_first_user_becomes_admin(tmp_path, monkeypatch):
     monkeypatch.setenv("GRCPAL_AUTH_MODE", "dev")
+    monkeypatch.setenv("GRCPAL_ENV", "dev")
     portal = make_portal(tmp_path, people=())
     client = TestClient(create_app(portal), base_url="https://grc.example.com")
     page = client.get("/dev/login")
@@ -785,6 +864,7 @@ def test_demo_seed_renders_for_every_role(tmp_path, monkeypatch):
     from grcpal.portal import demo
 
     monkeypatch.setenv("GRCPAL_AUTH_MODE", "dev")
+    monkeypatch.setenv("GRCPAL_ENV", "dev")
     portal = make_portal(tmp_path, people=())
     assert demo.seed(portal) and not demo.seed(portal)
     assert len(portal.cycles()) == 2 and portal.previous_cycle()

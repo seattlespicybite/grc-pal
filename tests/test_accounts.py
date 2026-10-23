@@ -307,3 +307,16 @@ def test_public_account_pages_render_with_strict_csp(env, path):
 def test_login_page_explains_first_admin_when_nobody_can_sign_in(env):
     _, client = env
     assert "grcpal create-admin" in client.get("/login").text
+
+
+def test_sign_in_records_the_real_client_ip_not_a_forged_one(env, monkeypatch):
+    portal, client = env
+    set_password(portal, CONTRIB)
+    monkeypatch.setenv("GRCPAL_TRUSTED_PROXY_HOPS", "1")
+    client.cookies.clear()
+    page = client.get("/login")
+    r = client.post("/login", data={"email": CONTRIB.email, "password": PW, "next": "/", "csrf": form_csrf(page.text)},
+                    headers={"X-Forwarded-For": "6.6.6.6, 203.0.113.9"}, follow_redirects=False)
+    assert r.status_code == 303
+    signin = [x for x in portal.log.recent(50) if x["action"] == "auth.signin"][0]
+    assert signin["detail"]["ip"] == "203.0.113.9"

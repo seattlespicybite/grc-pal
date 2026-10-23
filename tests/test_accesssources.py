@@ -443,6 +443,7 @@ def test_the_new_table_is_registered():
 @pytest.fixture()
 def client(portal, monkeypatch):
     monkeypatch.setenv("GRCPAL_AUTH_MODE", "dev")
+    monkeypatch.setenv("GRCPAL_ENV", "dev")
     monkeypatch.delenv("GRCPAL_PUBLIC_URL", raising=False)
     return TestClient(create_app(portal), base_url="https://grc.example.com")
 

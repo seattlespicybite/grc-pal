@@ -12,6 +12,8 @@
 #                          update.sh, which checks the new version before it gets traffic.
 #   --restore-from FILE    rebuild a NEW instance from a backup file (.grcbak); needs --kit
 #   --kit FILE             recovery kit (backup key and app key) that belongs to that backup
+#   --kit-out FILE         write this instance's recovery kit to FILE (new file, readable by you only); the
+#                          Backups page does not offer it in production. Keep it in a password manager.
 #   --github-repo O/R      your program repository; creates a keyless identity for its collectors
 #   --mail-from ADDRESS    shared mailbox that sends notifications through Microsoft Graph
 #   --require-assignment   only users assigned to the enterprise app may sign in (defense in depth)
@@ -23,7 +25,7 @@
 # re-running rotates the sign-in client secret.
 set -euo pipefail
 
-NAME="" ; ADMINS="" ; LOCATION="eastus2" ; IMAGE="" ; RESTORE_FROM="" ; KIT=""
+NAME="" ; ADMINS="" ; LOCATION="eastus2" ; IMAGE="" ; RESTORE_FROM="" ; KIT="" ; KIT_OUT=""
 GITHUB_REPO="" ; MAIL_FROM="" ; ALERT_EMAIL="" ; REQUIRE_ASSIGNMENT="false" ; WHAT_IF=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -33,17 +35,19 @@ while [ $# -gt 0 ]; do
     --image) IMAGE="$2"; shift 2 ;;
     --restore-from) RESTORE_FROM="$2"; shift 2 ;;
     --kit) KIT="$2"; shift 2 ;;
+    --kit-out) KIT_OUT="$2"; shift 2 ;;
     --github-repo) GITHUB_REPO="$2"; shift 2 ;;
     --mail-from) MAIL_FROM="$2"; shift 2 ;;
     --alert-email) ALERT_EMAIL="$2"; shift 2 ;;
     --require-assignment) REQUIRE_ASSIGNMENT="true"; shift ;;
     --what-if) WHAT_IF="1"; shift ;;
-    -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
     *) echo "Unknown option $1 (see --help)"; exit 1 ;;
   esac
 done
 [[ "$NAME" =~ ^[a-z0-9][a-z0-9-]{1,19}$ ]] || { echo "--name must be 2-20 lowercase letters, digits or hyphens"; exit 1; }
 [ -n "$ADMINS" ] || { echo "--admins is required (your work email)"; exit 1; }
+[ -z "$KIT_OUT" ] || [ ! -e "$KIT_OUT" ] || { echo "--kit-out $KIT_OUT already exists; choose a new file name"; exit 1; }
 command -v az >/dev/null || { echo "Install the Azure CLI first: https://aka.ms/azcli"; exit 1; }
 HERE="$(cd "$(dirname "$0")" && pwd)"
 if [ -n "$RESTORE_FROM" ]; then
@@ -84,8 +88,7 @@ if az containerapp show -g "$RG" -n "$APP" -o none 2>/dev/null; then
 fi
 if [ -z "$ENCRYPTION_KEY" ]; then
   ENCRYPTION_KEY=$(openssl rand -hex 32)
-  echo "generated a new encryption key; store a copy in your password manager:"
-  echo "  GRCPAL_ENCRYPTION_KEY=$ENCRYPTION_KEY"
+  echo "generated a new encryption key (it is in the recovery kit: use --kit-out FILE)"
 else
   echo "reusing the existing encryption key"
 fi
@@ -102,7 +105,7 @@ if [ -n "$RESTORE_FROM" ]; then
 fi
 if [ -z "$BACKUP_KEY" ]; then
   BACKUP_KEY=$(openssl rand -base64 32)
-  echo "generated a new backup key (download the recovery kit from Administration > Backups after sign-in)"
+  echo "generated a new backup key (it is in the recovery kit: use --kit-out FILE)"
 fi
 # Image: never change versions here by accident; update.sh does that with its checks.
 if [ -z "$IMAGE" ]; then
@@ -191,6 +194,12 @@ if [ -n "$RESTORE_FROM" ]; then
   az role assignment delete --assignee "$ME" --role "Storage Blob Data Contributor" --scope "$SCOPE" -o none 2>/dev/null || true
 fi
 
+if [ -n "$KIT_OUT" ]; then
+  step "Recovery kit"
+  GRCPAL_BACKUP_KEY="$BACKUP_KEY" GRCPAL_ENCRYPTION_KEY="$ENCRYPTION_KEY" python3 -I "$HERE/write_kit.py" "$KIT_OUT" "$URL"
+  echo "wrote $KIT_OUT: move it into your password manager now, keep it away from the backups, then delete this copy"
+fi
+
 step "Done"
 cat <<EOF
 Portal:        $URL
@@ -205,4 +214,5 @@ Next steps:
        done
   3. The sign-in client secret expires in one year. Re-run this script to rotate it.
   4. Restrict sign-in to your staff on compliant devices: docs/deploy-azure.md, Step 3b (Conditional Access).
+  5. No recovery kit saved yet? Re-run with the same options plus --kit-out recovery-kit.json.
 EOF

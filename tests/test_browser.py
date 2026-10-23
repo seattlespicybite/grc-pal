@@ -28,6 +28,7 @@ def server(tmp_path, monkeypatch):
 
     port = _free_port()
     monkeypatch.setenv("GRCPAL_AUTH_MODE", "dev")
+    monkeypatch.setenv("GRCPAL_ENV", "dev")
     monkeypatch.setenv("GRCPAL_KEY_FILE", str(tmp_path / "key"))
     monkeypatch.setenv("GRCPAL_JOBS_SYNC", "1")
     monkeypatch.setenv("GRCPAL_PUBLIC_URL", f"http://127.0.0.1:{port}")

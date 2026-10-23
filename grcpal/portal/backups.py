@@ -9,6 +9,10 @@ Safety rules
     checked against a strict pattern before any file is opened, so a request cannot reach other files.
   * On Azure the portal scales to zero, so "Back up now" is queued for the scheduled backup job instead of
     running inside a web request.
+  * With GRCPAL_ENV=production, backup files and the recovery kit cannot be downloaded through the web page:
+    one stolen admin session would otherwise take every record plus the keys that open them (and the saved
+    integration credentials). Operators get them from the command line (`grcpal backup kit`, `deploy.sh
+    --kit-out`). GRCPAL_WEB_BACKUP_DOWNLOAD=on brings the downloads back; each one is then emailed to every admin.
 """
 from __future__ import annotations
 
@@ -17,6 +21,18 @@ import os
 
 from grcpal import backup, backup_store
 from grcpal.portal.auth import SYSTEM
+
+
+def web_backup_download_allowed() -> bool:
+    """Backup files and the recovery kit leave through the web page only outside production, or when the
+    operator turned it on (GRCPAL_WEB_BACKUP_DOWNLOAD=on)."""
+    if os.getenv("GRCPAL_ENV", "").lower() != "production":
+        return True
+    return os.getenv("GRCPAL_WEB_BACKUP_DOWNLOAD", "").strip().lower() in ("on", "1", "true", "yes")
+
+
+WEB_DOWNLOAD_OFF = ("Backup files and the recovery kit are not downloadable from the web page in production. "
+                    "Use the command line on the server (grcpal backup kit, or deploy.sh --kit-out on Azure).")
 
 
 class BackupsMixin:
@@ -81,6 +97,7 @@ class BackupsMixin:
                 "queue_mode": self.backup_queue_mode, "can_restore": self.deployment == "vm",
                 "request": self.settings_store.state(backup_store.REQUEST_KEY, None),
                 "running": self.jobs.running("backup"), "kit": state.get("kit") or {},
+                "web_download": web_backup_download_allowed(),
                 "key_file": str(backup_store.key_file(self.evidence.root) or ""),
                 "frequencies": backup_store.FREQUENCIES}
 
@@ -137,24 +154,45 @@ class BackupsMixin:
         return self.jobs.submit("backup_verify", f"Check backup {name}", actor.email, work)
 
     def backup_download(self, actor, dest_id: str, name: str):
-        """(stream, filename). Admin only, audit-logged."""
+        """(stream, filename). Admin only, audit-logged, and in production only when turned on (see the top)."""
         self._backup_ready(actor)
+        if not web_backup_download_allowed():
+            raise self._forbidden(WEB_DOWNLOAD_OFF)
         dest = self._backup_dest(dest_id)
         info = backup_store.parse_name(name)
         if not info or info["tenant"] != self.store.tenant or name not in {b["name"] for b in dest.list()}:
             raise self._invalid("Unknown backup")
         self.audit(actor, "backup.download", name, {"where": dest.where(name)})
+        self._alert_admins_about_download(actor, "security.backup_download", "A backup file was downloaded",
+                                          [("Backup", name)])
         return dest.open(name), name
 
     def recovery_kit(self, actor) -> str:
-        """Backup key + app key. Admin only; recorded in the audit log and shown on the page."""
+        """Backup key + app key. Admin only; recorded in the audit log and shown on the page. In production only
+        when turned on (see the top)."""
         self._backup_ready(actor)
+        if not web_backup_download_allowed():
+            raise self._forbidden(WEB_DOWNLOAD_OFF)
         text = backup.make_kit(self._backup_key(), backup._settings_key(), self.public_url or "")
         state = self.settings_store.state(backup_store.STATE_KEY, {}) or {}
         state["kit"] = {"at": backup_store._now().isoformat(), "by": actor.email}
         self.settings_store.set_state(backup_store.STATE_KEY, state)
         self.audit(actor, "backup.kit_export", "backups", {"settings_key_included": bool(backup._settings_key())})
+        self._alert_admins_about_download(actor, "security.backup_kit", "The recovery kit was downloaded",
+                                          [("Holds", "the backup key and the key for saved integration credentials")])
         return text
+
+    def _alert_admins_about_download(self, actor, kind: str, title: str, fields: list) -> None:
+        """Every other active admin hears about it at once, so a download nobody expected is noticed."""
+        if os.getenv("GRCPAL_ENV", "").lower() != "production":
+            return
+        admins = [u["RowKey"] for u in self.users() if u.get("role") == "admin" and u.get("active", True)]
+        self._notify(kind, admins, actor, {
+            "subject": f"GRC-pal security alert: {title.lower()}", "title": title,
+            "intro": f"{actor.email} downloaded this from the Backups page. If nobody expected it, treat it as a "
+                     "security incident: disable that account, rotate the backup key and the integration "
+                     "credentials, and check the audit log.",
+            "fields": [("By", actor.email), *fields], "button": ("Open the audit log", self.link("/audit"))})
 
     def run_pre_update_backup(self) -> dict:
         """The updater's mandatory backup before switching versions (operator path, so it also works when the
