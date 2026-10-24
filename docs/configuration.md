@@ -58,7 +58,7 @@ Every Configuration save is in the audit log and is emailed to all admins (the p
 | --- | --- | --- |
 | `GRCPAL_AUTH_MODE` | `local` | `local` (GRC-pal accounts with passwords, for a VM), `easyauth` (Azure Container Apps / App Service), `proxy` (trusted reverse proxy) or `dev` |
 | `GRCPAL_BOOTSTRAP_ADMINS` | (empty) | Comma-separated emails created as admins at first sign-in |
-| `GRCPAL_ALLOWED_TENANT_IDS` | (empty = any) | Entra directory IDs allowed to sign in (easyauth). Required in production (the Azure template sets your tenant) |
+| `GRCPAL_ALLOWED_TENANT_IDS` | (empty) | Entra directory IDs allowed to sign in (easyauth). **Required** when `GRCPAL_ENV=production`: the portal refuses to start without it (the Azure template sets your tenant). Outside production, empty allows any directory |
 | `GRCPAL_GROUP_ADMIN` / `_CONTRIBUTOR` / `_AUDITOR` | (empty) | Optional group object IDs that create a user with that role at first sign-in |
 | `GRCPAL_PROXY_SECRET` | (none) | proxy mode, required: a random value of at least 32 characters (`openssl rand -hex 32`) that the proxy sends as `X-GRCPAL-Proxy-Secret` on every request. Requests without it are refused |
 | `GRCPAL_PROXY_EMAIL_HEADER` | `x-forwarded-email` | proxy mode: header carrying the signed-in email |
