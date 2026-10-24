@@ -154,8 +154,9 @@ def test_session_cookie_flags_and_logout(env):
     r = sign_in(client, ADMIN.email)
     cookie = r.headers["set-cookie"].lower()
     assert "httponly" in cookie and "samesite=lax" in cookie and "secure" in cookie
-    assert client.get("/").status_code == 200
-    client.get("/logout")
+    home = client.get("/")
+    assert home.status_code == 200
+    client.post("/logout", data={"csrf": form_csrf(home.text)})
     assert client.get("/", follow_redirects=False).status_code == 303
     assert "auth.signout" in audit_actions(portal)
 
@@ -320,3 +321,134 @@ def test_sign_in_records_the_real_client_ip_not_a_forged_one(env, monkeypatch):
     assert r.status_code == 303
     signin = [x for x in portal.log.recent(50) if x["action"] == "auth.signin"][0]
     assert signin["detail"]["ip"] == "203.0.113.9"
+
+
+# ---------------------------------------------------------------- session hygiene (hardening batch B5)
+SECRET = "test-secret-0123456789abcdef0123456789abcdef"
+
+
+@pytest.fixture()
+def prod(env, monkeypatch):
+    """The same local-account portal, run as production (GRCPAL_ENV=production)."""
+    portal, _ = env
+    monkeypatch.setenv("GRCPAL_ENV", "production")
+    monkeypatch.setenv("GRCPAL_SECRET", SECRET)
+    return portal, TestClient(create_app(portal), base_url="https://grc.example.com")
+
+
+def set_cookies(response):
+    return [v for k, v in response.headers.multi_items() if k == "set-cookie"]
+
+
+def test_production_cookies_are_secure_and_host_prefixed(prod):
+    portal, client = prod
+    set_password(portal, ADMIN)
+    # even when the app sees plain http (a proxy that does not pass the scheme), production cookies are Secure
+    plain = TestClient(client.app, base_url="http://grc.example.com")
+    r = sign_in(plain, ADMIN.email)
+    cookie = next(c for c in set_cookies(r) if "grcpal_session" in c)
+    assert cookie.startswith("__Host-grcpal_session=")
+    low = cookie.lower()
+    assert "secure" in low and "httponly" in low and "path=/" in low and "domain" not in low
+    sign_in(client, ADMIN.email)
+    assert client.get("/").status_code == 200
+    view = client.get("/view", params={"f": "all", "next": "/"}, follow_redirects=False)
+    assert any(c.startswith("__Host-grcpal_view=all;") and "secure" in c.lower() for c in set_cookies(view))
+
+
+def test_outside_production_cookie_names_do_not_change(env):
+    portal, client = env
+    set_password(portal, ADMIN)
+    assert any(c.startswith("grcpal_session=") for c in set_cookies(sign_in(client, ADMIN.email)))
+
+
+def test_old_cookie_names_are_accepted_once_and_reissued(prod):
+    # Sessions started before the upgrade keep working: the old cookie is read once, then replaced.
+    portal, client = prod
+    set_password(portal, ADMIN)
+    token = portal.sign_in(ADMIN.email, PW)
+    client.cookies.clear()
+    client.cookies.set("grcpal_session", token, domain="grc.example.com")
+    client.cookies.set("grcpal_view", "all", domain="grc.example.com")
+    r = client.get("/")
+    assert r.status_code == 200
+    cookies = set_cookies(r)
+    assert any(c.startswith(f"__Host-grcpal_session={token};") and "secure" in c.lower() for c in cookies)
+    assert any(c.startswith("__Host-grcpal_view=all;") for c in cookies)
+    assert any(c.startswith("grcpal_session=") and "max-age=0" in c.lower() for c in cookies)
+    assert any(c.startswith("grcpal_view=") and "max-age=0" in c.lower() for c in cookies)
+    # a forged old-name cookie is no session at all
+    client.cookies.clear()
+    client.cookies.set("grcpal_session", "made-up", domain="grc.example.com")
+    assert client.get("/", follow_redirects=False).headers["location"].startswith("/login")
+
+
+def test_form_tokens_are_bound_to_the_session_and_rotate_at_sign_in(env):
+    portal, client = env
+    set_password(portal, ADMIN)
+    sign_in(client, ADMIN.email)
+    old = form_csrf(client.get("/users").text)
+    sign_in(client, ADMIN.email)  # a new session: the old page's token must not work any more
+    new = form_csrf(client.get("/users").text)
+    assert new != old
+    data = {"email": "new.person@example.com", "name": "New", "role": "contributor"}
+    assert client.post("/users", data={**data, "csrf": old}, follow_redirects=False).status_code == 403
+    assert client.post("/users", data={**data, "csrf": new}, follow_redirects=False).status_code == 200
+    assert portal.user_row("new.person@example.com")
+
+
+def test_sign_in_ends_the_session_the_browser_already_had(env):
+    portal, client = env
+    set_password(portal, ADMIN)
+    sign_in(client, ADMIN.email)
+    first = client.cookies.get("grcpal_session")
+    page = client.get("/login")
+    client.post("/login", data={"email": ADMIN.email, "password": PW, "next": "/", "csrf": form_csrf(page.text)},
+                follow_redirects=False)
+    assert client.cookies.get("grcpal_session") != first
+    with pytest.raises(auth.AuthError):
+        portal.session_user(first)
+
+
+def _age_sessions(portal, minutes):
+    when = (accounts.utcnow() - dt.timedelta(minutes=minutes)).isoformat()
+    for row in portal.store.list("sessions", "s"):
+        portal.store.update("sessions", "s", row["RowKey"], {"last_used": when})
+
+
+def test_admin_sessions_end_after_30_idle_minutes(env):
+    portal, client = env
+    set_password(portal, ADMIN)
+    sign_in(client, ADMIN.email)
+    _age_sessions(portal, 29)
+    assert client.get("/").status_code == 200       # still active, and the request counts as activity
+    assert all(r["last_used"] > (accounts.utcnow() - dt.timedelta(minutes=1)).isoformat()
+               for r in portal.store.list("sessions", "s"))
+    _age_sessions(portal, 31)
+    r = client.get("/", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/login")
+    assert not portal.store.list("sessions", "s")
+
+
+def test_idle_limit_is_for_admins_only(env):
+    portal, client = env
+    set_password(portal, CONTRIB)
+    sign_in(client, CONTRIB.email)
+    _age_sessions(portal, 120)
+    assert client.get("/").status_code == 200
+
+
+def test_sign_out_is_a_post_with_a_form_token(env):
+    portal, client = env
+    set_password(portal, ADMIN)
+    sign_in(client, ADMIN.email)
+    home = client.get("/").text
+    assert re.search(r'<form method="post" action="/logout"', home)
+    # a link or an image on another site can no longer sign people out
+    assert client.get("/logout", follow_redirects=False).status_code == 405
+    assert client.post("/logout", data={"csrf": "bad"}, follow_redirects=False).status_code == 403
+    assert client.get("/").status_code == 200
+    r = client.post("/logout", data={"csrf": form_csrf(home)}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/login?out=1"
+    assert client.get("/", follow_redirects=False).status_code == 303
+    assert "auth.signout" in audit_actions(portal)

@@ -17,7 +17,7 @@ remains your responsibility. To report a vulnerability, see [SECURITY.md](../SEC
 | Approving your own work | Uploader can never review their upload |
 | Malicious upload (script, malware disguised as PDF) | Extension allow-list, magic-byte check, UTF-8 check for text, size limit, files served only as downloads with `Content-Disposition: attachment`, a sandbox CSP and HTML/SVG forced to `octet-stream` |
 | Cross-site scripting | Server-rendered templates with auto-escaping; strict CSP with no inline script or style; no third-party scripts or fonts |
-| Cross-site request forgery | Per-user HMAC token on every form (12-hour window) plus Origin check |
+| Cross-site request forgery | HMAC token on every form, tied to the person and their sign-in session (local session, Easy Auth or proxy session cookie) and renewed at every sign-in, valid 12 to 24 hours, plus an Origin check |
 | Open redirect | Return URLs limited to same-site paths |
 | Clickjacking | `frame-ancestors 'none'` and `X-Frame-Options: DENY` |
 | Email abuse | One message per recipient, no recipient lists exposed, subject sanitized, reminder rate limit, sender restricted to one mailbox (Exchange RBAC for Applications) |
@@ -30,7 +30,7 @@ remains your responsibility. To report a vulnerability, see [SECURITY.md](../SEC
 | AI data exposure or manipulation | See [ai-assistant.md](ai-assistant.md): off by default, confirmation, masking, injection fencing, human disposition, full record |
 | Stolen password database | Passwords stored only as scrypt hashes with a random salt; setup links and session cookies stored only as SHA-256 hashes, so a database copy cannot sign anyone in |
 | Finding which accounts exist | Same answer on sign-in and Forgot password whether or not the account exists |
-| Session theft | HttpOnly, SameSite=Lax cookie (Secure over HTTPS); sessions end after 8 hours, on sign-out, and when the person is disabled, changes role or sets a new password |
+| Session theft | HttpOnly, SameSite=Lax cookie; in production always Secure with the `__Host-` prefix (only this HTTPS host can set it). Every sign-in starts a new session; sessions end after 8 hours (admins: 30 minutes without activity), on sign-out (a form post with a token), and when the person is disabled, changes role or sets a new password |
 | Auditor keeps access after fieldwork | Every auditor account has an access end date (default 90 days); after it, sign-in and existing sessions are refused |
 | Losing the last admin | `grcpal create-admin` on the server creates or restores a local admin (break-glass); it needs shell access to the VM and is in the audit log |
 | Development shortcuts reaching production | `dev` sign-in runs only with `GRCPAL_ENV=dev` set explicitly (a missing or mistyped value refuses it); `grcpal serve --demo` listens on 127.0.0.1 only; production requires `GRCPAL_SECRET` |

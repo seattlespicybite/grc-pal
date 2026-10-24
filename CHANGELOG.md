@@ -80,6 +80,17 @@ All notable changes are listed here. The project follows [semantic versioning](h
   No data model change (the new field is read with a default).
 
 ### Security
+- **Session hygiene (hardening batch B5).**
+  - In production every GRC-pal cookie is `Secure` and uses the `__Host-` prefix (`__Host-grcpal_session`,
+    `__Host-grcpal_view`), so only this exact HTTPS host can set or read it. Cookies from before the upgrade are
+    accepted once and replaced, so nobody is signed out by the change.
+  - Form tokens are tied to the sign-in session as well as the person (the local session, the Azure Easy Auth
+    session cookie, or the proxy's session cookie). A token copied from another session is refused, and every
+    sign-in starts a new session and new tokens. Signing in also ends the session the browser had before.
+  - Local accounts: admin sessions end after 30 minutes without activity (`GRCPAL_ADMIN_IDLE_MINUTES`).
+    Admins signed in before the upgrade for more than 30 minutes sign in once more.
+  - Local accounts: **Sign out** is a form post with a token (`POST /logout`); `GET /logout` no longer signs
+    anyone out, so a link or image on another site cannot.
 - **Entra accounts are linked at first sign-in.** On Azure (easyauth) each person's Entra object ID and tenant
   are stored the first time they sign in; the same email from another Entra account is refused and logged as a
   security event until an admin clicks **Unlink Entra account** on Users and roles. In production the tenant

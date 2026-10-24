@@ -26,16 +26,20 @@ from grcpal.catalog import Catalog
 from grcpal.evidence import EvidenceStore
 from grcpal.portal import mailer as mailer_mod
 from grcpal.portal import store as store_mod
-from grcpal.portal.accounts import SESSION_COOKIE
+from grcpal.portal.accounts import SESSION_COOKIE, SESSION_HOURS
 from grcpal.portal.auth import (DEV_COOKIE, ROLE_HELP, ROLE_LABELS, ROLES, AuthError, User, auth_mode,
                                 identity_from_request)
 from grcpal.portal.observability import configure_logging, current_actor, event, new_request_id, request_id
-from grcpal.portal.security import MAX_UPLOAD_BYTES, SECURITY_HEADERS, client_ip, csrf_token, csrf_valid
+from grcpal.portal.security import (MAX_UPLOAD_BYTES, SECURITY_HEADERS, clear_cookie, client_ip, cookie_name, csrf_token,
+                                    csrf_valid, legacy_cookies, read_cookie, session_binding, set_cookie)
 from grcpal.portal.service import Forbidden, Invalid, Portal
 
 HERE = Path(__file__).parent
 STATUS_LABELS = report_mod._LABELS
 VIEW_COOKIE = "grcpal_view"   # which framework the person is looking at; a display preference, not a permission
+# Every cookie the portal sets, with its lifetime in seconds (None = until the browser closes). In production
+# each is stored as __Host-<name> (security.cookie_name); old bare-name copies are moved over once.
+COOKIE_LIFETIMES = {SESSION_COOKIE: SESSION_HOURS * 3600, VIEW_COOKIE: 365 * 86400, DEV_COOKIE: None}
 CATEGORY_NAMES = {"security": "Security", "availability": "Availability", "confidentiality": "Confidentiality",
                   "processing_integrity": "Processing Integrity", "privacy": "Privacy"}
 ACCEPT = ".pdf,.png,.jpg,.jpeg,.csv,.xlsx,.docx,.pptx,.txt,.json,.md,.eml"
@@ -122,6 +126,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         response.headers["X-Request-ID"] = rid
         if request.url.path.startswith("/static/"):
             response.headers["Cache-Control"] = "public, max-age=3600"
+        _reissue_legacy_cookies(request, response)
         if request.url.path != "/healthz":
             # The signed-in person is set on request.state by current_user (it runs in a worker thread, so the
             # context variable it also sets does not reach this point).
@@ -133,6 +138,35 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         return response
 
     # ------------------------------------------------------------------ helpers
+    def _reissue_legacy_cookies(request: Request, response) -> None:
+        """Production: a cookie still under its old bare name (set before the __Host- names) is moved to the new
+        name once, unless this response already sets or clears it (sign-in, sign-out)."""
+        already = " ".join(v for k, v in response.headers.items() if k == "set-cookie")
+        for base in legacy_cookies(request.cookies, COOKIE_LIFETIMES):
+            if f"{cookie_name(base)}=" in already or already.startswith(f"{base}=") or f" {base}=" in already:
+                continue
+            set_cookie(response, request.url.scheme, base, request.cookies[base], max_age=COOKIE_LIFETIMES[base])
+            response.delete_cookie(base, path="/", httponly=True, samesite="lax")
+
+    def form_subject(request: Request, subject: str) -> str:
+        """What a form token is bound to: the person (or the anonymous form's name) plus their sign-in session.
+        A token copied from one session (a saved page, a shared computer) is refused in any other, and every new
+        sign-in starts a new session, so it also rotates the token."""
+        return f"{subject}|{session_binding(session_cookie_value(request))}"
+
+    def session_cookie_value(request: Request) -> str:
+        if mode == "local":
+            return read_cookie(request.cookies, SESSION_COOKIE)
+        # easyauth: the platform's session cookie (AppServiceAuthSession, split into numbered parts when large);
+        # proxy: the proxy's session cookie (oauth2-proxy's _oauth2_proxy by default); dev: the chosen user.
+        prefixes = {"easyauth": ("AppServiceAuthSession",),
+                    "proxy": (os.getenv("GRCPAL_PROXY_SESSION_COOKIE", "_oauth2_proxy"),),
+                    "dev": (DEV_COOKIE, cookie_name(DEV_COOKIE))}.get(mode, ())
+        return "\n".join(f"{k}={v}" for k, v in sorted(request.cookies.items()) if prefixes and k.startswith(prefixes))
+
+    def form_token(request: Request, subject: str) -> str:
+        return csrf_token(form_subject(request, subject))
+
     def ip_of(request: Request) -> str:
         """The caller's address, believing only our own proxies (GRCPAL_TRUSTED_PROXY_HOPS, see security.py)."""
         return client_ip(request.headers, request.client.host if request.client else "")
@@ -143,7 +177,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     def current_user(request: Request) -> User:
         if mode == "local":
             try:
-                user = p().session_user(request.cookies.get(SESSION_COOKIE))
+                user = p().session_user(read_cookie(request.cookies, SESSION_COOKIE))
             except AuthError as exc:
                 raise _HTTPError(exc.status, str(exc)) from exc
             current_actor.set(user.email)
@@ -175,7 +209,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             allowed = os.getenv("GRCPAL_PUBLIC_URL") or f"{request.url.scheme}://{request.headers.get('host')}"
             if not _same_site(urlparse(origin), urlparse(allowed)):
                 raise _HTTPError(403, "Cross-site request blocked")
-        if not csrf_valid(subject, token):
+        if not csrf_valid(form_subject(request, subject), token):
             raise _HTTPError(403, "Your form expired. Go back, refresh the page and try again.")
 
     def health(force: bool = False) -> dict:
@@ -195,9 +229,9 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     def render(request: Request, user: User, name: str, **ctx) -> HTMLResponse:
         portal = p()
         in_use = portal.frameworks_in_use
-        view = portal.program_view(request.cookies.get(VIEW_COOKIE, ""))
+        view = portal.program_view(read_cookie(request.cookies, VIEW_COOKIE))
         ctx.setdefault("nav_active", "")
-        ctx.update(fw_in_use=in_use, view=view, view_fw=in_use.get(view), library_owner=portal.library_owner(),request=request, user=user, csrf=csrf_token(user.email), today=portal.today.isoformat(),
+        ctx.update(fw_in_use=in_use, view=view, view_fw=in_use.get(view), library_owner=portal.library_owner(),request=request, user=user, csrf=form_token(request, user.email), today=portal.today.isoformat(),
                    cycle=portal.active_cycle(), org=portal.org, request_id=request_id.get(),
                    review_count=len(portal.reviewable(user)), ar_open=portal.access_review_badge(user),
                    calendar_due=portal.calendar_past_due_count() if user.is_admin else 0,
@@ -207,7 +241,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         return templates.TemplateResponse(request, name, ctx)
 
     def current_view(request: Request) -> str:
-        return p().program_view(request.cookies.get(VIEW_COOKIE, ""))
+        return p().program_view(read_cookie(request.cookies, VIEW_COOKIE))
 
     def safe_dest(url: str, default: str) -> str:
         """A path inside this portal, or the default. Rejects other hosts, schemes, backslashes and control
@@ -246,7 +280,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             users = [u for u in p().users() if u.get("active", True)]
             return templates.TemplateResponse(request, "dev_login.html", {
                 "request": request, "user": None, "users": users, "next": safe_dest(next, "/"),
-                "csrf": csrf_token("dev-login"), "request_id": request_id.get(), "org": p().org})
+                "csrf": form_token(request, "dev-login"), "request_id": request_id.get(), "org": p().org})
 
         @app.post("/dev/login")
         def dev_login_post(request: Request, email: str = Form(...), name: str = Form(""), next: str = Form("/"),
@@ -259,13 +293,13 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             if not portal.user_row(email):
                 return RedirectResponse("/dev/login?err=" + quote("Unknown user. Ask an admin to add you."), status_code=303)
             resp = RedirectResponse(safe_dest(next, "/"), status_code=303)
-            resp.set_cookie(DEV_COOKIE, email, httponly=True, samesite="lax", secure=request.url.scheme == "https")
+            set_cookie(resp, request.url.scheme, DEV_COOKIE, email)
             return resp
 
         @app.get("/dev/logout")
-        def dev_logout():
+        def dev_logout(request: Request):
             resp = RedirectResponse("/dev/login", status_code=303)
-            resp.delete_cookie(DEV_COOKIE)
+            clear_cookie(resp, request.url.scheme, DEV_COOKIE)
             return resp
 
         @app.get("/dev/outbox", response_class=HTMLResponse)
@@ -455,8 +489,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             if fid == f:
                 choice = fid
         resp = RedirectResponse(safe_dest(next, "/"), status_code=303)
-        resp.set_cookie(VIEW_COOKIE, choice, max_age=365 * 86400, path="/", httponly=True, samesite="lax",
-                        secure=request.url.scheme == "https")
+        set_cookie(resp, request.url.scheme, VIEW_COOKIE, choice, max_age=COOKIE_LIFETIMES[VIEW_COOKIE])
         return resp
 
     # ------------------------------------------------------------------ criteria (admins, auditors)
@@ -910,7 +943,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     if mode == "local":
         routes_accounts.register(app, SimpleNamespace(p=p, templates=templates, HTTPError=_HTTPError, ip_of=ip_of,
-                                                      check_csrf=check_csrf, safe_dest=safe_dest))
+                                                      check_csrf=check_csrf, safe_dest=safe_dest,
+                                                      form_token=form_token, current_user=current_user))
 
     routes_extra.register(app, SimpleNamespace(
         p=p, current_user=current_user, need=need, check_csrf=check_csrf, render=render, back=back,
