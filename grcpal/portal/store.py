@@ -27,11 +27,12 @@ TABLES = ("users", "cycles", "assignments", "uploads", "comments", "overrides", 
           "aireviews", "aiaudits", "controledits", "controlhistory", "controlnotes", "calendardecisions",
           "calendaractivities", "calendarversions", "vendors", "vendorversions", "vendorreviews", "vendorfiles",
           "questionnaires", "vendorimports", "docs", "docversions", "arcampaigns", "arentries", "arapps",
-          "matriximports", "sessions", "account_links", "meta")
-# Sign-in sessions and one-time setup/reset links are never backed up: restoring them would revive old
-# sign-ins and used or expired links. After a restore everyone signs in again. "meta" (instance-wide data
-# model version, see grcpal/migrations.py) is recorded in the backup manifest and set again by restore.
-NOT_BACKED_UP = ("sessions", "account_links", "meta")
+          "matriximports", "sessions", "account_links", "signinlimits", "meta")
+# Sign-in sessions, one-time setup/reset links and sign-in failure counters are never backed up: restoring them
+# would revive old sign-ins, used or expired links and old locks. After a restore everyone signs in again.
+# "meta" (instance-wide data model version, see grcpal/migrations.py) is recorded in the backup manifest and set
+# again by restore.
+NOT_BACKED_UP = ("sessions", "account_links", "signinlimits", "meta")
 _JSON_FIELDS = {"contributors", "points", "detail", "controls", "values", "secrets", "mappings", "evidence",
                 "config", "result", "requirements", "findings", "package", "items", "summary", "assertions",
                 "headers", "steps", "last_test", "months", "edit", "before", "after", "owner_emails", "links",

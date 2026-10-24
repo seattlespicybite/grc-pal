@@ -13,3 +13,6 @@ control-health.*
 report.html
 report.json
 *.zip
+
+# Local encryption key (GRCPAL_KEY_FILE default): never commit
+.grcpal.key

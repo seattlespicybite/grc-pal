@@ -21,6 +21,30 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 No data model change. Runs collected before this release show as **Legacy** (file hashes still checked).
 
+### Security
+- **Local sign-in hardening (hardening batch B6; findings F-03, F-06, F-07, F-08, F-13, F-16).** These apply to
+  local accounts (VM installs and the break-glass admin); Azure Easy Auth sign-in is governed by Entra.
+  - **Lockout with growing waits.** After 5 failed sign-ins for one account, or 20 from one address, within
+    15 minutes, sign-in is locked for 1 minute, then 2, 4, 8 and at most 15 for each further failure. A locked
+    sign-in is refused before the password is checked, the answer is the same for real and unknown accounts,
+    and each lock is a security event on the Logs page. A successful sign-in clears the account's count.
+  - **Password checks are capped.** At most 4 password hashes run at once (`GRCPAL_MAX_PASSWORD_CHECKS`); others
+    wait up to 5 seconds and then get "busy, try again", so a flood of sign-ins cannot exhaust memory or CPU.
+  - **Optional two-step sign-in** with an authenticator app (6-digit codes, RFC 6238), set up from the new
+    **Two-step sign-in** link in the sidebar. Recommended for admins. Codes work once; wrong codes count towards
+    the lockout. An admin can remove it for someone who lost their phone (Users and roles), and
+    `grcpal create-admin` on the server clears it. The key is stored encrypted. No new dependency.
+  - **Password links keep their token out of the address path.** Emailed links now look like
+    `/account/password#...`: the part after `#` never reaches the server, a proxy or a log. The page swaps it,
+    once, for a password form that works for 15 minutes. Links emailed before the upgrade still work.
+  - **"Forgot password" is limited and refused for admins.** At most 3 emails per account and 10 requests per
+    address per hour. Admins and the break-glass account can no longer reset by email (ask another admin for a
+    link, or use `grcpal create-admin` on the server); the attempt is a security event. The page answers before
+    any lookup or email is done, so neither its text nor its timing shows whether an account exists.
+  - **Request size limit.** Bodies larger than the upload limit plus 5 MB (30 MB by default,
+    `GRCPAL_MAX_BODY_MB`) are refused with 413 before they are read.
+  - New table `signinlimits` (not backed up, like sessions). No migration.
+
 ## [0.6.0] - 2026-10-23 - Security hardening
 
 Security hardening release from the internal assessment of the Azure deployment (batches B1, B2, B3 and the CI

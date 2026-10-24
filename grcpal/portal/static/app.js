@@ -61,6 +61,15 @@
     });
   }
 
+  // Password links: the token sits after "#" in the emailed link, so it never reaches the server's logs. Post it
+  // once (it is swapped for a short-lived password form) and drop it from the address bar and history.
+  var linkForm = document.querySelector('form[data-link-open]');
+  if (linkForm && window.location.hash.length > 1) {
+    linkForm.querySelector('input[name=token]').value = decodeURIComponent(window.location.hash.slice(1));
+    window.history.replaceState(null, '', window.location.pathname);
+    linkForm.submit();
+  }
+
   // Confirm destructive actions.
   document.querySelectorAll('form[data-confirm]').forEach(function (f) {
     f.addEventListener('submit', function (ev) {

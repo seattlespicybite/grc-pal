@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}Two-step sign-in{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Two-step sign-in</h1>
+<p class="sub">With two-step sign-in, GRC-pal asks for a 6-digit code from an authenticator app on your phone (for example Microsoft Authenticator) after your password. A stolen password alone is then not enough. Strongly recommended for admins.</p></div>
+<div class="card">
+{% if secret %}
+<h2>Add GRC-pal to your authenticator app</h2>
+<ol>
+<li>In the app, choose to add an account, then <b>enter a setup key</b> (or open the link below on your phone).</li>
+<li>Account: <b>{{ user.email }}</b>. Key: <span class="mono" data-secret="{{ secret }}">{{ secret }}</span> (time-based).</li>
+<li>Type the 6-digit code the app shows.</li>
+</ol>
+<p class="sub"><a href="{{ uri }}">Open in an authenticator app on this device</a></p>
+<form method="post" action="/account/mfa/confirm"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label for="code">Code from the app</label><input id="code" name="code" type="text" inputmode="numeric" pattern="[0-9 ]*" maxlength="8" autocomplete="one-time-code" required autofocus>
+<div class="actions"><button class="btn" type="submit">Turn on</button></div></form>
+{% elif mfa.on %}
+<p>{{ pill('ok', 'On') }} since {{ mfa.since[:10] }}. You will be asked for a code each time you sign in.</p>
+<p class="sub">Lost your phone? Ask another GRC-pal admin to remove two-step sign-in on Users and roles, then set it up again.</p>
+<h2>Turn off</h2>
+<form method="post" action="/account/mfa/off" data-confirm="Turn off two-step sign-in? Your password alone will then be enough to sign in."><input type="hidden" name="csrf" value="{{ csrf }}">
+<input type="hidden" name="username" value="{{ user.email }}" autocomplete="username">
+<label for="pw">Your password</label><input id="pw" name="password" type="password" autocomplete="current-password" required>
+<div class="actions"><button class="btn ghost" type="submit">Turn off two-step sign-in</button></div></form>
+{% else %}
+<p>{{ pill('stale', 'Off') }} Your password is enough to sign in.</p>
+<form method="post" action="/account/mfa/start"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="actions"><button class="btn" type="submit">Set up two-step sign-in</button></div></form>
+{% endif %}
+</div>
+{% endblock %}
