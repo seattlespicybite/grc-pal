@@ -122,6 +122,29 @@ SHA-256 from the Trivy release's checksums file or ZAP's `ZapVersions.xml`, afte
 file you downloaded. Do not use `aquasecurity/trivy-action` or `setup-trivy`: their tags were hijacked in
 March 2026 (GHSA-69fq-xp46-6x23).
 
+## How authorization is tested
+
+`tests/test_authz.py` is the evidence that "who can do what" holds. For an auditor: pick any route in
+`tests/authz_matrix.py`; the table says which roles may call it, and the suite proves it.
+
+- **Completeness.** Every route of the app (dev and local sign-in modes) must be in the table, and every table
+  entry must be a real route. A new route without an entry fails the suite.
+- **Route by role.** Each route is called as: not signed in, admin, Control owner, a Control owner with nothing
+  assigned, auditor, expired auditor and disabled admin. Allowed roles get through and a POST changes data.
+  Refused roles are refused and a refused POST changes nothing: no table row (except events and sessions), no
+  evidence file, no email. The data is reset to the same starting point after every change.
+- **Object level.** A Control owner asks by ID for controls, requests, uploads, vendors, library versions and
+  access reviews that are not theirs: refused. A second admin (not the library owner) cannot change control
+  definitions or apply a matrix import.
+- **Organizations.** Two organizations share one store. An admin of one asks for every ID-bearing route with the
+  other's IDs, then every page is searched for the other's IDs and names. Nothing is shown or changed.
+- **CSRF.** Every POST refuses a missing token, another person's token and a cross-site Origin.
+- **Downloads.** Every file download is an attachment with a sandbox CSP, `nosniff` and a safe file name.
+- **Empty forms.** Every POST with an empty form answers cleanly, never with a server error.
+
+Limits: the suite uses demo-sized data and a stubbed network; it does not test the identity provider itself or
+the infrastructure around the app.
+
 ## Your responsibilities (complementary controls)
 
 - Keep evidence free of secrets and unnecessary personal data; redact screenshots.
