@@ -35,6 +35,8 @@ program repository for the audit period.
 | `audit_chain_verification.json` | Result of recomputing the chain at export time |
 | `control_status.json` | Control health at export time, including the computed status behind any override |
 | `evidence/` | Every uploaded file |
+| `evidence_run_verification.csv` | Every evidence run dated in the cycle: signature status, the manifest's SHA-256 and the audit-log record that holds the same hash |
+| `evidence_signing_key.pem` | Public key for checking each run's `manifest.sig` yourself |
 | `MANIFEST.csv` | SHA-256 of every file in the zip |
 
 ## Where evidence lives
@@ -42,7 +44,13 @@ program repository for the audit period.
   and the exact evidence source (`collector:`, `tool:`, `task:`, `git:`).
 - Evidence container layout: `<source>/<UTC timestamp>/` with the artifacts (JSON and CSV) and a
   `manifest.json` listing every file's SHA-256, the control IDs, the collector code version
-  (Git commit) and the workflow run URL.
+  (Git commit) and the workflow run URL. Next to it: `SHA256SUMS` (the same hashes in standard
+  `sha256sum` format) and `manifest.sig` (signature of `manifest.json`).
+- Collector runs also record **provenance** in the manifest: each API call (Microsoft Graph, Azure
+  Resource Graph, GitHub) with the request or query, record count, pages, the service's request ID
+  and the app registration (tenant and client ID) that made it. Use it to test completeness and
+  accuracy of the population (IPE): the record count should match the rows in the CSV, and
+  `"truncated": true` marks a list that hit the page limit.
 
 ## Integrity
 - Portal uploads are stored in the same write-once container (`portal_upload/<run>/`), with the
@@ -54,6 +62,25 @@ program repository for the audit period.
 - The container has a locked time-based immutability policy: blobs cannot be modified or deleted
   during retention, including by administrators.
 - Each manifest hash can be recomputed to confirm completeness and accuracy of the artifact.
+
+### Evidence integrity: four layers, and how to test them
+| Layer | Protects against | How to test |
+| --- | --- | --- |
+| SHA-256 of every file (`manifest.json`, `SHA256SUMS`) | A file changed after collection | Download the run folder and run `sha256sum -c SHA256SUMS` |
+| Ed25519 signature of the manifest (`manifest.sig`) | A file **and** its recorded hash both changed | Verify with `evidence_signing_key.pem` from the export, or `grcpal evidence verify --public-key evidence_signing_key.pem` |
+| Manifest hash in the hash-chained audit log (`evidence.sealed`) | Someone holding the signing key rewrites a run | Match `manifest_sha256` in `evidence_run_verification.csv` to the `evidence.sealed` record in `audit_log.csv`; `audit_chain_verification.json` must be OK |
+| Write-once storage (Azure deployments) | Deleting or replacing a run | Inspect the container's locked immutability policy |
+
+Each run's page in the portal (**Evidence > source > run**) re-checks all of this when opened and
+shows **Verified**, **Verified, not in audit log** (collected while the portal was not connected,
+for example from a CI runner), **Legacy** (collected before signing existed; hashes still checked)
+or **Failed** with the reason. A run without a signature that comes after signed runs of the same
+source is reported as failed, so removing a signature cannot hide a change.
+
+Timestamps come from the instance clock (UTC) and, in Azure, also from the storage service's own
+creation time on each blob, which the application cannot set. The signing key is derived from the
+instance's encryption key, so it is restored with the recovery kit; if that key is ever replaced,
+older runs verify only with the public key from an earlier export.
 - Collector code is version-controlled; the `collector_version` in each manifest identifies the
   exact code that produced the evidence.
 

@@ -54,7 +54,7 @@ explain choices in plain words, keep changes small, never leave the test suite r
 | Control matrix (data file export, import with preview/apply, report as print view and Word; admins and auditors download, library owner imports; uploaded file and result kept as `control_matrix_import`/`control_matrix_apply` evidence) | `grcpal/portal/matrix.py` (`MatrixMixin`), routes `routes_matrix.py`, templates `matrix*.html`, reader `xlsx.read_values`, Word writer `grcpal/wordfile.py`, table `matriximports`, tests `tests/test_matrix.py` |
 | Implementation notes per control | `features.py` (`save_control_note`), table `controlnotes`, `control.html` `#notes` |
 | Collectors (Entra, Intune, Azure, AWS, GCP, GitHub) | `grcpal/collectors/*.py` (register in `NAMES` and `PLATFORMS`), clients in `grcpal/clients.py`, `grcpal/integrations/` |
-| Evidence store (write-once, SHA-256 manifests, tenant namespace) | `grcpal/evidence.py` |
+| Evidence store (write-once, SHA-256 manifests, SHA256SUMS, signed manifests, tenant namespace); audit-log seal and verify in `service.py` (`verify_evidence`); provenance in `clients.Clients.queries` | `grcpal/evidence.py`, tests `tests/test_evidence_integrity.py` |
 | Health report | `grcpal/report.py` |
 | Backup file (.grcbak: encrypt, create, verify, restore, recovery kit) | `grcpal/backup.py` |
 | Backup locations, retention, schedule; Backups page rules | `grcpal/backup_store.py`, `grcpal/portal/backups.py`, `routes_backups.py` |

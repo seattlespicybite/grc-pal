@@ -10,7 +10,16 @@
 {% if m.error %}<dt>Error</dt><dd>{{ m.error }}</dd>{% endif %}</dl></section>
 <section class="card"><h2>Files</h2><table><thead><tr><th>File</th><th>Size</th><th>SHA-256</th></tr></thead><tbody>
 {% for f in m.files %}<tr><td><a href="/evidence/{{ source }}/{{ run }}/{{ f.name }}">{{ f.name }}</a></td><td>{{ '{:,}'.format(f.bytes) }} B</td><td class="mono" title="{{ f.sha256 }}">{{ f.sha256[:20] }}…</td></tr>{% endfor %}
-<tr><td><a href="/evidence/{{ source }}/{{ run }}/manifest.json">manifest.json</a></td><td></td><td></td></tr></tbody></table></section></div>
+<tr><td><a href="/evidence/{{ source }}/{{ run }}/manifest.json">manifest.json</a></td><td></td><td></td></tr>
+{% if m.integrity %}<tr><td><a href="/evidence/{{ source }}/{{ run }}/SHA256SUMS">SHA256SUMS</a></td><td></td><td></td></tr>{% if m.integrity.signature %}<tr><td><a href="/evidence/{{ source }}/{{ run }}/manifest.sig">manifest.sig</a></td><td></td><td></td></tr>{% endif %}{% endif %}</tbody></table></section></div>
+<section class="card"><h2>Integrity {{ pill({'verified': 'ok', 'warning': 'findings', 'legacy': 'na'}.get(v.status, 'error'), {'verified': 'Verified', 'warning': 'Verified, not in audit log', 'legacy': 'Legacy (unsigned)'}.get(v.status, 'Failed')) }}</h2>
+<dl class="kv"><dt>File hashes</dt><dd>{{ v.files }} file(s) checked against manifest.json just now</dd>
+<dt>Signature</dt><dd>{% if v.signed %}Ed25519, key <span class="mono">{{ v.key_id }}</span> (<a href="/evidence-signing-key.pem">public key</a>){% elif v.status == 'legacy' %}Collected before signing was added{% else %}Not valid{% endif %}</dd>
+<dt>Audit log</dt><dd>{% if v.anchor %}Record {{ v.anchor.seq }} at {{ v.anchor.at }}{% else %}No record{% endif %}</dd>
+<dt>Manifest SHA-256</dt><dd class="mono">{{ v.manifest_sha256 }}</dd>
+{% if m.provenance %}<dt>Source queries</dt><dd>{% for q in (m.provenance.queries or [])[:20] %}<div class="mono">{{ q.api }}: {{ q.request }} ({{ q.records }} records{% if q.truncated %}, incomplete{% endif %})</div>{% else %}{{ m.provenance.imported_by or 'none recorded' }}{% endfor %}</dd>{% endif %}
+{% if v.problems %}<dt>Problems</dt><dd>{% for x in v.problems %}<div>{{ x }}</div>{% endfor %}</dd>{% endif %}</dl>
+<p class="sub">Check it yourself: download SHA256SUMS and the files, then run <span class="mono">sha256sum -c SHA256SUMS</span>.</p></section>
 {% if m.findings %}<section class="card"><h2>Findings ({{ m.findings_count }})</h2><table><tbody>
 {% for f in m.findings[:200] %}<tr><td>{{ pill('attention' if f.severity == 'high' else 'findings', f.severity) }}</td><td>{{ f.title }}</td></tr>{% endfor %}</tbody></table></section>{% endif %}
 {% endblock %}

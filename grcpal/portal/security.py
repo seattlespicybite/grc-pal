@@ -128,6 +128,8 @@ def safe_filename(name: str) -> str:
 def validate_upload(filename: str, data: bytes) -> str | None:
     """Return an error message, or None if the file is acceptable."""
     ext = os.path.splitext(filename.lower())[1]
+    if filename.lower() in ("manifest.json", "manifest.sig", "sha256sums"):
+        return f"{filename} is a reserved name in the evidence store. Rename the file and upload it again."
     if ext not in ALLOWED_EXTENSIONS:
         return f"File type {ext or '(none)'} is not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
     if not data:
