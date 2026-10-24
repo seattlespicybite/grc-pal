@@ -1,6 +1,8 @@
 """Local accounts (GRCPAL_AUTH_MODE=local): passwords, one-time links, sessions, auditor end dates,
 break-glass admin from the CLI, and the Control owner label."""
+import base64
 import datetime as dt
+import json
 import re
 
 import pytest
@@ -10,10 +12,11 @@ from grcpal import cli
 from grcpal.portal import accounts, auth
 from grcpal.portal.app import create_app
 from grcpal.portal.service import Invalid
-from test_portal import ADMIN, AUDITOR, CONTRIB, TODAY, make_portal
+from test_portal import ADMIN, ADMIN2, AUDITOR, CONTRIB, HR, TODAY, make_portal
 
 PW = "correct horse battery"
-TOKEN_URL = re.compile(r"https://grc\.example\.com(/account/password/[A-Za-z0-9_-]+)")
+# Password links carry their token after "#", so it never reaches the server's request line or logs.
+TOKEN_URL = re.compile(r"https://grc\.example\.com/account/password#([A-Za-z0-9_-]+)")
 
 
 @pytest.fixture(autouse=True)
@@ -39,8 +42,15 @@ def form_csrf(html):
 
 
 def set_password(portal, who, password=PW):
-    path = TOKEN_URL.search(portal.setup_link(ADMIN, who.email)).group(1)
-    portal.set_password_with_link(path.rsplit("/", 1)[1], password)
+    token = TOKEN_URL.search(portal.setup_link(ADMIN, who.email)).group(1)
+    portal.set_password_with_link(portal.open_link(token), password)
+
+
+def open_link(client, token):
+    """What the browser does with an emailed link: the page posts the token from the fragment once and gets the
+    password form (bound to a short-lived cookie)."""
+    page = client.get("/account/password")
+    return client.post("/account/password/open", data={"token": token, "csrf": form_csrf(page.text)})
 
 
 def sign_in(client, email, password=PW, next="/"):
@@ -79,13 +89,14 @@ def test_default_auth_mode_is_local(monkeypatch):
 def test_setup_link_sets_password_once_then_sign_in_works(env):
     portal, client = env
     url = portal.setup_link(ADMIN, CONTRIB.email)
-    path = TOKEN_URL.search(url).group(1)
-    assert any(path in m.text for m in portal.mailer.outbox if m.to == CONTRIB.email)  # emailed too
-    page = client.get(path)
+    token = TOKEN_URL.search(url).group(1)
+    assert any(url in m.text for m in portal.mailer.outbox if m.to == CONTRIB.email)  # emailed too
+    page = open_link(client, token)
     assert page.status_code == 200 and "Choose a password" in page.text
-    r = client.post(path, data={"password": PW, "confirm": PW, "csrf": form_csrf(page.text)}, follow_redirects=False)
+    r = client.post("/account/password", data={"password": PW, "confirm": PW, "csrf": form_csrf(page.text)},
+                    follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].startswith("/login")
-    again = client.get(path)
+    again = open_link(client, token)
     assert "expired or was already used" in again.text  # single use
     r = sign_in(client, CONTRIB.email)
     assert r.status_code == 303 and r.headers["location"] == "/"
@@ -96,23 +107,22 @@ def test_setup_link_sets_password_once_then_sign_in_works(env):
 
 def test_setup_form_rejects_mismatch_and_weak_password(env):
     portal, client = env
-    path = TOKEN_URL.search(portal.setup_link(ADMIN, CONTRIB.email)).group(1)
-    page = client.get(path)
-    r = client.post(path, data={"password": PW, "confirm": PW + "!", "csrf": form_csrf(page.text)})
+    page = open_link(client, TOKEN_URL.search(portal.setup_link(ADMIN, CONTRIB.email)).group(1))
+    r = client.post("/account/password", data={"password": PW, "confirm": PW + "!", "csrf": form_csrf(page.text)})
     assert "do not match" in r.text
-    r = client.post(path, data={"password": "short", "confirm": "short", "csrf": form_csrf(page.text)})
+    r = client.post("/account/password", data={"password": "short", "confirm": "short", "csrf": form_csrf(page.text)})
     assert "at least 12" in r.text
     assert not portal.user_row(CONTRIB.email).get("password_hash")
 
 
 def test_expired_link_is_refused(env):
     portal, client = env
-    path = TOKEN_URL.search(portal.setup_link(ADMIN, CONTRIB.email)).group(1)
+    token = TOKEN_URL.search(portal.setup_link(ADMIN, CONTRIB.email)).group(1)
     for row in portal.store.list("account_links", "l"):
         portal.store.update("account_links", "l", row["RowKey"], {"expires": "2000-01-01T00:00:00+00:00"})
-    assert "expired or was already used" in client.get(path).text
+    assert "expired or was already used" in open_link(client, token).text
     with pytest.raises(Invalid):
-        portal.set_password_with_link(path.rsplit("/", 1)[1], PW)
+        portal.set_password_with_link(token, PW)
 
 
 def test_only_admins_create_links(env):
@@ -206,10 +216,9 @@ def test_self_service_reset_same_answer_for_unknown_email(env):
     assert msg in known.text and msg in unknown.text
     mails = list(portal.mailer.outbox)
     assert len(mails) == 1 and mails[0].to == CONTRIB.email
-    path = TOKEN_URL.search(mails[0].text).group(1)
-    page = client.get(path)
-    client.post(path, data={"password": "brand new passphrase", "confirm": "brand new passphrase",
-                            "csrf": form_csrf(page.text)})
+    page = open_link(client, TOKEN_URL.search(mails[0].text).group(1))
+    client.post("/account/password", data={"password": "brand new passphrase", "confirm": "brand new passphrase",
+                                           "csrf": form_csrf(page.text)})
     assert sign_in(client, CONTRIB.email, "brand new passphrase").status_code == 303
     assert not portal.store.list("account_links", "l")  # used link is gone
 
@@ -297,7 +306,7 @@ def test_cli_create_admin_refuses_mismatch(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------- pages
-@pytest.mark.parametrize("path", ["/login", "/account/forgot", "/account/password/not-a-real-token"])
+@pytest.mark.parametrize("path", ["/login", "/account/forgot", "/account/password"])
 def test_public_account_pages_render_with_strict_csp(env, path):
     _, client = env
     r = client.get(path)
@@ -452,3 +461,312 @@ def test_sign_out_is_a_post_with_a_form_token(env):
     assert r.status_code == 303 and r.headers["location"] == "/login?out=1"
     assert client.get("/", follow_redirects=False).status_code == 303
     assert "auth.signout" in audit_actions(portal)
+
+
+# ================================================================ B6: local sign-in hardening
+def _security(portal, text):
+    return [e for e in portal.events.search(category="security") if text in e["message"]]
+
+
+def _age_limits(portal, minutes):
+    """Move every sign-in limit back in time, as if `minutes` had passed."""
+    for row in portal.store.list("signinlimits", "k"):
+        fields = {}
+        for k in ("first", "locked_until"):
+            if row.get(k):
+                fields[k] = (dt.datetime.fromisoformat(row[k]) - dt.timedelta(minutes=minutes)).isoformat()
+        portal.store.update("signinlimits", "k", row["RowKey"], fields)
+
+
+# ---------------------------------------------------------------- reset links: token never in a URL path
+def test_password_links_keep_the_token_out_of_the_url_path(env, caplog):
+    import json
+    import logging
+
+    portal, client = env
+    url = portal.setup_link(ADMIN, CONTRIB.email)
+    token = TOKEN_URL.search(url).group(1)
+    assert f"/account/password/{token}" not in url  # after "#": browsers never send it to the server
+    with caplog.at_level(logging.INFO, logger="grcpal"):
+        page = open_link(client, token)
+        client.post("/account/password", data={"password": PW, "confirm": PW, "csrf": form_csrf(page.text)})
+    assert not any(token in json.dumps(getattr(r, "fields", {})) + r.getMessage() for r in caplog.records)
+    assert portal.user_row(CONTRIB.email).get("password_hash")
+
+
+def test_old_style_links_still_work_without_reaching_the_form_by_path(env):
+    portal, client = env
+    token = TOKEN_URL.search(portal.setup_link(ADMIN, CONTRIB.email)).group(1)
+    r = client.get(f"/account/password/{token}", follow_redirects=False)  # links mailed before the upgrade
+    assert r.status_code == 303 and r.headers["location"] == f"/account/password#{token}"
+    assert client.post(f"/account/password/{token}", data={"password": PW, "confirm": PW}).status_code in (404, 405)
+
+
+def test_a_link_is_exchanged_once_for_a_short_lived_form(env):
+    portal, client = env
+    token = TOKEN_URL.search(portal.setup_link(ADMIN, CONTRIB.email)).group(1)
+    page = open_link(client, token)
+    assert "Choose a password" in page.text
+    assert "expired or was already used" in open_link(client, token).text  # the emailed token is spent
+    # the form it opened lasts minutes, not the link's 72 hours
+    row = next(r for r in portal.store.list("account_links", "l") if r.get("stage") == "form")
+    assert dt.datetime.fromisoformat(row["expires"]) - accounts.utcnow() <= dt.timedelta(minutes=16)
+    portal.store.update("account_links", "l", row["RowKey"], {"expires": "2000-01-01T00:00:00+00:00"})
+    r = client.post("/account/password", data={"password": PW, "confirm": PW, "csrf": form_csrf(page.text)})
+    assert "expired or was already used" in r.text
+    assert not portal.user_row(CONTRIB.email).get("password_hash")
+
+
+def test_raw_link_tokens_cannot_set_a_password_directly(env):
+    portal, _ = env
+    token = TOKEN_URL.search(portal.setup_link(ADMIN, CONTRIB.email)).group(1)
+    with pytest.raises(Invalid):
+        portal.set_password_with_link(token, PW)  # only the form token from the exchange can
+
+
+# ---------------------------------------------------------------- self-service reset
+def test_admins_and_break_glass_cannot_reset_by_email(env):
+    portal, client = env
+    set_password(portal, ADMIN)
+    portal.store.update("users", "u", HR.email, {"local_only": True})
+    portal.mailer.outbox.clear()
+    page = client.get("/account/forgot")
+    for who in (ADMIN.email, HR.email):
+        r = client.post("/account/forgot", data={"email": who, "csrf": form_csrf(page.text)})
+        assert r.status_code == 200 and "If that email belongs to an active account" in r.text  # same answer
+    assert not portal.mailer.outbox and not portal.store.list("account_links", "l")
+    assert len(_security(portal, "Self-service password reset refused")) == 2
+    assert audit_actions(portal).count("account.reset_refused") == 2
+
+
+def test_reset_requests_are_limited_per_account(env):
+    portal, _ = env
+    portal.mailer.outbox.clear()
+    for _ in range(6):
+        portal.request_reset(CONTRIB.email, ip="203.0.113.5")
+    assert len([m for m in portal.mailer.outbox if m.to == CONTRIB.email]) == accounts.RESET_PER_ACCOUNT
+    assert _security(portal, "Password reset requests paused")
+    _age_limits(portal, 61)
+    portal.request_reset(CONTRIB.email, ip="203.0.113.5")
+    assert len(portal.mailer.outbox) == accounts.RESET_PER_ACCOUNT + 1
+
+
+def test_reset_requests_are_limited_per_address(env):
+    portal, _ = env
+    portal.mailer.outbox.clear()
+    for i in range(accounts.RESET_PER_IP):
+        portal.request_reset(f"nobody{i}@example.com", ip="203.0.113.5")
+    portal.request_reset(CONTRIB.email, ip="203.0.113.5")
+    assert not portal.mailer.outbox
+    portal.request_reset(CONTRIB.email, ip="198.51.100.7")
+    assert len(portal.mailer.outbox) == 1
+
+
+def test_reset_work_runs_after_the_answer(env):
+    """The page answers before the account is even looked up, so its timing says nothing about the account."""
+    import threading
+
+    portal, client = env
+    portal.mailer.sync = False
+    gate, done = threading.Event(), threading.Event()
+
+    def slow(email, ip):
+        gate.wait(5)
+        done.set()
+
+    portal._reset_work = slow
+    page = client.get("/account/forgot")
+    r = client.post("/account/forgot", data={"email": CONTRIB.email, "csrf": form_csrf(page.text)})
+    assert r.status_code == 200 and not done.is_set()
+    gate.set()
+    assert done.wait(5)
+
+
+# ---------------------------------------------------------------- sign-in limits
+def test_sign_in_locks_after_repeated_failures_with_growing_waits(env, monkeypatch):
+    portal, _ = env
+    set_password(portal, CONTRIB)
+    for _ in range(accounts.LOGIN_FREE_PER_ACCOUNT):
+        with pytest.raises(auth.AuthError) as exc:
+            portal.sign_in(CONTRIB.email, "wrong password here", ip="203.0.113.5")
+        assert exc.value.status == 401
+    with pytest.raises(auth.AuthError):
+        portal.sign_in(CONTRIB.email, "wrong password here", ip="203.0.113.5")  # this one starts a 1-minute lock
+    assert _security(portal, "Sign-in locked")
+    checks = []
+    monkeypatch.setattr(accounts, "verify_password", lambda *a: checks.append(1) or True)
+    with pytest.raises(auth.AuthError) as exc:
+        portal.sign_in(CONTRIB.email, PW, ip="198.51.100.7")  # the right password, even from elsewhere
+    assert exc.value.status == 429 and "minute" in str(exc.value)
+    assert not checks  # refused before any password hashing (no CPU spent)
+    monkeypatch.undo()
+    monkeypatch.setattr(accounts, "SCRYPT", {"n": 2 ** 10, "r": 8, "p": 1})
+    _age_limits(portal, 2)
+    with pytest.raises(auth.AuthError):
+        portal.sign_in(CONTRIB.email, "wrong password here", ip="203.0.113.5")
+    row = next(r for r in portal.store.list("signinlimits", "k") if r.get("kind") == "login-account")
+    lock = dt.datetime.fromisoformat(row["locked_until"]) - accounts.utcnow()
+    assert dt.timedelta(minutes=1, seconds=30) < lock <= dt.timedelta(minutes=2)  # the wait doubles
+    _age_limits(portal, 3)
+    assert portal.sign_in(CONTRIB.email, PW, ip="203.0.113.5")
+    assert not any(r.get("kind") == "login-account" for r in portal.store.list("signinlimits", "k"))  # success clears
+
+
+def test_lockout_looks_the_same_for_unknown_accounts(env):
+    portal, client = env
+    set_password(portal, CONTRIB)
+    answers = []
+    for email in (CONTRIB.email, "nobody@example.com"):
+        for _ in range(accounts.LOGIN_FREE_PER_ACCOUNT + 1):
+            sign_in(client, email, "wrong password here")
+        r = sign_in(client, email, "wrong password here")
+        answers.append((r.status_code, "Too many failed sign-in attempts" in r.text))
+    assert answers[0] == answers[1] == (429, True)
+
+
+def test_sign_in_is_limited_per_address(env):
+    portal, _ = env
+    set_password(portal, CONTRIB)
+    for i in range(accounts.LOGIN_FREE_PER_IP + 1):
+        with pytest.raises(auth.AuthError):
+            portal.sign_in(f"spray{i}@example.com", "Winter2026!", ip="203.0.113.5")
+    with pytest.raises(auth.AuthError) as exc:
+        portal.sign_in(CONTRIB.email, PW, ip="203.0.113.5")
+    assert exc.value.status == 429
+    assert portal.sign_in(CONTRIB.email, PW, ip="198.51.100.7")  # other addresses are not affected
+
+
+def test_password_checks_are_capped(env, monkeypatch):
+    import threading
+
+    portal, _ = env
+    set_password(portal, CONTRIB)
+    monkeypatch.setattr(accounts, "_CHECKS", threading.BoundedSemaphore(1))
+    monkeypatch.setattr(accounts, "CHECK_WAIT_SECONDS", 0.05)
+    accounts._CHECKS.acquire()  # another sign-in is hashing
+    try:
+        with pytest.raises(auth.AuthError) as exc:
+            portal.sign_in(CONTRIB.email, PW, ip="203.0.113.5")
+        assert exc.value.status == 503
+    finally:
+        accounts._CHECKS.release()
+    assert portal.sign_in(CONTRIB.email, PW, ip="203.0.113.5")
+
+
+# ---------------------------------------------------------------- two-step sign-in (TOTP)
+def test_totp_matches_the_rfc_6238_test_vectors():
+    secret = base64.b32encode(b"12345678901234567890").decode()
+    assert accounts.totp_code(secret, 59 // 30, digits=8) == "94287082"
+    assert accounts.totp_code(secret, 1111111109 // 30, digits=8) == "07081804"
+    assert accounts.totp_code(secret, 59 // 30) == "287082"
+
+
+def _turn_on_mfa(client):
+    page = client.get("/account/mfa")
+    assert page.status_code == 200
+    r = client.post("/account/mfa/start", data={"csrf": form_csrf(page.text)})
+    secret = re.search(r'data-secret="([A-Z2-7]+)"', r.text).group(1)
+    assert "otpauth://totp/" in r.text
+    code = accounts.totp_code(secret, accounts._step())
+    r = client.post("/account/mfa/confirm", data={"code": code, "csrf": form_csrf(r.text)}, follow_redirects=False)
+    assert r.status_code == 303
+    return secret
+
+
+def test_admin_turns_on_two_step_sign_in(env):
+    portal, client = env
+    set_password(portal, ADMIN)
+    sign_in(client, ADMIN.email)
+    secret = _turn_on_mfa(client)
+    row = portal.user_row(ADMIN.email)
+    assert row.get("totp_secret") and secret not in json.dumps(row)  # stored encrypted
+    assert "account.mfa_on" in audit_actions(portal)
+    client.cookies.clear()
+    page = client.get("/login")
+    data = {"email": ADMIN.email, "password": PW, "next": "/", "csrf": form_csrf(page.text)}
+    r = client.post("/login", data=data, follow_redirects=False)
+    assert r.status_code == 401 and "6-digit code" in r.text
+    r = client.post("/login", data={**data, "code": "000000" if accounts.totp_code(secret, accounts._step()) != "000000"
+                                     else "111111"}, follow_redirects=False)
+    assert r.status_code == 401
+    code = accounts.totp_code(secret, accounts._step() + 1)  # the confirm used this step's code; the next one is new
+    assert client.post("/login", data={**data, "code": code}, follow_redirects=False).status_code == 303
+    client.cookies.clear()
+    page = client.get("/login")
+    r = client.post("/login", data={**data, "csrf": form_csrf(page.text), "code": code}, follow_redirects=False)
+    assert r.status_code == 401  # a code works once
+
+
+def test_wrong_codes_count_towards_the_lock(env):
+    portal, client = env
+    set_password(portal, ADMIN)
+    sign_in(client, ADMIN.email)
+    secret = _turn_on_mfa(client)
+    good = accounts.totp_code(secret, accounts._step() + 1)
+    bad = "123456" if good != "123456" else "654321"
+    for _ in range(accounts.LOGIN_FREE_PER_ACCOUNT + 1):
+        with pytest.raises(auth.AuthError):
+            portal.sign_in(ADMIN.email, PW, ip="203.0.113.5", code=bad)
+    with pytest.raises(auth.AuthError) as exc:
+        portal.sign_in(ADMIN.email, PW, ip="203.0.113.5", code=good)
+    assert exc.value.status == 429
+
+
+def test_turning_two_step_off_needs_the_password(env):
+    portal, client = env
+    set_password(portal, ADMIN)
+    sign_in(client, ADMIN.email)
+    _turn_on_mfa(client)
+    page = client.get("/account/mfa")
+    r = client.post("/account/mfa/off", data={"password": "not my password", "csrf": form_csrf(page.text)})
+    assert r.status_code == 400 and portal.user_row(ADMIN.email).get("totp_secret")
+    r = client.post("/account/mfa/off", data={"password": PW, "csrf": form_csrf(page.text)}, follow_redirects=False)
+    assert r.status_code == 303 and not portal.user_row(ADMIN.email).get("totp_secret")
+    assert "account.mfa_off" in audit_actions(portal)
+
+
+def test_admin_resets_a_lost_authenticator_and_others_cannot(env):
+    from grcpal.portal.service import Forbidden
+
+    portal, client = env
+    set_password(portal, ADMIN2)
+    sign_in(client, ADMIN2.email)
+    _turn_on_mfa(client)
+    with pytest.raises(Forbidden):
+        portal.reset_mfa(CONTRIB, ADMIN2.email)
+    set_password(portal, ADMIN)
+    sign_in(client, ADMIN.email)
+    page = client.get("/users")
+    assert f"/users/{ADMIN2.email.replace('@', '%40')}/mfa" in page.text
+    r = client.post(f"/users/{ADMIN2.email}/mfa", data={"csrf": form_csrf(page.text)}, follow_redirects=False)
+    assert r.status_code == 303 and not portal.user_row(ADMIN2.email).get("totp_secret")
+    assert "account.mfa_reset" in audit_actions(portal)
+
+
+def test_break_glass_from_the_server_clears_two_step(env):
+    portal, client = env
+    set_password(portal, ADMIN)
+    sign_in(client, ADMIN.email)
+    _turn_on_mfa(client)
+    portal.create_local_admin(ADMIN.email, "Admin", "a brand new break glass phrase")
+    assert not portal.user_row(ADMIN.email).get("totp_secret")
+
+
+# ---------------------------------------------------------------- request size (F-13)
+def test_oversized_request_bodies_are_refused_before_parsing(env, monkeypatch):
+    from grcpal.portal import security
+
+    _, client = env
+    monkeypatch.setattr(security, "MAX_BODY_BYTES", 2048)
+    page = client.get("/account/forgot")
+    big = {"email": "x" * 4096 + "@example.com", "csrf": form_csrf(page.text)}
+    r = client.post("/account/forgot", data=big)
+    assert r.status_code == 413 and "Content-Security-Policy" in r.headers
+
+    def chunks():  # no Content-Length: counted while it streams
+        for _ in range(8):
+            yield b"email=" + b"x" * 1024
+
+    r = client.post("/account/forgot", content=chunks(), headers={"content-type": "application/x-www-form-urlencoded"})
+    assert r.status_code == 413
+    assert client.post("/account/forgot", data={"email": CONTRIB.email, "csrf": form_csrf(page.text)}).status_code == 200

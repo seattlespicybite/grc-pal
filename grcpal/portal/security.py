@@ -25,6 +25,9 @@ SECURITY_HEADERS = {
 }
 
 MAX_UPLOAD_BYTES = int(os.getenv("GRCPAL_MAX_UPLOAD_MB", "25")) * 1024 * 1024
+# Largest request body accepted at all (the largest upload plus room for the form around it). Checked before the
+# body is read or spooled to disk, so an oversized request costs nothing (BodyLimit below).
+MAX_BODY_BYTES = int(os.getenv("GRCPAL_MAX_BODY_MB", "0") or 0) * 1024 * 1024 or MAX_UPLOAD_BYTES + 5 * 1024 * 1024
 ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".csv", ".xlsx", ".docx", ".pptx", ".txt", ".json", ".md", ".eml"}
 # Leading bytes for binary formats; text formats must decode as UTF-8 and contain no NUL bytes.
 MAGIC = {
@@ -188,3 +191,56 @@ def client_ip(headers, peer: str | None) -> str:
         if len(parts) >= hops:
             return _address(parts[-hops])
     return _address(peer or "")
+
+
+class BodyTooLarge(Exception):
+    """A request body passed MAX_BODY_BYTES while it was being read."""
+
+
+class BodyLimit:
+    """ASGI middleware: refuse request bodies larger than MAX_BODY_BYTES with 413, before anything parses them.
+    A declared Content-Length is checked up front; a body without one is counted as it arrives."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        limit = MAX_BODY_BYTES
+        declared = dict(scope.get("headers") or ()).get(b"content-length", b"")
+        if declared.isdigit() and int(declared) > limit:
+            return await self._refuse(send)
+        state = {"seen": 0, "over": False, "started": False}
+
+        async def counted():
+            message = await receive()
+            if message["type"] == "http.request":
+                state["seen"] += len(message.get("body", b""))
+                if state["seen"] > limit:
+                    state["over"] = True
+                    raise BodyTooLarge()
+            return message
+
+        async def watched(message):
+            if state["over"]:  # whatever the app answers to the cut-off body (often a 400), send 413 instead
+                if message["type"] == "http.response.start" and not state["started"]:
+                    state["started"] = True
+                    await self._refuse(send)
+                return
+            state["started"] = state["started"] or message["type"] == "http.response.start"
+            await send(message)
+
+        try:
+            await self.app(scope, counted, watched)
+        except BodyTooLarge:
+            if not state["started"]:
+                await self._refuse(send)
+
+    @staticmethod
+    async def _refuse(send):
+        body = b"Request too large."
+        await send({"type": "http.response.start", "status": 413,
+                    "headers": [(b"content-type", b"text/plain; charset=utf-8"),
+                                (b"content-length", str(len(body)).encode()), (b"connection", b"close")]})
+        await send({"type": "http.response.body", "body": body})

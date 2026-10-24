@@ -30,7 +30,7 @@ from grcpal.portal.accounts import SESSION_COOKIE, SESSION_HOURS
 from grcpal.portal.auth import (DEV_COOKIE, ROLE_HELP, ROLE_LABELS, ROLES, AuthError, User, auth_mode,
                                 identity_from_request)
 from grcpal.portal.observability import configure_logging, current_actor, event, new_request_id, request_id
-from grcpal.portal.security import (MAX_UPLOAD_BYTES, SECURITY_HEADERS, clear_cookie, client_ip, cookie_name, csrf_token,
+from grcpal.portal.security import (MAX_UPLOAD_BYTES, BodyLimit, SECURITY_HEADERS, clear_cookie, client_ip, cookie_name, csrf_token,
                                     csrf_valid, legacy_cookies, read_cookie, session_binding, set_cookie)
 from grcpal.portal.service import Forbidden, Invalid, Portal
 
@@ -104,6 +104,10 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     templates.env.globals["logout_url"] = logout_url
 
     # ------------------------------------------------------------------ middleware
+    # Inner to trace_and_secure (added first), so a refused oversized body still gets the security headers and a
+    # request log line.
+    app.add_middleware(BodyLimit)
+
     @app.middleware("http")
     async def trace_and_secure(request: Request, call_next):
         rid = new_request_id(request.headers.get("x-request-id"))
@@ -855,6 +859,15 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             return back("/users", err=str(exc))
         return back("/users", msg=f"{email} is no longer linked to a Microsoft Entra account; their next sign-in links one")
 
+    @app.post("/users/{email}/mfa")
+    def reset_mfa(request: Request, email: str, csrf: str = Form(""), user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        try:
+            p().reset_mfa(user, email)
+        except (Invalid, Forbidden) as exc:
+            return back("/users", err=str(exc))
+        return back("/users", msg=f"Two-step sign-in removed for {email.lower()}; they can set it up again")
+
     @app.post("/users/{email}/active")
     def set_active(request: Request, email: str, active: str = Form(...), csrf: str = Form(""),
                    user: User = Depends(current_user)):
@@ -956,7 +969,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     if mode == "local":
         routes_accounts.register(app, SimpleNamespace(p=p, templates=templates, HTTPError=_HTTPError, ip_of=ip_of,
                                                       check_csrf=check_csrf, safe_dest=safe_dest,
-                                                      form_token=form_token, current_user=current_user))
+                                                      form_token=form_token, current_user=current_user,
+                                                      render=render))
 
     routes_extra.register(app, SimpleNamespace(
         p=p, current_user=current_user, need=need, check_csrf=check_csrf, render=render, back=back,
@@ -1049,7 +1063,7 @@ def _remind_msg(r: dict) -> str:
     return msg
 
 
-_SECRET_PATHS = re.compile(r"^(/account/password/)[^/]+")
+_SECRET_PATHS = re.compile(r"^(/account/password/)(?!open$)[^/]+")
 
 
 def _log_path(path: str) -> str:

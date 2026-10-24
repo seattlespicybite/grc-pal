@@ -3,7 +3,8 @@
 <div class="card">
 <h1>Forgot your password?</h1>
 {% if sent %}<div class="flash ok" role="status">If that email belongs to an active account, we sent a link to choose a new password. It works once and expires in 1 hour.</div>
-<p class="sub">No email? GRC-pal may not be set up to send email yet. Ask a GRC-pal admin for a password link.</p>
+<p class="sub">No email? GRC-pal may not be set up to send email yet. Ask a GRC-pal admin for a password link.
+Admins cannot reset their own password by email: ask another admin, or run <span class="mono">grcpal create-admin</span> on the server.</p>
 {% else %}<p class="sub">Enter your work email. We will send you a link to choose a new password.</p>
 <form method="post" action="/account/forgot"><input type="hidden" name="csrf" value="{{ csrf }}">
 <label for="e">Work email</label><input id="e" name="email" type="email" autocomplete="username" required autofocus>

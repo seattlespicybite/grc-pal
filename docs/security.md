@@ -17,6 +17,9 @@ remains your responsibility. To report a vulnerability, see [SECURITY.md](../SEC
 | Approving your own work | Uploader can never review their upload |
 | Malicious upload (script, malware disguised as PDF) | Extension allow-list, magic-byte check, UTF-8 check for text, size limit, files served only as downloads with `Content-Disposition: attachment`, a sandbox CSP and HTML/SVG forced to `octet-stream` |
 | Cross-site scripting | Server-rendered templates with auto-escaping; strict CSP with no inline script or style; no third-party scripts or fonts |
+| Password guessing and spraying against local accounts | Lockout per account (5 failures in 15 minutes) and per address (20), with waits that double up to 15 minutes, refused before any password hashing and identical for unknown accounts; every failure and lock is a security event; optional two-step sign-in (authenticator app) for local accounts |
+| Flooding sign-in to exhaust the server | At most `GRCPAL_MAX_PASSWORD_CHECKS` password hashes at once; locked sign-ins cost no hashing; request bodies above `GRCPAL_MAX_BODY_MB` refused before they are read |
+| Password reset abused (mailbox takeover, flooding, finding accounts) | No self-service reset for admins or the break-glass account; at most 3 reset emails per account and 10 requests per address per hour; same answer and timing for every address (the work runs after the reply); link tokens sit after `#` so they never reach logs, and are swapped once for a 15-minute form |
 | Cross-site request forgery | HMAC token on every form, tied to the person and their sign-in session (local session, Easy Auth or proxy session cookie) and renewed at every sign-in, valid 12 to 24 hours, plus an Origin check |
 | Open redirect | Return URLs limited to same-site paths |
 | Clickjacking | `frame-ancestors 'none'` and `X-Frame-Options: DENY` |
@@ -138,11 +141,12 @@ March 2026 (GHSA-69fq-xp46-6x23).
 
 ## Accepted risks for the internal VM proof of concept
 
-Local accounts have **no MFA and no lockout after failed attempts** yet. This is accepted only
-because the portal is reachable from the internal network alone. Failed sign-ins are recorded on the
-Logs page (category security) so you can spot guessing. Before the portal is reachable from outside
-the internal network, add MFA and lockout (roadmap), or use Entra SSO (next release) with
-Conditional Access. Also:
+Local accounts lock after repeated failed sign-ins and offer optional two-step sign-in with an
+authenticator app, but two-step sign-in is not enforced, and an address-based limit can be spread
+over many addresses. Failed sign-ins and locks are recorded on the Logs page (category security).
+Turn on two-step sign-in for every admin. For a portal reachable from outside the internal network,
+use Entra sign-in (Azure Easy Auth or a proxy) with Conditional Access MFA, and keep local sign-in
+for the break-glass admin only. Also:
 
 - Use HTTPS; without it passwords cross the network in clear text. The Setup guide flags it.
 - Whoever administers the VM can read the database and evidence folder. Limit VM admin access and

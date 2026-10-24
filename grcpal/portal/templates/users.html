@@ -26,12 +26,15 @@ description, evidence wanted and framework mappings. Other admins run the progra
 <label class="sub" for="until-{{ loop.index }}">Access ends</label> <input id="until-{{ loop.index }}" name="access_until" type="date" value="{{ u.access_until or '' }}" min="{{ today }}">
 <button class="btn small ghost" type="submit">Save</button>{% if not u.access_until %} <span class="sub">No end date set</span>{% endif %}</form>{% endif %}</td>
 <td>{% if not u.active %}{{ pill('cancelled', 'Disabled') }}{% elif u.access_until and u.access_until < today %}{{ pill('stale', 'Access ended') }}{% else %}{{ pill('ok', 'Active') }}{% endif %}
-{% if auth_mode == 'local' and u.active and not u.password_hash %}<div class="sub">No password yet</div>{% endif %}</td>
+{% if auth_mode == 'local' and u.active and not u.password_hash %}<div class="sub">No password yet</div>{% endif %}
+{% if auth_mode == 'local' and u.totp_secret %}<div class="sub">Two-step sign-in on</div>{% endif %}</td>
 <td class="sub">{{ u.source }}<br>{{ u.created_at[:10] }} by {{ u.created_by }}</td><td class="sub">{{ when(u.last_seen) if u.last_seen else 'never' }}</td>
 <td><div class="actions-cell">{% if auth_mode == 'local' and u.active %}<form method="post" action="/users/{{ u.RowKey|urlencode }}/link" data-confirm="Create a new password link for {{ u.RowKey }}? Any earlier link stops working; their current password keeps working until they use it.">
 <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small ghost" type="submit">{{ 'Reset password' if u.password_hash else 'Password link' }}</button></form>{% endif %}
 {% if u.role == 'admin' and u.active and u.RowKey != library_owner and (not library_owner or user.email == library_owner) %}<form method="post" action="/users/{{ u.RowKey|urlencode }}/library-owner" data-confirm="Make {{ u.RowKey }} the control library owner? {{ 'You will no longer be able to change control definitions.' if library_owner else 'Only this person will be able to change control definitions.' }}">
 <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small ghost" type="submit">{{ 'Hand over control library' if library_owner else 'Make control library owner' }}</button></form>{% endif %}
+{% if auth_mode == 'local' and u.totp_secret %}<form method="post" action="/users/{{ u.RowKey|urlencode }}/mfa" data-confirm="Remove two-step sign-in for {{ u.RowKey }}? Do this only after confirming who is asking (for example a lost phone). Their sessions end; they sign in with their password and can set it up again.">
+<input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ghost small" type="submit">Remove two-step sign-in</button></form>{% endif %}
 {% if u.entra_oid %}<form method="post" action="/users/{{ u.RowKey|urlencode }}/identity" data-confirm="Unlink {{ u.RowKey }} from its Microsoft Entra account? Do this only after checking who now holds this email address: the next person to sign in with it will be linked.">
 <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ghost small" type="submit">Unlink Entra account</button></form>{% endif %}
 <form method="post" action="/users/{{ u.RowKey|urlencode }}/active" {% if u.active %}data-confirm="Disable {{ u.RowKey }}? They will lose access immediately."{% endif %}>

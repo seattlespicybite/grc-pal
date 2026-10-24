@@ -66,6 +66,7 @@ Every Configuration save is in the audit log and is emailed to all admins (the p
 | `GRCPAL_LOGOUT_URL` | `/oauth2/sign_out` | proxy mode: sign-out link |
 | `GRCPAL_PROXY_SESSION_COOKIE` | `_oauth2_proxy` | proxy mode: name (or name prefix) of the proxy's session cookie; form tokens are tied to it so they change at every sign-in |
 | `GRCPAL_ADMIN_IDLE_MINUTES` | `30` | local mode: an admin session unused for this many minutes ends. Other roles keep the 8-hour session limit |
+| `GRCPAL_MAX_PASSWORD_CHECKS` | `4` | local mode: password checks running at once (each uses about 32 MiB). Further sign-ins wait up to 5 seconds, then are asked to try again |
 | `GRCPAL_DEV_PRINCIPAL` | (empty) | dev mode: default user as JSON, e.g. `{"email":"me@example.com"}` |
 
 `proxy` mode reads the signed-in email from a header, which anyone who reaches the app directly could also
@@ -95,6 +96,7 @@ sign-in links the new account. Both steps are in the audit log (`user.identity_b
 | `GRCPAL_EVIDENCE_CONTAINER` | `evidence` | Container name |
 | `GRCPAL_EVIDENCE_DIR` | `evidence` | Local evidence folder (also a cache in production) |
 | `GRCPAL_MAX_UPLOAD_MB` | `25` | Upload size limit |
+| `GRCPAL_MAX_BODY_MB` | upload limit + 5 | Largest request accepted at all; larger requests get 413 before they are read |
 
 ## Email
 

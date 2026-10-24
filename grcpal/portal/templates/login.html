@@ -8,6 +8,7 @@
 <form method="post" action="/login"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ next }}">
 <label for="e">Work email</label><input id="e" name="email" type="email" value="{{ email }}" autocomplete="username" required autofocus>
 <label for="pw">Password</label><input id="pw" name="password" type="password" autocomplete="current-password" required>
+<label for="otp">Code from your authenticator app <span class="sub">(only if you set up two-step sign-in)</span></label><input id="otp" name="code" type="text" inputmode="numeric" pattern="[0-9 ]*" maxlength="8" autocomplete="one-time-code">
 <div class="actions"><button class="btn" type="submit">Sign in</button> <a href="/account/forgot">Forgot password?</a></div></form>
 </div>
 {% if first_admin %}<div class="card"><h2>First time here?</h2>
