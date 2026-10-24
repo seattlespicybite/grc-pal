@@ -62,7 +62,8 @@
     </nav>
     <div class="side-user"><b>{{ user.name }}</b>{{ user.email }}
       <div class="mt-s"><span class="role role-{{ user.role }}">{{ role_labels[user.role] }}</span> <span class="sub-dark">Cycle: {{ cycle.name }}</span></div>
-      <a class="signout" href="{{ logout_url }}">{{ 'Switch user' if auth_mode == 'dev' else 'Sign out' }}</a></div>
+      {% if auth_mode == 'local' %}<form method="post" action="/logout" class="signout-form"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="signout" type="submit">Sign out</button></form>
+      {% else %}<a class="signout" href="{{ logout_url }}">{{ 'Switch user' if auth_mode == 'dev' else 'Sign out' }}</a>{% endif %}</div>
   </aside>
   <main class="main" id="main">
     {% if auth_mode == 'dev' %}<div class="devbar">Development mode: sign-in is simulated. Never expose this instance to the internet.</div>{% endif %}

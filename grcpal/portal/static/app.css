@@ -127,6 +127,8 @@ a.stat { color: var(--text); } a.stat:hover { text-decoration: none; border-colo
 .role-admin { background: #f2a93b; color: #1a1f24; } .role-contributor { background: #2bb3b5; color: #06191d; } .role-auditor { background: #b9c7cd; color: #1a1f24; }
 .sub-dark { color: #9fb5bd; font-size: 12px; }
 .signout { display: inline-block; margin-top: 8px; color: #c9d7dc; font-size: 12px; text-decoration: underline; }
+.signout-form { margin: 0; }
+button.signout { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; font-size: 12px; }
 .devbar { background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); border: 1px solid var(--warn);
   border-radius: 8px; padding: 6px 12px; font-size: 13px; margin-bottom: 14px; }
 .thread { display: grid; gap: 10px; }

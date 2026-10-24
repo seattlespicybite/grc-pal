@@ -30,6 +30,8 @@ import os
 import re
 from dataclasses import dataclass, field
 
+from grcpal.portal.security import read_cookie
+
 ROLES = ("admin", "contributor", "auditor")
 # "contributor" is stored in the data; people see it as "Control owner".
 ROLE_LABELS = {"admin": "Admin", "contributor": "Control owner", "auditor": "Auditor"}
@@ -164,8 +166,8 @@ def identity_from_request(headers, cookies=None) -> Identity:
         raise AuthError("not signed in")
     if mode == "dev":
         raw = headers.get("x-dev-principal") or os.getenv("GRCPAL_DEV_PRINCIPAL")
-        if cookies.get(DEV_COOKIE):
-            raw = json.dumps({"email": cookies[DEV_COOKIE]})
+        if read_cookie(cookies, DEV_COOKIE):
+            raw = json.dumps({"email": read_cookie(cookies, DEV_COOKIE)})
         if not raw:
             raise AuthError("dev mode: choose a user on /dev/login")
         try:
