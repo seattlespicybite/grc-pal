@@ -703,9 +703,21 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         need(user, "admin", "auditor")
         try:
             manifest = p().manifest(source, run)
+            integrity = p().verify_evidence(user, source, run)
         except Invalid as exc:
             raise _HTTPError(404, str(exc)) from exc
-        return render(request, user, "evidence_run.html", source=source, run=run, m=manifest)
+        return render(request, user, "evidence_run.html", source=source, run=run, m=manifest, v=integrity)
+
+    @app.get("/evidence-signing-key.pem")
+    def evidence_signing_key(user: User = Depends(current_user)):
+        """Public half of the evidence signing key, for auditors to verify manifest.sig independently."""
+        need(user, "admin", "auditor")
+        from grcpal.evidence import public_key_pem
+
+        pem = public_key_pem()
+        if not pem:
+            raise _HTTPError(404, "No evidence signing key is configured")
+        return _attachment("grcpal-evidence-signing-key.pem", pem.encode())
 
     @app.get("/evidence/{source}/{run}/{filename}")
     def evidence_download(source: str, run: str, filename: str, user: User = Depends(current_user)):

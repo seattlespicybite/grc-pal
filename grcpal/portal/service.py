@@ -21,7 +21,7 @@ import re
 import uuid
 import zipfile
 
-from grcpal.evidence import EvidenceStore, utcnow
+from grcpal.evidence import INTEGRITY_FILES, EvidenceStore, public_key_pem, utcnow, verify_source
 from grcpal.portal import notify
 from grcpal.portal.auditlog import AuditLog
 from grcpal.portal.accounts import AccountsMixin
@@ -75,6 +75,7 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Vendors
                  today: dt.date | None = None, public_url: str | None = None, jobs_sync: bool | None = None) -> None:
         self.base_catalog, self.store, self.evidence = catalog, store, evidence
         self.log = AuditLog(store)
+        evidence.on_seal = self._seal_evidence  # one portal per evidence store and tenant
         self._today = today
         self._init_features(os.getenv("GRCPAL_JOBS_SYNC") == "1" if jobs_sync is None else jobs_sync)
         self._explicit_mailer = mailer is not None
@@ -1007,9 +1008,40 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Vendors
             raise Invalid("Evidence run not found")
         return json.loads(raw)
 
+    # ---- evidence integrity: audit-log anchor and verification ----
+    def _seal_evidence(self, prefix: str, digest: str, manifest: dict) -> None:
+        """Record each finished run's manifest hash in the hash-chained audit log, so a manifest rewritten
+        later no longer matches (even by someone holding the signing key)."""
+        self.audit(SYSTEM, "evidence.sealed", prefix, {
+            "sha256": digest, "controls": manifest.get("controls") or [], "status": manifest.get("status"),
+            "key_id": (manifest.get("integrity") or {}).get("key_id")})
+
+    def evidence_anchor(self, source: str, run: str) -> dict | None:
+        prefix = f"{source}/{run}"
+        return next((r for r in self.log.recent(limit=20, action="evidence.sealed", target=prefix)
+                     if r["target"] == prefix), None)
+
+    def verify_evidence(self, actor: User, source: str, run: str, check_files: bool = True) -> dict:
+        """Hashes, signature and audit-log anchor of one run. Status: verified, warning (good but not
+        recorded in the audit log, e.g. collected without the portal), legacy (before signing), failed."""
+        if not actor.sees_everything:
+            raise Forbidden("Only admins and auditors can verify evidence")
+        if not RUN_ID.match(run or "") or "/" in source or ".." in source:
+            raise Invalid("Unknown evidence run")
+        result = self.evidence.verify_run(source, run, check_files=check_files)
+        anchor = self.evidence_anchor(source, run)
+        result["anchor"] = {"seq": anchor["seq"], "at": anchor["at"]} if anchor else None
+        if anchor and result["manifest_sha256"] and anchor["detail"].get("sha256") != result["manifest_sha256"]:
+            result["problems"].append(f"manifest.json does not match audit log record {anchor['seq']} (changed)")
+            result["status"] = "failed"
+        elif not anchor and result["status"] == "verified":
+            result["status"] = "warning"
+            result["problems"].append("not recorded in the audit log (collected while the portal was not connected)")
+        return result
+
     def evidence_file(self, source: str, run: str, filename: str) -> bytes:
         manifest = self.manifest(source, run)
-        if filename != "manifest.json" and filename not in {f["name"] for f in manifest["files"]}:
+        if filename not in ("manifest.json", *INTEGRITY_FILES) and filename not in {f["name"] for f in manifest["files"]}:
             raise Invalid("File is not part of this evidence run")
         data = self.evidence.read(source, run, filename)
         if data is None:
@@ -1061,6 +1093,19 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Vendors
             table(name, rows)
         files.update(vendor_files)
         files["audit_chain_verification.json"] = json.dumps(self.log.verify(), indent=2).encode()
+        runs = []
+        for source in self.evidence.list_sources():
+            for r in verify_source(self.evidence, source,
+                                   lambda src, run: self.verify_evidence(actor, src, run, check_files=False)):
+                run = r["run"]
+                if cycle["start"] <= run[:10] <= cycle["end"]:
+                    runs.append({"source": source, "run": run, "status": r["status"], "signed": r["signed"],
+                                 "key_id": r["key_id"] or "", "manifest_sha256": r["manifest_sha256"] or "",
+                                 "audit_record": (r["anchor"] or {}).get("seq", ""), "problems": "; ".join(r["problems"])})
+        table("evidence_run_verification", runs)
+        pem = public_key_pem()
+        if pem:
+            files["evidence_signing_key.pem"] = pem.encode()
         files["cycle.json"] = json.dumps({k: v for k, v in cycle.items() if k != "PartitionKey"}, indent=2).encode()
         if control_status is not None:
             files["control_status.json"] = json.dumps(control_status, indent=2, default=str).encode()
@@ -1079,6 +1124,10 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Vendors
             "calendar_occurrences.csv lists every scheduled activity due in the cycle and what an admin recorded for it;\n"
             "calendar_decisions.csv keeps every decision, including ones later corrected.\n"
             "audit_chain_verification.json shows whether the tamper-evident audit log verified at export time.\n"
+            "evidence_run_verification.csv lists every evidence run in the cycle: signature status, the manifest's\n"
+            "SHA-256 and the audit_log.csv record (action evidence.sealed) that holds the same hash. To re-test a run,\n"
+            "download its folder, run `sha256sum -c SHA256SUMS`, and check manifest.sig against manifest.json with\n"
+            "evidence_signing_key.pem (Ed25519), or run `grcpal evidence verify --public-key evidence_signing_key.pem`.\n"
             "implementation_notes.csv holds every version of each control's 'How we meet this control' notes.\n"
             "vendors.csv is the vendor population (all statuses) with tier, data access, status and review dates;\n"
             "vendor_reviews.csv, vendor_exceptions.csv and vendor_cuecs.csv hold each onboarding check, annual review and\n"

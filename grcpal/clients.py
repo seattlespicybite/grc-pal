@@ -58,6 +58,22 @@ class Clients:
         self.settings = settings
         self._credential = None
         self._tokens: dict[str, tuple[str, float]] = {}
+        # Provenance for evidence: one entry per list call (API, request, record count, identity, request id).
+        # The CLI copies it into each run's manifest so auditors can test completeness and accuracy.
+        self.queries: list[dict] = []
+
+    def _record(self, api: str, request: str, records: int, pages: int, resp=None, **extra) -> None:
+        headers = getattr(resp, "headers", None) or {}
+        rid = headers.get("request-id") or headers.get("x-ms-request-id") or headers.get("x-github-request-id")
+        entry = {"api": api, "request": request[:500], "records": records, "pages": pages,
+                 "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **extra}
+        if rid:
+            entry["request_id"] = rid
+        if api in ("microsoft-graph", "azure-resource-graph") and self.settings is not None:
+            entry["identity"] = {k: v for k, v in (("tenant_id", self.settings.get("GRCPAL_MS_TENANT_ID")),
+                                                   ("client_id", self.settings.get("GRCPAL_MS_CLIENT_ID")),
+                                                   ("auth", self.settings.get("GRCPAL_MS_AUTH"))) if v}
+        self.queries.append(entry)
 
     # ---------------- auth ----------------
     def _azure_token(self, scope: str) -> str:
@@ -136,10 +152,14 @@ class Clients:
         hdrs = {"Authorization": f"Bearer {self._azure_token('https://graph.microsoft.com/.default')}"}
         hdrs.update(headers or {})
         items: list[dict] = []
+        request, pages, first = path + ("?" + "&".join(f"{k}={v}" for k, v in params.items()) if params else ""), 0, None
         while url:
-            data = self._request("GET", url, headers=hdrs, params=params).json()
+            resp = self._request("GET", url, headers=hdrs, params=params)
+            first, pages = first or resp, pages + 1
+            data = resp.json()
             items.extend(data.get("value", []))
             url, params = data.get("@odata.nextLink"), None
+        self._record("microsoft-graph", request, len(items), pages, first)
         return items
 
     # ---------------- Azure Resource Graph ----------------
@@ -149,17 +169,21 @@ class Clients:
         subs = subscriptions or (self.settings.list("GRCPAL_SUBSCRIPTIONS") if self.settings is not None
                                  else [s for s in os.getenv("GRCPAL_SUBSCRIPTIONS", "").split(",") if s])
         rows: list[dict] = []
-        skip = None
+        skip, pages, first = None, 0, None
         while True:
             body: dict[str, Any] = {"query": query, "options": {"$top": 1000}}
             if subs:
                 body["subscriptions"] = subs
             if skip:
                 body["options"]["$skipToken"] = skip
-            data = self._request("POST", url, headers=hdrs, json=body).json()
+            resp = self._request("POST", url, headers=hdrs, json=body)
+            first, pages = first or resp, pages + 1
+            data = resp.json()
             rows.extend(data.get("data", []))
             skip = data.get("$skipToken")
             if not skip:
+                self._record("azure-resource-graph", " ".join(query.split()), len(rows), pages, first,
+                             subscriptions=subs or "all visible")
                 return rows
 
     # ---------------- GitHub ----------------
@@ -169,16 +193,20 @@ class Clients:
         url = path if path.startswith("http") else self.github_api + path
         params = dict(params or {}, per_page=100)
         items: list[dict] = []
-        for _ in range(max_pages):
+        first = None
+        for page in range(1, max_pages + 1):
             resp = self._gh("GET", url, params=params)
+            first = first or resp
             data = resp.json()
             items.extend(data if isinstance(data, list) else data.get("items", []))
             nxt = resp.links.get("next", {}).get("url")
             if not nxt:
+                self._record("github", path, len(items), page, first)
                 return items
             url, params = nxt, None
         if complete:
             raise RuntimeError(f"More than {max_pages} pages from {path}; refusing an incomplete list")
+        self._record("github", path, len(items), max_pages, first, truncated=True)
         return items
 
     def gh_get(self, path: str, allow_404: bool = False) -> dict | None:

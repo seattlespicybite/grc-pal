@@ -4,6 +4,23 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Added
+- **Evidence integrity.** Every evidence run now also gets `SHA256SUMS` (check with `sha256sum -c`) and
+  `manifest.sig`, an Ed25519 signature of `manifest.json` with a key derived from the instance's encryption key
+  (or `GRCPAL_EVIDENCE_SIGNING_KEY`). The manifest's SHA-256 is recorded in the hash-chained audit log
+  (`evidence.sealed`), so a rewritten run is caught even by someone holding the signing key.
+- `grcpal evidence verify` (hashes, signature, audit-log record; exit code 1 on failure) and
+  `grcpal evidence public-key`. Each evidence run page shows an **Integrity** card; admins and auditors can
+  download the public key.
+- Collector runs record provenance: each API call with its request or query, record count, pages, request ID
+  and the app registration used.
+- The auditor export adds `evidence_run_verification.csv` and `evidence_signing_key.pem`.
+
+### Changed
+- Uploads named `manifest.json`, `manifest.sig` or `SHA256SUMS` are refused (reserved names in the evidence store).
+
+No data model change. Runs collected before this release show as **Legacy** (file hashes still checked).
+
 ## [0.6.0] - 2026-10-23 - Security hardening
 
 Security hardening release from the internal assessment of the Azure deployment (batches B1, B2, B3 and the CI

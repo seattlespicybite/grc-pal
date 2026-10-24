@@ -18,6 +18,8 @@ Portal administration (uses GRCPAL_TABLES_URL or GRCPAL_SQLITE)
     grcpal users list
     grcpal remind --overdue [--dry-run]   email owners of overdue requests and vendor reviews due soon
     grcpal audit verify                   check the tamper-evident audit log
+    grcpal evidence verify [--source S]   check hashes, signature and audit-log record of evidence runs
+    grcpal evidence public-key            print the evidence signing public key (give it to your auditor)
     grcpal checks run                     run custom HTTP, TLS and command checks
     grcpal ai review --control HR-01      AI evidence review of one control
     grcpal ai audit --framework soc2      AI mock audit across a framework
@@ -38,7 +40,7 @@ import json
 import sys
 from pathlib import Path
 
-from grcpal import collectors, report, tasks
+from grcpal import __version__, collectors, report, tasks
 from grcpal.catalog import Catalog, validate
 from grcpal.evidence import EvidenceStore
 
@@ -82,9 +84,19 @@ def cmd_validate(args) -> int:
     return 1 if errors else 0
 
 
+def _sealed_store(args, catalog=None) -> EvidenceStore:
+    """Evidence store whose runs are recorded in the portal's audit log when a portal store is configured."""
+    store = EvidenceStore(args.evidence)
+    try:
+        _portal(catalog or Catalog.load(args.base), store)  # sets store.on_seal when a portal store exists
+    except (Exception, SystemExit) as exc:  # noqa: BLE001 - collect anyway; verify shows "not recorded"
+        print(f"WARN  evidence will not be recorded in the audit log: {exc}", file=sys.stderr)
+    return store
+
+
 def cmd_collect(args) -> int:
     ctx = _ctx(args)
-    store = EvidenceStore(args.evidence)
+    store = _sealed_store(args, ctx.catalog)
     names = collectors.NAMES if args.all else args.names
     source_controls = ctx.catalog.sources("collector")
     failed = 0
@@ -97,6 +109,8 @@ def cmd_collect(args) -> int:
             print(f"skip  {name}: not configured")
             continue
         run = store.new_run(name, sorted(source_controls.get(name, [])), {"description": mod.DESCRIPTION})
+        ctx.clients.queries = []
+        run.provenance = {"collector": name, "grcpal_version": __version__, "queries": ctx.clients.queries}
         try:
             findings = mod.run(ctx, run) or []
             manifest = run.finish(findings)
@@ -192,8 +206,9 @@ def cmd_ai(args) -> int:
 
 
 def cmd_store(args) -> int:
-    store = EvidenceStore(args.evidence)
+    store = _sealed_store(args)
     run = store.new_run(args.source, [c for c in args.controls.split(",") if c], {"tool": args.source})
+    run.provenance = {"imported_by": "grcpal store", "files": [Path(f).name for f in args.files]}
     for f in args.files:
         p = Path(f)
         if p.is_file():
@@ -203,6 +218,46 @@ def cmd_store(args) -> int:
     manifest = run.finish(findings)
     print(f"stored {len(manifest['files'])} files -> {run.prefix}")
     return 0
+
+
+def cmd_evidence(args) -> int:
+    from grcpal import evidence as ev
+
+    if args.action == "public-key":
+        pem = ev.public_key_pem()
+        if not pem:
+            print("No evidence key: set GRCPAL_ENCRYPTION_KEY (or GRCPAL_EVIDENCE_SIGNING_KEY)", file=sys.stderr)
+            return 1
+        print(pem, end="")
+        return 0
+    if args.run and not args.source:
+        print("--run needs --source", file=sys.stderr)
+        return 2
+    public = ev.load_public_key(Path(args.public_key).read_text()) if args.public_key else None
+    store = EvidenceStore(args.evidence)
+    portal = None
+    if public is None:
+        try:
+            portal = _portal(Catalog.load(args.base), store)
+        except (Exception, SystemExit) as exc:  # noqa: BLE001 - files and signature can still be checked
+            print(f"WARN  audit log not available, checking files and signatures only: {exc}", file=sys.stderr)
+    from grcpal.portal.auth import SYSTEM
+
+    counts: dict[str, int] = {}
+    def check(source, run):
+        return (portal.verify_evidence(SYSTEM, source, run) if portal
+                else store.verify_run(source, run, public_key=public))
+
+    for source in [args.source] if args.source else store.list_sources():
+        results = ev.verify_source(store, source, check)
+        for r in results:
+            if args.run and r["run"] != args.run:
+                continue
+            counts[r["status"]] = counts.get(r["status"], 0) + 1
+            if r["status"] != "verified" or args.verbose:
+                print(f"{r['status']:<9} {source}/{r['run']}" + (f": {'; '.join(r['problems'])}" if r["problems"] else ""))
+    print("  ".join(f"{k}: {v}" for k, v in sorted(counts.items())) or "no evidence runs found")
+    return 1 if counts.get("failed") else 0
 
 
 def cmd_tasks(args) -> int:
@@ -689,6 +744,15 @@ def main(argv: list[str] | None = None) -> int:
     au = sub.add_parser("audit", help="audit log tools")
     au.add_argument("action", choices=["verify"])
     au.set_defaults(fn=cmd_audit)
+
+    evp = sub.add_parser("evidence", help="evidence integrity: verify runs, print the signing public key")
+    evp.add_argument("action", choices=["verify", "public-key"])
+    evp.add_argument("--source", help="verify one source only (default: every source)")
+    evp.add_argument("--run", help="verify one run only (needs --source)")
+    evp.add_argument("--public-key", help="verify with this PEM public key (for example the one given to an "
+                                          "auditor) instead of this instance's key; skips the audit-log check")
+    evp.add_argument("--verbose", action="store_true", help="also list runs that verified")
+    evp.set_defaults(fn=cmd_evidence)
 
     ex = sub.add_parser("export", help="auditor export zip for a cycle")
     ex.add_argument("--cycle", help="cycle ID (default: active cycle)")
