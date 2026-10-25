@@ -235,8 +235,9 @@ def test_table_is_well_formed():
 
 
 def test_auditors_never_write():
-    """An auditor reads. No POST in the table allows the auditor role."""
-    assert [k for k, roles in M.EXPECT.items() if k[0] == "POST" and "auditor" in roles] == []
+    """An auditor reads. No POST in the table allows the auditor role, except their own two-step sign-in."""
+    assert [k for k, roles in M.EXPECT.items()
+            if k[0] == "POST" and "auditor" in roles and k not in M.SELF_SERVICE] == []
 
 
 # ====================================================================================== route x role
@@ -455,6 +456,8 @@ def test_csrf(h, route):
     """Every writing POST refuses a missing token, another person's token and a cross-site Origin: each gets a
     403 and changes nothing. (A valid token from the right person is the control: it works.)"""
     method, template = route
+    if not h.serves(route):
+        pytest.skip("not served in this sign-in mode")
     role = "owner" if "owner" in M.EXPECT[route] and "admin" not in M.EXPECT[route] else "admin"
     w = h.w
     cases = {"missing token": {"token": "missing"}, "another person's token": {"token": "other"},

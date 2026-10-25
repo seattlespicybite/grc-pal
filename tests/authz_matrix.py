@@ -26,7 +26,9 @@ PUBLIC = {
     ("GET", "/healthz"), ("GET", "/dev/login"), ("POST", "/dev/login"), ("GET", "/dev/logout"),
     ("GET", "/login"), ("POST", "/login"), ("POST", "/logout"),
     ("GET", "/account/forgot"), ("POST", "/account/forgot"),
-    ("GET", "/account/password/{token}"), ("POST", "/account/password/{token}"),
+    ("GET", "/account/password/{token}"),    # old link format: redirects to the form below, sets nothing
+    # choosing a password from an emailed link: the link's token (then a short-lived cookie) is the identity
+    ("POST", "/account/password/open"), ("GET", "/account/password"), ("POST", "/account/password"),
 }
 
 # {placeholder} -> world attribute, per route template. Control A is the owner's, control B belongs to someone else.
@@ -52,6 +54,7 @@ PARAMS: dict[str, dict[str, str]] = {
     "/users/{email}/library-owner": {"email": "admin2_email"},
     "/users/{email}/identity": {"email": "user_target"},
     "/users/{email}/active": {"email": "user_target"},
+    "/users/{email}/mfa": {"email": "user_target"},
     "/cycles/{cycle_id}/export": {"cycle_id": "cycle_closed"},
     "/policies/{policy_id}": {"policy_id": "policy"},
     "/policies/{policy_id}/ack": {"policy_id": "policy"},
@@ -184,6 +187,10 @@ FORMS: dict[tuple[str, str], object] = {
     ("POST", "/users/{email}/library-owner"): {},
     ("POST", "/users/{email}/identity"): {},
     ("POST", "/users/{email}/active"): {"active": "0"},
+    ("POST", "/users/{email}/mfa"): {},
+    ("POST", "/account/mfa/start"): {},
+    ("POST", "/account/mfa/confirm"): {"code": "000000"},
+    ("POST", "/account/mfa/off"): {"password": "not-the-password"},
     ("POST", "/cycles"): {"name": "FY2099", "start": "2026-10-13", "end": "2027-10-12", "carry_forward": "1"},
     ("POST", "/cycles/current"): lambda w: {"name": "Renamed cycle", "start": w.portal.active_cycle()["start"],
                                             "end": w.portal.active_cycle()["end"]},
@@ -325,7 +332,8 @@ _GROUPS: list[tuple[frozenset, str]] = [
            POST /policies/{policy_id}/remind | POST /settings/{section_id} | POST /setup/{step_id}
            POST /updates/approve | POST /updates/check | POST /updates/policy | POST /updates/verify
            POST /uploads/{upload_id}/review | POST /users | POST /users/{email}/active | POST /users/{email}/identity
-           POST /users/{email}/library-owner | POST /users/{email}/link | POST /users/{email}/role
+           POST /users/{email}/library-owner | POST /users/{email}/link | POST /users/{email}/mfa
+           POST /users/{email}/role
            POST /users/{email}/until | POST /vendors/import | POST /vendors/import/upload
            POST /vendors/import/{token}/apply | POST /vendors/import/{token}/discard
            POST /vendors/questionnaire/edit | POST /vendors/questionnaire/publish | POST /vendors/{vid}/cuecs
@@ -357,6 +365,9 @@ _GROUPS: list[tuple[frozenset, str]] = [
     # --- named people. An admin who is not named is refused
     (OWNER_ONLY, """POST /access-reviews/{cid}/decide | POST /access-reviews/{cid}/signoff
                     POST /library/{did}/review/{vid}"""),
+    # --- each signed-in person's own account security (two-step sign-in). Auditors too: it changes only
+    # their own sign-in, never the organization's data (see SELF_SERVICE)
+    (EVERYONE, """GET /account/mfa | POST /account/mfa/start | POST /account/mfa/confirm | POST /account/mfa/off"""),
     # --- any active person who writes (not auditors)
     (STAFF, """GET /vendors/new | POST /policies/{policy_id}/ack | POST /vendors/new"""),
 ]
@@ -379,7 +390,13 @@ NO_WRITE: set[tuple[str, str]] = {
     ("POST", "/vendors/{vid}/signin-check"),                             # needs Microsoft Entra ID
     ("POST", "/vendors/questionnaire/publish"),                          # nothing to publish without edits
     ("POST", "/vendors/{vid}/review/acceptance"),                        # needs the owner's signed note first
+    ("POST", "/users/{email}/mfa"),                                      # the target has no two-step sign-in to remove
+    ("POST", "/account/mfa/confirm"), ("POST", "/account/mfa/off"),      # a wrong code / password changes nothing
+    ("POST", "/account/mfa/start"),                                      # the test people have no password or key
 }
+
+# POSTs that change only the caller's own sign-in (not organization data), so auditors may use them too
+SELF_SERVICE = {("POST", "/account/mfa/start"), ("POST", "/account/mfa/confirm"), ("POST", "/account/mfa/off")}
 
 # Known gaps, strict: the test must fail while the gap exists, and a fixed gap must be removed from here.
 XFAIL: dict[tuple[str, str], str] = {}
