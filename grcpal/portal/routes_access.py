@@ -7,6 +7,7 @@ from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse
 
 from grcpal import accesssources as src
+from grcpal.portal import accessapps as aa
 from grcpal.portal import accessreview as ar
 from grcpal.portal.auth import User
 from grcpal.portal.security import MAX_UPLOAD_BYTES
@@ -146,6 +147,32 @@ def register(app, h) -> None:
         if not result["ok"]:
             return back(f"/access-reviews/apps/{aid}", err="Test failed. See the result below")
         return back(f"/access-reviews/apps/{aid}", msg=f"Test passed: {result['records']} accounts read")
+
+    @app.get("/access-reviews/accounts", response_class=HTMLResponse)
+    def accounts_page(request: Request, app_id: str = "", user: User = Depends(current_user)):
+        try:
+            data = p().access_accounts(user, app_id)
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            raise h.HTTPError(404, str(exc)) from exc
+        return render(request, user, "access_accounts.html", nav_active="access", flags=aa.ACCOUNT_FLAGS,
+                      kinds=src.KINDS, **data)
+
+    @app.post("/access-reviews/accounts/pull")
+    async def accounts_pull(request: Request, user: User = Depends(current_user)):
+        form = await posted(request, user)
+        aid = str(form.get("app_id", ""))
+        dest = f"/access-reviews/accounts?app_id={aid}" if aid else "/access-reviews/accounts"
+        try:
+            job = p().request_access_pull(user, aid)
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(dest, err=str(exc))
+        if job.get("status") == "failed":
+            return back(dest, err=f"Pull failed: {job.get('message', '')}")
+        return back(dest, msg="Pull started. Refresh the page in a minute to see the result")
 
     @app.get("/access-reviews/{cid}", response_class=HTMLResponse)
     def review_page(request: Request, cid: str, user: User = Depends(current_user)):

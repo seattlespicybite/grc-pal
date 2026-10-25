@@ -361,8 +361,9 @@ def test_starting_a_review_from_applications(portal):
     assert job["status"] == "done", job.get("message")
     cid = job["result"]["campaign"]
     camp = portal.access_campaign(ADMIN, cid)["campaign"]
-    assert camp["pulled"] == {"Microsoft 365": {"kind": "entra_users", "records": 5}, "GitHub": {"kind": "github_org", "records": 4},
-                              "Customer portal": {"kind": "rest", "records": 2}, "GRC-pal": {"kind": "grcpal", "records": 5}}
+    assert {k: (v["kind"], v["records"]) for k, v in camp["pulled"].items()} == {
+        "Microsoft 365": ("entra_users", 5), "GitHub": ("github_org", 4), "Customer portal": ("rest", 2), "GRC-pal": ("grcpal", 5)}
+    assert camp["pulled"]["GitHub"]["snapshot"].startswith(f"access-{gh['RowKey']}/")   # also stored as a daily snapshot
     assert camp["records"] == 5 + 4 + 2 + 5 + 1
     entries = {(e["app"], e["account_id"]): e for e in portal._ar_entries(cid)}
     assert entries[("GitHub", "Alice-GH")]["email"] == "alice@example.com"            # identity map

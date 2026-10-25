@@ -1,0 +1,56 @@
+{% extends "base.html" %}{% block title %}Accounts{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Accounts</h1>
+<div class="sub">Every application's account list is read every night and stored write-once as evidence. Pick an application to see its accounts, what changed in the last pull, and the pull history. A review started within 24 hours of a pull uses that stored list.</div></div>
+<div class="head-actions"><a class="btn ghost" href="/access-reviews">Access reviews</a><a class="btn ghost" href="/access-reviews/apps">Applications</a>
+{% if user.is_admin %}<form method="post" action="/access-reviews/accounts/pull" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" type="submit">Pull all now</button></form>{% endif %}</div></div>
+
+{% if jobs %}<div class="card mb"><h2>Recent manual pulls</h2><div class="table-wrap"><table><tbody>
+{% for j in jobs %}<tr><td>{{ j.title }}<div class="sub">{{ j.created_at[:16]|replace('T', ' ') }}</div></td>
+<td><span class="pill job-{{ j.status }}">{{ j.status|capitalize }}</span>{% if j.message %}<div class="sub">{{ j.message }}</div>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div></div>{% endif %}
+
+<div class="card mb"><div class="table-wrap"><table>
+<thead><tr><th>Application</th><th>Source</th><th>Last pull</th><th>Accounts</th><th>Changes in last pull</th></tr></thead>
+<tbody>{% for a in apps %}{% set lp = a.last_pull %}<tr>
+<td><a href="/access-reviews/accounts?app_id={{ a.RowKey }}"><b>{{ a.name }}</b></a>{% if not a.active %} <span class="pill na">Retired</span>{% endif %}</td>
+<td>{{ kinds[a.kind] }}</td>
+<td>{% if lp and lp.ok %}<span class="pill ok">OK</span><div class="sub">{{ lp.at[:16]|replace('T', ' ') }}</div>{% elif lp %}<span class="pill attention">Failed</span><div class="sub">{{ lp.at[:16]|replace('T', ' ') }}: {{ lp.error }}</div>{% else %}<span class="sub">Not pulled yet</span>{% endif %}</td>
+<td>{{ lp.records if lp and lp.ok else '—' }}</td>
+<td>{% if lp and lp.ok %}+{{ lp.added }} / −{{ lp.removed }} / {{ lp.changed }} changed{% else %}—{% endif %}</td>
+</tr>{% else %}<tr><td colspan="5"><div class="empty">No applications with an API source yet. <a href="/access-reviews/apps">Add your applications</a>.</div></td></tr>{% endfor %}</tbody>
+</table></div></div>
+
+{% if selected %}{% set s = selected %}
+<div class="card mb"><div class="page-head"><div><h2>{{ s.app.name }}</h2>
+<div class="sub">{% if s.run %}Last good pull {{ s.pulled_at[:16]|replace('T', ' ') }} UTC, {{ s.accounts|length }} accounts. Evidence: <code>{{ s.run }}</code>{% else %}No successful pull yet.{% endif %}
+{% if not s.directory %} Add Microsoft Entra ID / Microsoft 365 as an application to flag accounts that match nobody in Entra ID.{% endif %}</div></div>
+{% if user.is_admin and s.app.active %}<div class="head-actions"><form method="post" action="/access-reviews/accounts/pull" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="app_id" value="{{ s.app.RowKey }}"><button class="btn ghost" type="submit">Pull now</button></form></div>{% endif %}</div>
+
+{% set c = s.changes %}{% if c and (c.added or c.removed or c.changed) %}
+<h3>Changes since the pull before</h3>
+<ul>{% if c.added %}<li><b>New:</b> {{ c.added|join(', ') }}</li>{% endif %}
+{% if c.removed %}<li><b>Removed:</b> {{ c.removed|join(', ') }}</li>{% endif %}
+{% for ch in c.changed %}<li><b>{{ ch.account_id }}</b>: {{ ch.field }} {{ ch.before or '(empty)' }} → {{ ch.after or '(empty)' }}</li>{% endfor %}</ul>
+{% elif s.run %}<div class="sub mb">No changes since the pull before.</div>{% endif %}
+
+<div class="table-wrap"><table>
+<thead><tr><th>Account</th><th>Email</th><th>Status</th><th>Role</th><th>Last sign-in</th><th>MFA</th><th>Flags</th></tr></thead>
+<tbody>{% for r in s.accounts %}<tr>
+<td><b>{{ r.account_id }}</b>{% if r.name %}<div class="sub">{{ r.name }}</div>{% endif %}</td>
+<td>{{ r.email or '—' }}</td><td>{{ r.status }}</td><td>{{ r.role or '—' }}</td><td>{{ r.last_login or '—' }}</td><td>{{ r.mfa or '—' }}</td>
+<td>{% if r.flags %}<div class="tags">{% for f in r.flags %}<span>{{ flags[f] }}</span>{% endfor %}</div>{% endif %}</td>
+</tr>{% else %}<tr><td colspan="7"><div class="empty">No accounts stored yet.</div></td></tr>{% endfor %}</tbody>
+</table></div></div>
+
+<div class="card"><h2>Pull history</h2><div class="table-wrap"><table>
+<thead><tr><th>Pulled (UTC)</th><th>Result</th><th>Accounts</th><th>Changes</th></tr></thead>
+<tbody>{% for hrow in s.history %}<tr>
+<td><code>{{ hrow.run }}</code></td>
+<td>{% if hrow.status == 'ok' %}<span class="pill ok">OK</span>{% else %}<span class="pill attention">Failed</span><div class="sub">{{ hrow.error }}</div>{% endif %}</td>
+<td>{{ hrow.records if hrow.status == 'ok' else '—' }}</td>
+<td>{% if hrow.status == 'ok' %}+{{ hrow.added }} / −{{ hrow.removed }} / {{ hrow.changed }} changed{% else %}—{% endif %}</td>
+</tr>{% else %}<tr><td colspan="4"><div class="empty">No pulls yet.</div></td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% endif %}
+{% endblock %}

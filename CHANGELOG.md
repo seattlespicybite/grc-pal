@@ -5,6 +5,11 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Added
+- **Daily account pulls for access reviews.** Every night after `collect --all` (or `grcpal access-pull`, or **Pull now**),
+  each access review application with an API source is read and stored write-once as `access-<application>` evidence:
+  the full account list, what changed since the last good pull, and the request addresses. A failed pull is stored as a
+  failure and alerted like a collector. New **Accounts** page (admins, auditors read-only) with flags, including accounts
+  not found in Entra ID, and the pull history. A review started within 24 hours of a pull uses that stored list.
 - **Evidence integrity.** Every evidence run now also gets `SHA256SUMS` (check with `sha256sum -c`) and
   `manifest.sig`, an Ed25519 signature of `manifest.json` with a key derived from the instance's encryption key
   (or `GRCPAL_EVIDENCE_SIGNING_KEY`). The manifest's SHA-256 is recorded in the hash-chained audit log

@@ -139,6 +139,12 @@ class CalendarMixin:
                                        "controls": [chk["control"]] if chk.get("control") else [],
                                        "schedule": {"daily": "Daily check", "weekly": "Weekly check"}.get(
                                            chk.get("schedule", "daily"), "Manual check")}
+        from grcpal.portal.accessapps import snapshot_source
+
+        for app in self.store.list("arapps", "a"):  # daily account pulls: failures alert like any collector
+            if app.get("active", True) and app["kind"] != "csv":
+                out[snapshot_source(app["RowKey"])] = {"title": f"Account pull: {app['name']}", "controls": ["IAM-05"],
+                                                       "schedule": "Daily account pull"}
         return out
 
     def calendar_activities(self, include_retired: bool = False, include_hidden: bool = False) -> list[dict]:

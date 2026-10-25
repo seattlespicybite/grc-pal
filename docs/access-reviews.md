@@ -29,6 +29,25 @@ reachable only inside your network) comes in as a CSV export. Every source is re
 7. **The admin closes the review.** It needs a reviewer and a decision for every account, a sign-off from every manager, and
    confirmed removals (or a written reason). Closing stores the decisions file write-once in the evidence store.
 
+## Daily account pulls (Accounts page)
+
+Every night, after `grcpal collect --all`, GRC-pal reads the full account list of every active application that has an
+API source (everything except CSV uploads) and stores it write-once as evidence in `access-<application id>/<time>`:
+`accounts.json` and `accounts.csv` (the list), `changes.json` (accounts added, removed, and email, status, role or MFA
+changes since the last good pull), `requests.json` (the addresses read, without query strings) and the manifest with the
+record count and SHA-256 of every file. Run it any time with `grcpal access-pull`, or with **Pull now** on
+*Access reviews > Accounts* (admins).
+
+- **A failed or incomplete pull is stored as a failed run, never as a partial list.** It shows on the calendar as
+  *Account pull: <application>* and is included in the failed-collector email, like any collector.
+- **The Accounts page** (admins; auditors read-only) shows each application's last pull and changes, its current accounts
+  with flags (the review flags plus *Not found in Entra ID* when Microsoft Entra ID / Microsoft 365 is one of the
+  applications) and the last 10 pulls. Admin-type accounts without MFA also count as a finding on the run.
+- **Reviews use the stored list.** Starting a review within 24 hours of a good pull uses that pull instead of reading the
+  application again, and the review records which snapshot it covered (`snapshot` in `source_<application>.json`).
+  Older than that, the review reads the application again and stores that pull as a snapshot too.
+- Snapshots are kept like all evidence (write-once, never deleted by GRC-pal).
+
 ## Applications
 
 Add each in-scope application once and choose where its accounts come from. Use **Test** after saving: it reads the
@@ -104,6 +123,8 @@ sent anywhere else: no AI is involved in access reviews.
 - **Completeness of the list.** The exact list reviewed (`population.csv`, every source together) is stored write-once with
   its SHA-256, shown on the closed review, next to each source's accounts and record count (`source_<application>.json`),
   the managers used and any uploaded file as received. Compare a source with a fresh export from the application.
+- **The list on any day.** Each daily pull is its own write-once run with a record count and hashes; compare a day's
+  `accounts.csv` with the application and check it with `grcpal evidence verify`. The review names the snapshot it used.
 - **Who reviewed what.** The decisions file (*Download decisions*) lists every account, its reviewer, the decision, the
   comment, who decided and when, and whether the removal was confirmed.
 - **Independence.** No reviewer reviewed their own account. The audit log shows each decision, sign-off, reassignment and

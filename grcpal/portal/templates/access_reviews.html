@@ -3,7 +3,7 @@
 <div class="page-head"><div><h1>Access reviews</h1>
 <div class="sub">{% if user.is_contributor %}Reviews that include people you manage. For each account, decide whether the access is still needed (SOC 2 CC6.2 and CC6.3).
 {% else %}Managers review the accounts of their own people across every application, on one screen. GRC-pal reads the account lists, the managers decide, and the result is stored as evidence (SOC 2 CC6.2 and CC6.3).{% endif %}</div></div>
-{% if user.sees_everything %}<div class="head-actions"><a class="btn ghost" href="/access-reviews/apps">Applications</a></div>{% endif %}</div>
+{% if user.sees_everything %}<div class="head-actions"><a class="btn ghost" href="/access-reviews/accounts">Accounts</a><a class="btn ghost" href="/access-reviews/apps">Applications</a></div>{% endif %}</div>
 
 {% if jobs %}<div class="card mb"><h2>Recently prepared</h2><div class="table-wrap"><table><tbody>
 {% for j in jobs %}<tr><td>{{ j.title }}<div class="sub">{{ j.created_at[:16]|replace('T', ' ') }}</div></td>
