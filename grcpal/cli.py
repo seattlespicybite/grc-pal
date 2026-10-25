@@ -420,9 +420,38 @@ def cmd_create_admin(args) -> int:
         portal.create_local_admin(args.email, args.name or "", password)
     except Invalid as exc:
         raise SystemExit(str(exc)) from exc
+    from grcpal.portal.auth import on_azure_web
+
+    if args.two_step or on_azure_web():  # on Azure break-glass sign-in refuses an account without it
+        _enroll_two_step(portal, args.email.lower(), args.name or "")
     print(f"{args.email.lower()} is a local admin (break-glass: password sign-in only). Sign in at "
           f"{portal.public_url or 'the portal'}/login")
     return 0
+
+
+def _enroll_two_step(portal, email: str, name: str) -> None:
+    """Two-step sign-in for the break-glass account, set up on the server (the account cannot sign in on Azure
+    without it, so it cannot be set up in the portal). The secret is shown once, here, and stored encrypted."""
+    from grcpal.portal.auth import User
+    from grcpal.portal.service import Invalid
+
+    who = User(email=email, name=name or email, role="admin")
+    try:
+        secret, uri = portal.mfa_start(who)
+    except Invalid as exc:
+        raise SystemExit(f"Two-step sign-in not set: {exc}") from exc
+    print("\nTwo-step sign-in: add this account to an authenticator app (keep it with the break-glass password).")
+    print(f"  Secret (type it in):  {secret}")
+    print(f"  Or open this link on the phone:  {uri}")
+    for _ in range(3):
+        try:
+            portal.mfa_confirm(who, input("Enter the 6-digit code the app shows: "))
+            print("Two-step sign-in is on.")
+            return
+        except Invalid as exc:
+            print(exc)
+    raise SystemExit("Two-step sign-in was not confirmed. Run create-admin again; until then this account cannot "
+                     "sign in on Azure.")
 
 
 def cmd_remind(args) -> int:
@@ -734,6 +763,8 @@ def main(argv: list[str] | None = None) -> int:
     ca = sub.add_parser("create-admin", help="create the first admin or a break-glass admin (local sign-in)")
     ca.add_argument("email")
     ca.add_argument("--name")
+    ca.add_argument("--two-step", action="store_true",
+                    help="also set up two-step sign-in (always done on Azure, where break-glass requires it)")
     ca.set_defaults(fn=cmd_create_admin)
 
     rm = sub.add_parser("remind", help="email people with overdue requests and vendor reviews coming due")

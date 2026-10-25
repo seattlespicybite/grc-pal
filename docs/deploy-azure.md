@@ -283,6 +283,53 @@ version that is running.
 `./deploy/azure/deploy.sh --name acme --admins you@acme.com --image ghcr.io/seattlespicybite/grc-pal:0.3.0`
 after a backup; from then on the workflow does it.
 
+## Break-glass sign-in (when Microsoft sign-in to GRC-pal is broken)
+
+Everyone signs in with Microsoft; password sign-in does not exist on the internet. Break-glass opens it for a
+few hours, for one account, when sign-in to GRC-pal is broken but Azure and Entra ID still work: the sign-in
+secret expired, the app assignment or group is wrong, or every GRC-pal admin is disabled. It does **not** help
+in an Entra ID outage (GRC-pal also needs Entra ID to read its own storage); for that, use your Entra
+emergency access accounts.
+
+**Set it up once** (needs Contributor on the resource group):
+
+```bash
+./deploy/azure/breakglass.sh --name acme set-password --email breakglass@acme.com
+```
+
+It opens a shell in the running app and runs `grcpal create-admin` there: you type a password (at least 12
+characters) and add the account to an authenticator app, then type a code to confirm. Nothing goes on the command
+line. Keep the password and the authenticator (a spare phone or a hardware token that shows codes) together,
+offline, known only to the people allowed to use them. Running it again replaces both.
+
+**Use it:**
+
+```bash
+./deploy/azure/breakglass.sh --name acme arm --hours 2   # type the instance name to confirm
+# sign in at https://<portal>/login with the break-glass account: password + code; fix the problem
+./deploy/azure/breakglass.sh --name acme disarm
+./deploy/azure/breakglass.sh --name acme status          # what is open right now
+```
+
+While it is open:
+
+- only the break-glass account can sign in, and only with its code; other passwords and "Forgot password" do
+  nothing, and staff cannot sign in with Microsoft;
+- each sign-in is a security event on the Logs page, is marked `break_glass` in the audit log, and is emailed to
+  every admin;
+- it closes by itself at the closing time (at most 24 hours) and ends its sessions, even if nobody runs
+  `disarm`; `update.sh` refuses to run until you disarm;
+- arming and disarming change the sign-in settings, so the "security change" alert from `--alert-email`
+  fires: that is expected.
+
+Why the steps run in this order: while Easy Auth is on, GRC-pal believes the identity header Azure adds to each
+request. `arm` first starts a revision that no longer believes it (password sign-in), moves traffic there and only
+then turns Easy Auth off; `disarm` turns Easy Auth on first. At no moment can someone send a made-up header and
+be let in. Never turn Easy Auth off by hand in the Azure portal.
+
+**Test it every quarter** (CC6.1, CC7.4): arm for 1 hour, sign in, check the email arrived and the audit log entry,
+disarm. Keep the audit log export and the alert email as evidence of the drill, and record who took part.
+
 ## Rebuild from a backup
 
 To recover from a lost resource group or subscription, or to move to another region, build a **new** instance
