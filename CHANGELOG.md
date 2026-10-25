@@ -22,6 +22,18 @@ All notable changes are listed here. The project follows [semantic versioning](h
 No data model change. Runs collected before this release show as **Legacy** (file hashes still checked).
 
 ### Security
+- **Easy Auth only on Azure.** In `easyauth` mode the portal now refuses to start unless it runs on Azure
+  Container Apps or App Service (`CONTAINER_APP_NAME` or `WEBSITE_SITE_NAME` is set by the platform). Anywhere else
+  nothing removes a caller's `X-MS-CLIENT-PRINCIPAL` header, so anyone could forge one and sign in as anyone.
+  Docker or VM installs use `local` or `proxy`.
+- **Entra sign-ins in the audit log.** Each new Easy Auth or proxy sign-in session is recorded once as
+  `auth.signin` (method, client address and, for Entra, the object and tenant ID), so GRC-pal keeps its own
+  sign-in evidence beyond Entra's log retention (7 days on Entra ID Free). Only a hash of the session cookie is
+  stored. Refused sign-ins stay security events on the Logs page.
+- `Cross-Origin-Resource-Policy: same-origin` on every response: other sites cannot embed portal responses.
+- **Conditional Access collector checks device compliance** (AST-02, also IAM-02): a finding when no enabled
+  policy requires a compliant or hybrid-joined device. A policy that accepts MFA *or* a compliant device does
+  not count, because MFA alone would let an unmanaged laptop in.
 - **Local sign-in hardening (hardening batch B6; findings F-03, F-06, F-07, F-08, F-13, F-16).** These apply to
   local accounts (VM installs and the break-glass admin); Azure Easy Auth sign-in is governed by Entra.
   - **Lockout with growing waits.** After 5 failed sign-ins for one account, or 20 from one address, within

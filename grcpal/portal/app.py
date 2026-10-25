@@ -28,7 +28,7 @@ from grcpal.portal import mailer as mailer_mod
 from grcpal.portal import store as store_mod
 from grcpal.portal.accounts import SESSION_COOKIE, SESSION_HOURS
 from grcpal.portal.auth import (DEV_COOKIE, ROLE_HELP, ROLE_LABELS, ROLES, AuthError, User, auth_mode,
-                                identity_from_request)
+                                identity_from_request, require_easyauth_platform)
 from grcpal.portal.observability import configure_logging, current_actor, event, new_request_id, request_id
 from grcpal.portal.security import (MAX_UPLOAD_BYTES, BodyLimit, SECURITY_HEADERS, clear_cookie, client_ip, cookie_name, csrf_token,
                                     csrf_valid, legacy_cookies, read_cookie, session_binding, set_cookie)
@@ -89,6 +89,7 @@ def asset_versions() -> dict[str, str]:
 def create_app(portal: Portal | None = None) -> FastAPI:
     configure_logging()
     mode = auth_mode()  # fail fast on an unsafe configuration
+    require_easyauth_platform(mode)
     app = FastAPI(title="GRC-pal", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.portal = portal or portal_from_env()
     app.state.report_cache = (0.0, None)
@@ -194,7 +195,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                 p().events.security(f"Sign-in refused: {exc}", path=request.url.path, ip=ip_of(request))
             raise _HTTPError(exc.status, str(exc)) from exc
         try:
-            user = p().resolve(identity)
+            user = p().resolve(identity, ip=ip_of(request), method=mode,
+                               session=session_binding(session_cookie_value(request)))
         except AuthError as exc:
             p().events.security(f"Access refused for {identity.email}: {exc}", actor=identity.email, path=request.url.path,
                                 ip=ip_of(request))

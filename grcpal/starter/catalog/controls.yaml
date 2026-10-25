@@ -284,6 +284,7 @@ controls:
     type: automated
     evidence:
       - {artifact: Intune managed device export, via: "collector:intune_devices"}
+      - {artifact: Conditional Access device-compliance policy, via: "collector:conditional_access"}
     iso27001: [A.5.9, A.8.1]
 
   - id: AST-03

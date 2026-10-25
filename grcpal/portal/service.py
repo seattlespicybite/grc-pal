@@ -124,18 +124,31 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Vendors
     def active_emails(self, *roles: str) -> list[str]:
         return [u["RowKey"] for u in self.users() if u.get("active", True) and (not roles or u["role"] in roles)]
 
-    def resolve(self, identity: Identity) -> User:
-        """Map a signed-in identity to a portal user, creating the row on first sign-in when allowed."""
+    def resolve(self, identity: Identity, ip: str = "", method: str = "", session: str = "") -> User:
+        """Map a signed-in identity to a portal user, creating the row on first sign-in when allowed.
+
+        `session` is a hash of the sign-in layer's session cookie (Easy Auth's AppServiceAuthSession, the proxy's
+        cookie). A value this person has not used before means a new sign-in, recorded once as auth.signin."""
         row = self.user_row(identity.email)
-        if row:
-            self._check_access(row)
-            row = self._check_identity_binding(row, identity)
-            if (row.get("last_seen") or "") < (utcnow() - dt.timedelta(hours=1)).isoformat():
-                fields = {"last_seen": _now()}
-                if identity.name and identity.name != identity.email:
-                    fields["name"] = identity.name[:120]
-                row = self.store.update("users", "u", row["RowKey"], fields)
-            return User(email=row["RowKey"], name=row.get("name") or identity.name, role=row["role"])
+        if not row:
+            row = self._provision(identity)
+        self._check_access(row)
+        row = self._check_identity_binding(row, identity)
+        if session and method and row.get("signin_session") != session:
+            row = self.store.update("users", "u", row["RowKey"], {"signin_session": session, "last_signin": _now()})
+            details = {"method": method, "ip": ip}
+            if identity.object_id:
+                details.update(entra_oid=identity.object_id, entra_tid=identity.tenant_id)
+            self.audit(row["RowKey"], "auth.signin", row["RowKey"], details)
+        if (row.get("last_seen") or "") < (utcnow() - dt.timedelta(hours=1)).isoformat():
+            fields = {"last_seen": _now()}
+            if identity.name and identity.name != identity.email:
+                fields["name"] = identity.name[:120]
+            row = self.store.update("users", "u", row["RowKey"], fields)
+        return User(email=row["RowKey"], name=row.get("name") or identity.name, role=row["role"])
+
+    def _provision(self, identity: Identity) -> dict:
+        """First sign-in of someone without a users row: create it when a rule allows, otherwise refuse."""
         role, source = None, ""
         if identity.email in bootstrap_admins():
             role, source = "admin", "bootstrap"
@@ -145,9 +158,7 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Vendors
             role, source = "contributor", "roles.yaml"
         if not role:
             raise AuthError("you have not been given access to GRC-pal yet; ask an admin to add you", 403)
-        self._create_user(identity.email, identity.name, role, source, SYSTEM.email)
-        self._check_identity_binding(self.user_row(identity.email), identity)
-        return User(email=identity.email, name=identity.name, role=role)
+        return self._create_user(identity.email, identity.name, role, source, SYSTEM.email)
 
     def _check_identity_binding(self, row: dict, identity: Identity) -> dict:
         """Tie a person to their Microsoft Entra object ID (and tenant) at their first sign-in that carries one.

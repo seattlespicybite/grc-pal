@@ -126,6 +126,20 @@ def auth_mode() -> str:
     return mode
 
 
+# Set by the platform itself on every app replica (not on jobs, which serve no web pages).
+EASYAUTH_PLATFORM_VARS = ("CONTAINER_APP_NAME", "WEBSITE_SITE_NAME")  # Azure Container Apps, App Service
+
+
+def require_easyauth_platform(mode: str) -> None:
+    """The web portal in easyauth mode believes the X-MS-CLIENT-PRINCIPAL header. Only Azure's built-in sign-in
+    can set it safely (the platform refuses that header from callers). Anywhere else (docker run, a VM, a
+    Kubernetes pod) anyone could type the header and be anyone, so refuse to start instead."""
+    if mode == "easyauth" and not any(os.getenv(v) for v in EASYAUTH_PLATFORM_VARS):
+        raise RuntimeError("GRCPAL_AUTH_MODE=easyauth works only on Azure Container Apps or App Service with "
+                           "built-in authentication turned on (CONTAINER_APP_NAME or WEBSITE_SITE_NAME is not set "
+                           "here). Elsewhere anyone could forge the sign-in header: use local or proxy instead.")
+
+
 def _csv_env(name: str) -> list[str]:
     return [v.strip().lower() for v in os.getenv(name, "").split(",") if v.strip()]
 

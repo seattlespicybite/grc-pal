@@ -236,12 +236,74 @@ def test_request_log_names_the_user_and_hides_reset_tokens(env, caplog):
 
 
 
+@pytest.mark.parametrize("platform_var", [None, "CONTAINER_APP_NAME", "WEBSITE_SITE_NAME"])
+def test_easyauth_portal_starts_only_on_azure(tmp_path, monkeypatch, platform_var):
+    # Off Azure nothing strips a caller's X-MS-CLIENT-PRINCIPAL header, so anyone could type one and be an admin.
+    monkeypatch.setenv("GRCPAL_AUTH_MODE", "easyauth")
+    monkeypatch.delenv("GRCPAL_ENV", raising=False)
+    for var in auth.EASYAUTH_PLATFORM_VARS:
+        monkeypatch.delenv(var, raising=False)
+    if platform_var is None:
+        with pytest.raises(RuntimeError, match="only on Azure"):
+            create_app(make_portal(tmp_path))
+        return
+    monkeypatch.setenv(platform_var, "grcpal-test")
+    client = TestClient(create_app(make_portal(tmp_path)), base_url="https://grc.example.com")
+    client.headers["X-MS-CLIENT-PRINCIPAL"] = _principal(ADMIN.email, name=ADMIN.name)
+    assert client.get("/").status_code == 200
+
+
+def test_easyauth_sign_in_is_audited_once_per_platform_session(tmp_path, monkeypatch):
+    # Evidence of who signed in, when and from where, kept in GRC-pal's own hash-chained log (Entra Free keeps
+    # its sign-in log 7 days). One record per Easy Auth session, not one per page.
+    monkeypatch.setenv("GRCPAL_AUTH_MODE", "easyauth")
+    monkeypatch.delenv("GRCPAL_ENV", raising=False)
+    monkeypatch.delenv("GRCPAL_ALLOWED_TENANT_IDS", raising=False)
+    monkeypatch.setenv("CONTAINER_APP_NAME", "grcpal-test")
+    monkeypatch.setenv("GRCPAL_TRUSTED_PROXY_HOPS", "1")
+    portal = make_portal(tmp_path)
+    client = TestClient(create_app(portal), base_url="https://grc.example.com")
+    client.headers["X-MS-CLIENT-PRINCIPAL"] = _principal(ADMIN.email, oid="OID-ADMIN", name=ADMIN.name)
+    client.headers["X-Forwarded-For"] = "6.6.6.6, 203.0.113.9"
+
+    def signins():
+        return [x for x in portal.log.recent(200) if x["action"] == "auth.signin"]
+
+    client.cookies.set("AppServiceAuthSession", "session-one", domain="grc.example.com")
+    for path in ("/", "/users", "/"):
+        assert client.get(path).status_code == 200
+    assert len(signins()) == 1
+    first = signins()[0]
+    assert first["actor"] == ADMIN.email
+    assert first["detail"] == {"method": "easyauth", "ip": "203.0.113.9", "entra_oid": "oid-admin",
+                               "entra_tid": "tenant-a"}
+    assert "session-one" not in json.dumps(portal.user_row(ADMIN.email))  # only a hash of the cookie is kept
+
+    client.cookies.set("AppServiceAuthSession", "session-two", domain="grc.example.com")  # signed in again
+    assert client.get("/").status_code == 200
+    assert len(signins()) == 2
+
+
+def test_refused_sign_in_is_not_recorded_as_a_sign_in(tmp_path, monkeypatch):
+    monkeypatch.setenv("GRCPAL_AUTH_MODE", "easyauth")
+    monkeypatch.delenv("GRCPAL_ENV", raising=False)
+    monkeypatch.delenv("GRCPAL_ALLOWED_TENANT_IDS", raising=False)
+    monkeypatch.setenv("CONTAINER_APP_NAME", "grcpal-test")
+    portal = make_portal(tmp_path)
+    client = TestClient(create_app(portal), base_url="https://grc.example.com")
+    client.headers["X-MS-CLIENT-PRINCIPAL"] = _principal("stranger@example.com", oid="OID-X")
+    client.cookies.set("AppServiceAuthSession", "session-x", domain="grc.example.com")
+    assert client.get("/").status_code == 403
+    assert not [x for x in portal.log.recent(200) if x["action"] == "auth.signin"]
+
+
 def test_easyauth_form_tokens_are_bound_to_the_platform_session(tmp_path, monkeypatch):
     # A form token taken from one Easy Auth session (a stolen page, a shared machine) is refused in another,
     # and a new sign-in (a new AppServiceAuthSession cookie) rotates it.
     monkeypatch.setenv("GRCPAL_AUTH_MODE", "easyauth")
     monkeypatch.delenv("GRCPAL_ENV", raising=False)
     monkeypatch.delenv("GRCPAL_ALLOWED_TENANT_IDS", raising=False)
+    monkeypatch.setenv("CONTAINER_APP_NAME", "grcpal-test")  # running on Azure Container Apps
     client = TestClient(create_app(make_portal(tmp_path)), base_url="https://grc.example.com")
     client.headers["X-MS-CLIENT-PRINCIPAL"] = _principal(ADMIN.email, name=ADMIN.name)
     client.cookies.set("AppServiceAuthSession", "session-one", domain="grc.example.com")
@@ -389,6 +451,7 @@ def test_admin_pages_render(env, path):
     r = as_(client, ADMIN).get(path)
     assert r.status_code == 200, r.text[:500]
     assert "Content-Security-Policy" in r.headers and r.headers["X-Frame-Options"] == "DENY"
+    assert r.headers["Cross-Origin-Resource-Policy"] == "same-origin"
     assert r.headers["X-Request-ID"]
     # the strict CSP blocks inline styles and scripts, so pages must not use them
     assert 'style="' not in r.text and "<script>" not in r.text and "onclick" not in r.text
