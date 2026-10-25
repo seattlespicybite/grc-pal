@@ -25,6 +25,7 @@ from grcpal.evidence import INTEGRITY_FILES, EvidenceStore, public_key_pem, utcn
 from grcpal.portal import notify
 from grcpal.portal.auditlog import AuditLog
 from grcpal.portal.accounts import AccountsMixin
+from grcpal.portal.setupguide import SetupGuideMixin
 from grcpal.portal.backups import BackupsMixin
 from grcpal.portal.updates import UpdatesMixin
 from grcpal.portal.calendar import CalendarMixin
@@ -70,7 +71,7 @@ def _rk() -> str:
 
 
 class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, VendorsMixin, VendorImportMixin, DocLibMixin,
-             AccessReviewMixin, AccessAppsMixin, AccountsMixin, BackupsMixin, UpdatesMixin):
+             AccessReviewMixin, AccessAppsMixin, AccountsMixin, BackupsMixin, UpdatesMixin, SetupGuideMixin):
     def __init__(self, catalog, store, evidence: EvidenceStore, mailer: Mailer | None = None,
                  today: dt.date | None = None, public_url: str | None = None, jobs_sync: bool | None = None) -> None:
         self.base_catalog, self.store, self.evidence = catalog, store, evidence

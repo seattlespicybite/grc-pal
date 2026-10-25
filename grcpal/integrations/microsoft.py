@@ -1,6 +1,8 @@
 """Microsoft Entra ID, Microsoft 365 and Azure: credentials and connection tests."""
 from __future__ import annotations
 
+import re
+
 from grcpal import checks
 
 GRAPH = "https://graph.microsoft.com/v1.0"
@@ -13,7 +15,19 @@ GRAPH_PROBES = (
     ("Application.Read.All", "/applications?$top=1&$select=id"),
     ("Policy.Read.All", "/identity/conditionalAccess/policies?$top=1"),
     ("DeviceManagementManagedDevices.Read.All", "/deviceManagement/managedDevices?$top=1&$select=id"),
+    ("GroupMember.Read.All", "/groups?$top=1&$select=id"),   # access reviews: group members of SSO apps and roles
 )
+_PEM_BLOCK = re.compile(r"-----BEGIN ([A-Z0-9 ]+)-----(.*?)-----END \1-----", re.S)
+
+
+def normalize_pem(text: str) -> str:
+    """Rebuild PEM blocks pasted into a one-line password box (browsers drop the line breaks)."""
+    blocks = []
+    for label, body in _PEM_BLOCK.findall(text or ""):
+        b64 = "".join(body.split())
+        lines = [b64[i:i + 64] for i in range(0, len(b64), 64)]
+        blocks.append("\n".join([f"-----BEGIN {label}-----", *lines, f"-----END {label}-----"]))
+    return "\n".join(blocks) + "\n" if blocks else ""
 
 
 def credential(settings):
@@ -23,6 +37,12 @@ def credential(settings):
     auth = settings.get("GRCPAL_MS_AUTH")
     tenant = settings.get("GRCPAL_MS_TENANT_ID") or None
     client = settings.get("GRCPAL_MS_CLIENT_ID") or None
+    if auth == "certificate":
+        pem = normalize_pem(settings.secret("GRCPAL_MS_CERTIFICATE"))
+        if not (tenant and client and "PRIVATE KEY" in pem and "CERTIFICATE" in pem):
+            raise ValueError("Certificate sign-in needs the tenant ID, client ID and the certificate with its private "
+                             "key (the .pem file from grcpal ms-cert)")
+        return identity.CertificateCredential(tenant, client, certificate_data=pem.encode())
     if auth == "client_secret":
         if not (tenant and client and settings.secret("GRCPAL_MS_CLIENT_SECRET")):
             raise ValueError("Client secret sign-in needs the tenant ID, client ID and client secret")
@@ -47,12 +67,14 @@ def validate(settings, ctx, result) -> None:
         result.add("Microsoft collection is turned off", True)
         return
     tok = result.run("Sign in to Microsoft Entra ID", lambda: token(settings, "https://graph.microsoft.com/.default"),
-                     hint="Check the tenant ID, client ID and secret, or that the managed identity exists.")
+                     hint="Check the tenant ID and client ID, then the certificate or secret (the certificate's public "
+                          ".cer file must be uploaded to the app registration), or that the managed identity exists.")
     if not tok:
         return
     for permission, path in GRAPH_PROBES:
         r = _get(GRAPH + path, tok)
-        hint = (f"Grant the application permission {permission} to the identity and grant admin consent. "
+        hint = (f"Grant the application permission {permission} to the identity and grant admin consent "
+                "(deploy/azure/grant-permissions.ps1 grants all of them). "
                 "Licensing can also block some reports (Entra ID P1 for sign-in data, Intune for devices).")
         result.add(f"Graph permission {permission}", r.status_code == 200,
                    "ok" if r.status_code == 200 else f"HTTP {r.status_code}: {r.text()[:160]}", hint)

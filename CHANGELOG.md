@@ -5,6 +5,21 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Added
+- **Setup guide covers the whole program setup.** Eight new steps, each a checklist of what is done and what
+  is missing with links to the page where the work is done: **audit period** (cycle dates set by an admin),
+  **control owners** (controls without an owner, control library owner), **backups** (location, schedule, a
+  recent backup, recovery kit exported), **updates** (policy chosen on a VM; how updates arrive elsewhere),
+  **email alerts** (email tested, admins receiving failure alerts), **access reviews** (applications added and
+  tested), **vendors** (register not empty) and **calendar and policies** (recommendations). These steps turn
+  Done by themselves when their checks pass; **Continue** no longer marks an unfinished step done. The finish
+  page lists them under **Program setup**. The welcome step lists what to have at hand.
+- **Certificate sign-in to Microsoft** (`GRCPAL_MS_AUTH=certificate`, recommended on a VM) and
+  `grcpal ms-cert`, which creates the certificate (private `.pem` readable by you only, public `.cer` for the app
+  registration, thumbprint and expiry printed). A certificate pasted on one line is rebuilt.
+- The Microsoft connection test also checks **GroupMember.Read.All** (access reviews).
+
+### Changed
+- The deployment step points to the VM installer instead of a sign-in proxy for running outside Azure.
 - **Evidence integrity.** Every evidence run now also gets `SHA256SUMS` (check with `sha256sum -c`) and
   `manifest.sig`, an Ed25519 signature of `manifest.json` with a key derived from the instance's encryption key
   (or `GRCPAL_EVIDENCE_SIGNING_KEY`). The manifest's SHA-256 is recorded in the hash-chained audit log
