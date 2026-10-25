@@ -450,8 +450,10 @@ def _make_ms_certificate(name: str, days: int = 730) -> str:
 def cmd_ms_cert(args) -> int:
     """Create the certificate GRC-pal signs in to Microsoft with. The .pem (private) never leaves the server
     except into the Configuration page; the .cer (public) is uploaded to the app registration."""
+    import hashlib
+
     from cryptography import x509
-    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives import serialization
 
     base = Path(args.out)
     key_file, cer_file = base.with_suffix(".pem"), base.with_suffix(".cer")
@@ -465,14 +467,17 @@ def cmd_ms_cert(args) -> int:
         fh.write(pem)
     cer_file.write_text(cert_pem)
     cert = x509.load_pem_x509_certificate(cert_pem.encode())
+    # Entra shows certificates by their SHA-1 thumbprint. It is only a label to compare by eye, not a security
+    # check, so it is computed with usedforsecurity=False (the certificate itself is signed with SHA-256).
+    thumbprint = hashlib.sha1(cert.public_bytes(serialization.Encoding.DER), usedforsecurity=False).hexdigest()
     print(f"Private key and certificate: {key_file} (readable by you only)\n"
           f"Public certificate:          {cer_file}\n"
-          f"Thumbprint (SHA-1):          {cert.fingerprint(hashes.SHA1()).hex().upper()}\n"
+          f"Thumbprint (SHA-1):          {thumbprint.upper()}\n"
           f"Expires:                     {cert.not_valid_after_utc:%Y-%m-%d}\n\n"
           "1. Entra admin center > App registrations > your GRC-pal app > Certificates & secrets > Certificates >\n"
           f"   Upload certificate: choose {cer_file.name}. Check the thumbprint matches.\n"
           "2. GRC-pal > Configuration > Microsoft: How GRC-pal signs in = certificate; paste the whole .pem file.\n"
-          f"3. Then delete {key_file.name} from this server, or keep it only in your password manager.")
+          f"3. Then remove {key_file.name} from this server, or keep it only in your password manager.")
     return 0
 
 
