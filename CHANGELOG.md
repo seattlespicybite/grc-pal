@@ -5,11 +5,29 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Added
+feature/access-snapshots
 - **Daily account pulls for access reviews.** Every night after `collect --all` (or `grcpal access-pull`, or **Pull now**),
   each access review application with an API source is read and stored write-once as `access-<application>` evidence:
   the full account list, what changed since the last good pull, and the request addresses. A failed pull is stored as a
   failure and alerted like a collector. New **Accounts** page (admins, auditors read-only) with flags, including accounts
   not found in Entra ID, and the pull history. A review started within 24 hours of a pull uses that stored list.
+=======
+- **Setup guide covers the whole program setup.** Eight new steps, each a checklist of what is done and what
+  is missing with links to the page where the work is done: **audit period** (cycle dates set by an admin),
+  **control owners** (controls without an owner, control library owner), **backups** (location, schedule, a
+  recent backup, recovery kit exported), **updates** (policy chosen on a VM; how updates arrive elsewhere),
+  **email alerts** (email tested, admins receiving failure alerts), **access reviews** (applications added and
+  tested), **vendors** (register not empty) and **calendar and policies** (recommendations). These steps turn
+  Done by themselves when their checks pass; **Continue** no longer marks an unfinished step done. The finish
+  page lists them under **Program setup**. The welcome step lists what to have at hand.
+- **Certificate sign-in to Microsoft** (`GRCPAL_MS_AUTH=certificate`, recommended on a VM) and
+  `grcpal ms-cert`, which creates the certificate (private `.pem` readable by you only, public `.cer` for the app
+  registration, thumbprint and expiry printed). A certificate pasted on one line is rebuilt.
+- The Microsoft connection test also checks **GroupMember.Read.All** (access reviews).
+
+### Changed
+- The deployment step points to the VM installer instead of a sign-in proxy for running outside Azure.
+main
 - **Evidence integrity.** Every evidence run now also gets `SHA256SUMS` (check with `sha256sum -c`) and
   `manifest.sig`, an Ed25519 signature of `manifest.json` with a key derived from the instance's encryption key
   (or `GRCPAL_EVIDENCE_SIGNING_KEY`). The manifest's SHA-256 is recorded in the hash-chained audit log
@@ -20,6 +38,19 @@ All notable changes are listed here. The project follows [semantic versioning](h
 - Collector runs record provenance: each API call with its request or query, record count, pages, request ID
   and the app registration used.
 - The auditor export adds `evidence_run_verification.csv` and `evidence_signing_key.pem`.
+
+### Security
+- **Authorization test suite** (`tests/test_authz.py`, table in `tests/authz_matrix.py`): every route of the app, in
+  both sign-in modes, is called as each kind of caller (not signed in, admin, Control owner, other Control owner,
+  auditor, expired auditor, disabled admin). Allowed roles must get through and change data; refused roles must be
+  refused and change nothing (no table row, evidence file or email). It also checks object-level access (IDs of
+  other people's controls, vendors, reviews, documents), a second admin who is not the library owner, two
+  organizations in one store, CSRF on every POST, and download headers. A route that is not in the table fails
+  the suite.
+- `GET /cycles/{id}/export` now sends the same sandbox CSP and sanitized file name as every other download.
+- `POST /vendors/new` without a name returns a message instead of a server error.
+- Editing a custom control that does not exist is refused instead of creating it (the "already exists" check
+  was skipped on that path).
 
 ### Changed
 - Uploads named `manifest.json`, `manifest.sig` or `SHA256SUMS` are refused (reserved names in the evidence store).

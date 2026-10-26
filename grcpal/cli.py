@@ -448,6 +448,62 @@ def cmd_create_admin(args) -> int:
     return 0
 
 
+def _make_ms_certificate(name: str, days: int = 730) -> str:
+    """Self-signed certificate for an Entra app registration: RSA 2048 (what Entra accepts), PEM with the key."""
+    import datetime as dt
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
+    now = dt.datetime.now(dt.timezone.utc)
+    cert = (x509.CertificateBuilder().subject_name(subject).issuer_name(subject).public_key(key.public_key())
+            .serial_number(x509.random_serial_number()).not_valid_before(now - dt.timedelta(minutes=5))
+            .not_valid_after(now + dt.timedelta(days=days))
+            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+            .sign(key, hashes.SHA256()))
+    key_pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                serialization.NoEncryption()).decode()
+    return key_pem + cert.public_bytes(serialization.Encoding.PEM).decode()
+
+
+def cmd_ms_cert(args) -> int:
+    """Create the certificate GRC-pal signs in to Microsoft with. The .pem (private) never leaves the server
+    except into the Configuration page; the .cer (public) is uploaded to the app registration."""
+    import hashlib
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import serialization
+
+    base = Path(args.out)
+    key_file, cer_file = base.with_suffix(".pem"), base.with_suffix(".cer")
+    for f in (key_file, cer_file):
+        if f.exists():
+            raise SystemExit(f"{f} already exists; choose another --out name")
+    pem = _make_ms_certificate(args.name, args.days)
+    cert_pem = pem[pem.index("-----BEGIN CERTIFICATE"):]
+    fd = os.open(key_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(pem)
+    cer_file.write_text(cert_pem)
+    cert = x509.load_pem_x509_certificate(cert_pem.encode())
+    # Entra shows certificates by their SHA-1 thumbprint. It is only a label to compare by eye, not a security
+    # check, so it is computed with usedforsecurity=False (the certificate itself is signed with SHA-256).
+    thumbprint = hashlib.sha1(cert.public_bytes(serialization.Encoding.DER), usedforsecurity=False).hexdigest()
+    print(f"Private key and certificate: {key_file} (readable by you only)\n"
+          f"Public certificate:          {cer_file}\n"
+          f"Thumbprint (SHA-1):          {thumbprint.upper()}\n"
+          f"Expires:                     {cert.not_valid_after_utc:%Y-%m-%d}\n\n"
+          "1. Entra admin center > App registrations > your GRC-pal app > Certificates & secrets > Certificates >\n"
+          f"   Upload certificate: choose {cer_file.name}. Check the thumbprint matches.\n"
+          "2. GRC-pal > Configuration > Microsoft: How GRC-pal signs in = certificate; paste the whole .pem file.\n"
+          f"3. Then remove {key_file.name} from this server, or keep it only in your password manager.")
+    return 0
+
+
 def cmd_remind(args) -> int:
     from grcpal.portal.auth import SYSTEM
 
@@ -749,6 +805,12 @@ def main(argv: list[str] | None = None) -> int:
     i.add_argument("--org", help="organization name for catalog/scope.yaml")
     i.set_defaults(fn=cmd_init)
 
+    mc = sub.add_parser("ms-cert", help="create the certificate GRC-pal uses to sign in to Microsoft (app registration)")
+    mc.add_argument("--out", default="grcpal-microsoft", help="file name without extension (writes .pem and .cer)")
+    mc.add_argument("--name", default="GRC-pal monitoring", help="certificate name shown in Entra")
+    mc.add_argument("--days", type=int, default=730, help="validity in days (default 2 years)")
+    mc.set_defaults(fn=cmd_ms_cert)
+
     u = sub.add_parser("users", help="list or add portal users")
     u.add_argument("action", choices=["list", "add"])
     u.add_argument("email", nargs="?")
@@ -832,7 +894,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     if args.cmd == "collect" and not (args.all or args.names):
         p.error("collect needs collector names or --all")
-    if args.base is None and args.cmd not in ("init", "serve", "publish-config", "update", "migrate"):
+    if args.base is None and args.cmd not in ("init", "serve", "publish-config", "update", "migrate", "ms-cert"):
         from grcpal import configbundle
 
         fetched = configbundle.fetch()  # deployed jobs: use the catalog published by the program repo

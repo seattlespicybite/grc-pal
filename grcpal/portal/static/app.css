@@ -192,7 +192,7 @@ input[type=file] { max-width: 100%; }
 .checklist li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .checklist li:last-child { border-bottom: 0; }
 .checklist .mark { font-weight: 700; text-align: center; }
-.checklist .ok .mark { color: var(--ok); } .checklist .bad .mark { color: var(--bad); } .checklist .warn .mark { color: var(--warn); }
+.checklist .ok .mark { color: var(--ok); } .checklist .bad .mark { color: var(--bad); } .checklist .warn .mark { color: var(--warn); } .checklist .info .mark { color: var(--muted); }
 .hint-box { margin-top: 4px; font-size: 13px; color: var(--text); background: color-mix(in srgb, var(--warn) 10%, transparent);
   border-radius: 6px; padding: 6px 10px; }
 .result-ok { border-color: var(--ok); } .result-bad { border-color: var(--bad); }

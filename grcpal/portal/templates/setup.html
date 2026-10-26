@@ -29,11 +29,21 @@
 <div><label for="b-mail">Sender mailbox (optional)</label><input id="b-mail" data-arg="--mail-from" placeholder="grc@acme.example"></div>
 </div>
 <pre class="note mono mt" data-cmd-output>./deploy/azure/deploy.sh --name acme --admins you@acme.example --location eastus2</pre>
-<p class="sub">Other platforms: run the container image anywhere with a sign-in proxy in front (see docs/deploy-azure.md and docs/configuration.md).</p></details>
+<p class="sub">On your own server: install on a Debian VM with deploy/vm/install.sh (HTTPS, backups, scheduled collection and updates included; see docs/deploy-vm.md).</p></details>
 <form method="post" action="/setup/{{ step.id }}" class="actions"><input type="hidden" name="csrf" value="{{ csrf }}">
 <button class="btn ghost" name="action" value="back" type="submit">Back</button>
 <button class="btn ghost" name="action" value="skip" type="submit">Skip for now</button>
 <button class="btn" name="action" value="next" type="submit">Continue</button></form>
+
+{% elif step.kind == 'readiness' %}
+<ul class="checklist mt">{% for c in ready.checks %}<li class="{{ 'ok' if c.ok else ('info' if c.optional else 'warn') }}"><span class="mark" aria-hidden="true">{{ '✓' if c.ok else ('·' if c.optional else '!') }}</span>
+<div><b>{{ c.name }}</b>{% if c.optional %} <span class="sub">(recommended)</span>{% endif %} <span class="sub">{{ c.detail }}</span>{% if not c.ok and c.hint %}<div class="hint-box">{{ c.hint }}</div>{% endif %}</div></li>{% endfor %}</ul>
+<p class="mt">{% for label, href in ready.links %}<a class="btn {{ 'ghost' if not loop.first }}" href="{{ href }}">{{ label }}</a> {% endfor %}</p>
+<p class="sub">{% if ready.has_required %}This step turns Done by itself when everything above is green. Come back here after you finish on the linked page.{% else %}These are recommendations. Continue when you have looked at them.{% endif %}</p>
+<form method="post" action="/setup/{{ step.id }}" class="actions"><input type="hidden" name="csrf" value="{{ csrf }}">
+<button class="btn ghost" name="action" value="back" type="submit">Back</button>
+{% if not ready.ready %}<button class="btn ghost" name="action" value="skip" type="submit">Skip for now</button>{% endif %}
+<button class="btn {{ '' if ready.ready or not ready.has_required else 'ghost' }}" name="action" value="next" type="submit">Continue</button></form>
 
 {% elif step.kind == 'access' %}
 <table class="mt"><tbody>{% for u in people %}<tr><td><b>{{ u.name }}</b><div class="sub">{{ u.RowKey }}</div></td><td><span class="role role-{{ u.role }}">{{ role_labels[u.role] }}</span></td></tr>{% endfor %}</tbody></table>
@@ -59,6 +69,8 @@
 <button class="btn ghost" name="action" value="next" type="submit">Continue</button></form>
 
 {% elif step.kind == 'summary' %}
+<h3 class="mt">Program setup</h3>
+<table><tbody>{% for sid, title, st in program %}<tr><td><a href="/setup/{{ sid }}">{{ title }}</a></td><td><span class="pill wz-{{ st }}">{{ {'done': 'Done', 'skipped': 'Skipped', 'failed': 'Needs attention', 'todo': 'To do'}[st] }}</span></td></tr>{% endfor %}</tbody></table>
 <h3 class="mt">Integrations</h3>
 <table><tbody>{% for o in overview %}<tr><td><a href="/settings/{{ o.section.id }}">{{ o.section.title }}</a></td><td><span class="pill st-{{ o.status }}">{{ {'ok': 'Connected', 'failed': 'Test failed', 'configured': 'Not tested', 'not_configured': 'Not set up', 'disabled': 'Off'}[o.status] }}</span></td></tr>{% endfor %}</tbody></table>
 <h3 class="mt">Installation</h3>

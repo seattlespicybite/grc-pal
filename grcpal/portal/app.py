@@ -924,8 +924,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             raise _HTTPError(403, str(exc)) from exc
         except Invalid as exc:
             raise _HTTPError(404, str(exc)) from exc
-        return Response(blob, media_type="application/zip", headers={
-            "Content-Disposition": f'attachment; filename="grcpal-{cycle_id}-export.zip"'})
+        return _attachment(f"grcpal-{cycle_id}-export.zip", blob)
 
     # ------------------------------------------------------------------ policies
     @app.get("/policies", response_class=HTMLResponse)

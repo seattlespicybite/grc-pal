@@ -8,7 +8,11 @@ There are two layers:
    has **Test without saving**, **Save and apply** and **Save and test**, and shows the result of the
    last test. Changes take effect immediately and are recorded in the audit log (field names only).
    Secrets are encrypted with AES-256-GCM using `GRCPAL_ENCRYPTION_KEY`, bound to the tenant and
-   field, and never shown again. The **Setup guide** walks through the same sections in order.
+   field, and never shown again. The **Setup guide** walks through the same sections in order, plus
+   the program setup that lives on other pages: audit period, control owners, backups and the recovery
+   kit, updates, email alerts, access review applications, vendors, the security calendar and policy
+   approvers. Each of those steps shows a checklist of what is done and links to the page where you do
+   the rest; it turns **Done** by itself when everything required is green.
 2. **Environment variables** for how the instance itself runs (sign-in mode, storage, keys). The
    deployment sets them. Any Configuration-page field can also be given as an environment variable
    of the same name; a value saved on the page takes precedence.

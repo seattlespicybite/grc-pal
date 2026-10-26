@@ -363,6 +363,8 @@ class VendorsMixin:
         if not actor.is_admin:  # the requester owns what they asked for until an admin changes it
             clean["owner_email"] = actor.email
             clean.setdefault("owner_name", actor.name)
+        if not clean.get("name"):
+            raise self._invalid("Give the vendor a name")
         base = slug(clean["name"])
         vid, n = (base if base not in RESERVED else f"{base}-vendor"), 2
         if any(v.get("name", "").lower() == clean["name"].lower() for v in self.store.list("vendors", "v")):
