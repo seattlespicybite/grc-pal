@@ -14,6 +14,7 @@ from grcpal.ai.review import VERDICT_LABELS
 from grcpal.portal.auth import User
 from grcpal.portal.eventlog import CATEGORIES, LEVELS
 from grcpal.portal.service import Forbidden, Invalid
+from grcpal.portal.setupguide import STEPS as GUIDE_STEPS
 from grcpal.settings import SECTIONS
 
 # Setup wizard steps. "section" steps reuse the Configuration forms; the others are special pages.
@@ -22,9 +23,11 @@ STEPS = (
      "intro": "This guide walks through everything GRC-pal needs, one step at a time. Each step explains what the "
               "setting is for and where to find the value. You can save and test a step, skip it and come back, or "
               "close the guide at any time; nothing is lost. Everything here is also on the Configuration page.",
-     "todo": ["About 30 to 60 minutes, depending on how many systems you connect.",
+     "todo": ["About 1 to 2 hours, depending on how many systems you connect. You can stop and continue later.",
               "Have at hand: your Microsoft tenant ID, and admin access to the cloud accounts and GitHub organization "
               "you want to connect (or someone who has it).",
+              "Also useful: the dates of your SOC 2 observation period, a list of control owners, your vendor list "
+              "as a spreadsheet, and a password manager for the backup recovery kit.",
               "Credentials you enter are encrypted before they are stored and are never shown again.",
               "Only admins can see this guide."]},
     {"id": "deployment", "title": "Where GRC-pal runs", "kind": "deployment",
@@ -37,6 +40,10 @@ STEPS = (
               "until their access end date. "
               "Add at least one more admin so nobody reviews their own uploads. Everyone else can be added later, "
               "or gets access automatically when you assign them work."},
+    {"id": "cycle", "kind": "readiness"},
+    {"id": "owners", "kind": "readiness"},
+    {"id": "backups", "kind": "readiness"},
+    {"id": "updates", "kind": "readiness"},
     {"id": "microsoft", "kind": "section", "section": "microsoft"},
     {"id": "azure", "kind": "section", "section": "azure"},
     {"id": "aws", "kind": "section", "section": "aws"},
@@ -44,6 +51,10 @@ STEPS = (
     {"id": "github", "kind": "section", "section": "github"},
     {"id": "sources", "kind": "section", "section": "sources"},
     {"id": "email", "kind": "section", "section": "email"},
+    {"id": "alerts", "kind": "readiness"},
+    {"id": "access_reviews", "kind": "readiness"},
+    {"id": "vendors", "kind": "readiness"},
+    {"id": "calendar_library", "kind": "readiness"},
     {"id": "ai", "kind": "section", "section": "ai"},
     {"id": "collect", "title": "First evidence run", "kind": "collect",
      "intro": "Run every enabled collector now with the settings you saved. It takes a few minutes. Afterwards the "
@@ -59,6 +70,9 @@ def _step(step_id: str) -> dict:
     if step and step["kind"] == "section":
         sec = SECTIONS[step["section"]]
         step = {**step, "title": sec.title, "intro": sec.guide}
+    elif step and step["kind"] == "readiness":
+        title, why, _ = GUIDE_STEPS[step["id"]]
+        step = {**step, "title": title, "intro": why}
     return step
 
 
@@ -128,18 +142,23 @@ def register(app, h) -> None:
     def wizard_state() -> dict:
         return p().settings_store.state("wizard", {}) or {}
 
-    def step_status(step: dict, state: dict) -> str:
+    def step_status(step: dict, state: dict, user: User | None = None) -> str:
         if step["kind"] == "section":
             st = next(o["status"] for o in p().settings_overview() if o["section"].id == step["section"])
             if st in ("ok", "failed", "disabled"):
                 return {"ok": "done", "failed": "failed", "disabled": "skipped"}[st]
-        return (state.get(step["id"]) or {}).get("status", "todo")
+        saved = (state.get(step["id"]) or {}).get("status", "todo")
+        if step["kind"] == "readiness" and user is not None:
+            ready = p().setup_readiness(user, step["id"])
+            if ready["has_required"]:  # the checklist decides; "Continue" never marks it done
+                return "done" if ready["ready"] else ("skipped" if saved == "skipped" else "todo")
+        return saved
 
     @app.get("/setup", response_class=HTMLResponse)
     def setup_home(request: Request, user: User = Depends(current_user)):
         admin(user)
         state = wizard_state()
-        nxt = next((s["id"] for s in STEPS if step_status(s, state) in ("todo", "failed")), "finish")
+        nxt = next((s["id"] for s in STEPS if step_status(s, state, user) in ("todo", "failed")), "finish")
         return RedirectResponse(f"/setup/{nxt}", status_code=303)
 
     def render_step(request, user, step_id, result=None, msg=None, err=None, form=None):
@@ -149,7 +168,7 @@ def register(app, h) -> None:
         state = wizard_state()
         portal = p()
         idx = STEP_IDS.index(step_id)
-        ctx = {"step": step, "steps": [(s_, _step(s_["id"])["title"], step_status(s_, state)) for s_ in STEPS],
+        ctx = {"step": step, "steps": [(s_, _step(s_["id"])["title"], step_status(s_, state, user)) for s_ in STEPS],
                "index": idx, "prev_id": STEP_IDS[idx - 1] if idx else None,
                "next_id": STEP_IDS[idx + 1] if idx + 1 < len(STEP_IDS) else None, "result": result,
                "page_msg": msg, "page_err": err, "s": portal.settings, "form": form}
@@ -162,7 +181,11 @@ def register(app, h) -> None:
         if step["kind"] == "collect":
             ctx["last"] = portal.settings_store.state("last_collection", {}) or {}
             ctx["running"] = portal.jobs.running("collect")
+        if step["kind"] == "readiness":
+            ctx["ready"] = portal.setup_readiness(user, step_id)
         if step["kind"] == "summary":
+            ctx["program"] = [(s_["id"], _step(s_["id"])["title"], step_status(s_, state, user))
+                              for s_ in STEPS if s_["kind"] == "readiness"]
             ctx["overview"] = portal.settings_overview()
             ctx["checks"] = portal.deployment_checks(request.headers.get("host", ""))
         return render(request, user, "setup.html", **ctx)
@@ -203,8 +226,9 @@ def register(app, h) -> None:
                 return render_step(request, user, step_id, result=result,
                                    msg="Saved. " + ("All checks passed." if result["ok"] else "Some checks failed; see below."))
             return render_step(request, user, step_id, msg="Saved and applied.")
-        state[step_id] = {"status": "done", "by": user.email}
-        p().settings_store.set_state("wizard", state)
+        if step["kind"] != "readiness" or not p().setup_readiness(user, step_id)["has_required"]:
+            state[step_id] = {"status": "done", "by": user.email}
+            p().settings_store.set_state("wizard", state)
         return RedirectResponse(f"/setup/{nxt}", status_code=303)
 
     # ================================================================ logs

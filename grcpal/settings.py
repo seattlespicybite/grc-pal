@@ -76,24 +76,32 @@ SCHEMA: tuple[Section, ...] = (
         ), category="general", testable=False),
     Section(
         "microsoft", "Microsoft Entra ID and Microsoft 365", "Users, MFA, roles, apps, Conditional Access, Intune devices.",
-        "GRC-pal reads your directory with Microsoft Graph, read-only. Best: run in Azure and use the managed identity "
-        "(no secret). Otherwise create an app registration with application permissions User.Read.All, "
-        "AuditLog.Read.All, RoleManagement.Read.Directory, Application.Read.All, Policy.Read.All and "
-        "DeviceManagementManagedDevices.Read.All, grant admin consent, and enter a client secret here. "
-        "The test checks each permission separately.",
+        "GRC-pal reads your directory with Microsoft Graph, read-only. In Azure, use the managed identity (no secret). "
+        "On a VM, create an app registration with application permissions User.Read.All, AuditLog.Read.All, "
+        "RoleManagement.Read.Directory, Application.Read.All, Policy.Read.All, DeviceManagementManagedDevices.Read.All "
+        "and GroupMember.Read.All (access reviews), and grant admin consent (deploy/azure/grant-permissions.ps1 does "
+        "this). Sign in with a certificate: on the server run grcpal ms-cert, upload the .cer file to the app "
+        "registration (Certificates & secrets > Certificates) and paste the .pem file here. A certificate cannot be "
+        "copied from a screen or a log the way a client secret can. Sending email through Graph (Mail.Send) is "
+        "tested in the Email step. The test checks each permission separately.",
         (
             Field("GRCPAL_MS_ENABLED", "Collect from Microsoft Entra ID and Microsoft 365", "Turn off if you do not use "
                   "Microsoft 365.", kind="bool", default="true"),
             Field("GRCPAL_MS_TENANT_ID", "Directory (tenant) ID", "Entra admin center > Overview > Tenant ID. A GUID.",
                   placeholder="00000000-0000-0000-0000-000000000000"),
-            Field("GRCPAL_MS_AUTH", "How GRC-pal signs in", "Managed identity: no secret, works when GRC-pal runs in "
+            Field("GRCPAL_MS_AUTH", "How GRC-pal signs in", "Certificate (recommended on a VM): an app registration and "
+                  "a certificate from grcpal ms-cert. Managed identity: no secret, works when GRC-pal runs in "
                   "Azure. Client secret: an app registration's ID and secret. Default chain: whatever is available "
                   "(environment, managed identity, az login on your computer).", kind="select",
-                  options=("managed_identity", "client_secret", "default"), default="default"),
+                  options=("certificate", "managed_identity", "client_secret", "default"), default="default"),
             Field("GRCPAL_MS_CLIENT_ID", "Client (application) ID", "For client secret: the app registration's "
                   "Application (client) ID. For managed identity: the identity's client ID if it is user-assigned.",
-                  show_when="GRCPAL_MS_AUTH=client_secret|managed_identity",
-                  required_when="GRCPAL_MS_AUTH=client_secret"),
+                  show_when="GRCPAL_MS_AUTH=certificate|client_secret|managed_identity",
+                  required_when="GRCPAL_MS_AUTH=certificate|client_secret"),
+            Field("GRCPAL_MS_CERTIFICATE", "Certificate with private key (.pem)", "Open the .pem file that grcpal ms-cert "
+                  "wrote, copy everything and paste it here (line breaks do not matter). Stored encrypted. The public "
+                  ".cer file goes to the app registration. Create a new one before it expires (2 years).",
+                  kind="secret", show_when="GRCPAL_MS_AUTH=certificate", required_when="GRCPAL_MS_AUTH=certificate"),
             Field("GRCPAL_MS_CLIENT_SECRET", "Client secret", "App registration > Certificates & secrets > New client "
                   "secret. Copy the Value (not the ID). Set a reminder to rotate it before it expires.",
                   kind="secret", show_when="GRCPAL_MS_AUTH=client_secret", required_when="GRCPAL_MS_AUTH=client_secret"),
@@ -252,6 +260,7 @@ SCHEMA: tuple[Section, ...] = (
 
 OPTION_LABELS = {
     "managed_identity": "Managed identity (no secret)", "client_secret": "App registration with a client secret",
+    "certificate": "App registration with a certificate (recommended on a VM)",
     "default": "Default credential chain", "access_key": "IAM user access key", "assume_role": "Assume a role",
     "azure_web_identity": "Azure managed identity to an AWS role (no secret)",
     "workload_identity": "Workload Identity Federation (no key)", "service_account_key": "Service account key",

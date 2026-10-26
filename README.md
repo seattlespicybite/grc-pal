@@ -162,8 +162,10 @@ development only.
    make one admin the **control library owner**.
 2. **Scope and frameworks:** SOC 2 is the only framework in use by default; set the report scope in
    `catalog/scope.yaml` (starter: Security, Availability, Confidentiality).
-3. **Setup guide:** connect Microsoft Entra ID / Microsoft 365, Azure, GitHub and email. Each
-   connection is tested before it is saved. Turn off what is not used (AWS, Google Cloud).
+3. **Setup guide:** connect Microsoft Entra ID / Microsoft 365 (certificate sign-in on a VM), Azure,
+   GitHub and email; set the audit period, control owners, backups and recovery kit, updates, email
+   alerts, access review applications and vendors. Each connection is tested before it is saved, and
+   each program step shows what is still missing. Turn off what is not used (AWS, Google Cloud).
 4. **Controls:** as library owner, adjust owners and wording to the organization; each change asks
    for a reason and is kept for the auditor.
 5. **Requests:** assign evidence requests, or let the recurring activities open them each month.

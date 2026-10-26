@@ -8,6 +8,7 @@ Where collectors run decides the best sign-in method:
 
 | Collectors run in | Microsoft / Azure | AWS | Google Cloud |
 | --- | --- | --- | --- |
+| A VM (deploy/vm/install.sh) | App registration with a certificate (`grcpal ms-cert`) | Access key or assume role | Service account key (encrypted) |
 | The portal and its daily job (Azure Container Apps) | Managed identity (no secret) | Azure managed identity to an AWS role (no secret) | Service account key (encrypted) |
 | GitHub Actions in your program repository | GitHub OIDC (no secret) | GitHub OIDC with `aws-actions/configure-aws-credentials` | GitHub OIDC with `google-github-actions/auth` |
 | Your computer | `az login` | AWS profile (default chain) | `gcloud auth application-default login` |
@@ -18,6 +19,19 @@ Where collectors run decides the best sign-in method:
   RoleManagement.Read.Directory, Application.Read.All, Policy.Read.All,
   DeviceManagementManagedDevices.Read.All, and GroupMember.Read.All for access reviews that include groups
   (Entra enterprise applications and Azure). `deploy/azure/grant-permissions.ps1` grants them to an identity.
+- **Sign-in from a VM: use a certificate, not a client secret.** A certificate's private key is created on
+  the server and never shown on a screen, in a log or in a ticket, so it cannot be copied the way a secret can.
+  1. On the server: `grcpal ms-cert --out grcpal-microsoft` (with Docker:
+     `docker compose exec grcpal grcpal ms-cert --out /tmp/grcpal-microsoft`). It writes
+     `grcpal-microsoft.pem` (private key and certificate, readable by you only) and `grcpal-microsoft.cer`
+     (public), valid for 2 years, and prints the thumbprint.
+  2. Entra admin center > App registrations > your GRC-pal app > **Certificates & secrets > Certificates >
+     Upload certificate**: choose the `.cer` file and check the thumbprint matches.
+  3. **Configuration > Microsoft**: *How GRC-pal signs in* = certificate; paste the whole `.pem` file (line
+     breaks do not matter); **Save and test**. Then delete the `.pem` file from the server.
+  4. Put the expiry date in the security calendar; create and upload a new certificate before it expires.
+- **Email through Microsoft Graph** needs Mail.Send restricted to one mailbox; the **Email** step's test sends
+  a real message, which proves it.
 - **Azure:** Reader at the management group or on each subscription in scope. Optionally assign the
   built-in Azure Policy initiative *SOC 2 Type 2* in audit mode and enter its assignment name.
 
