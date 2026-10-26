@@ -5,13 +5,11 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Added
-feature/access-snapshots
 - **Daily account pulls for access reviews.** Every night after `collect --all` (or `grcpal access-pull`, or **Pull now**),
   each access review application with an API source is read and stored write-once as `access-<application>` evidence:
   the full account list, what changed since the last good pull, and the request addresses. A failed pull is stored as a
   failure and alerted like a collector. New **Accounts** page (admins, auditors read-only) with flags, including accounts
   not found in Entra ID, and the pull history. A review started within 24 hours of a pull uses that stored list.
-=======
 - **Setup guide covers the whole program setup.** Eight new steps, each a checklist of what is done and what
   is missing with links to the page where the work is done: **audit period** (cycle dates set by an admin),
   **control owners** (controls without an owner, control library owner), **backups** (location, schedule, a
@@ -27,7 +25,6 @@ feature/access-snapshots
 
 ### Changed
 - The deployment step points to the VM installer instead of a sign-in proxy for running outside Azure.
-main
 - **Evidence integrity.** Every evidence run now also gets `SHA256SUMS` (check with `sha256sum -c`) and
   `manifest.sig`, an Ed25519 signature of `manifest.json` with a key derived from the instance's encryption key
   (or `GRCPAL_EVIDENCE_SIGNING_KEY`). The manifest's SHA-256 is recorded in the hash-chained audit log
@@ -229,8 +226,6 @@ New tables `arapps`, `matriximports` and `vendorimports` (no migration needed). 
   pending from before can be approved on **Reviews** or the control page with an approval note.
   No data model change (the new field is read with a default).
 
-release/0.6.0
-=======
 ### Security
 - **Session hygiene (hardening batch B5).**
   - In production every GRC-pal cookie is `Secure` and uses the `__Host-` prefix (`__Host-grcpal_session`,
@@ -274,7 +269,6 @@ release/0.6.0
   files; it opens only the workbook, shared text and worksheet parts.
 
 New tables `arapps`, `matriximports` and `vendorimports` (no migration needed). No other data model change.
-main
 
 ### Fixed
 - **Program repository knowledge articles and frameworks now reach Azure portals.** `grcpal publish-config`
