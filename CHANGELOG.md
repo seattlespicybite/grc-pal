@@ -16,6 +16,19 @@ All notable changes are listed here. The project follows [semantic versioning](h
   and the app registration used.
 - The auditor export adds `evidence_run_verification.csv` and `evidence_signing_key.pem`.
 
+### Security
+- **Authorization test suite** (`tests/test_authz.py`, table in `tests/authz_matrix.py`): every route of the app, in
+  both sign-in modes, is called as each kind of caller (not signed in, admin, Control owner, other Control owner,
+  auditor, expired auditor, disabled admin). Allowed roles must get through and change data; refused roles must be
+  refused and change nothing (no table row, evidence file or email). It also checks object-level access (IDs of
+  other people's controls, vendors, reviews, documents), a second admin who is not the library owner, two
+  organizations in one store, CSRF on every POST, and download headers. A route that is not in the table fails
+  the suite.
+- `GET /cycles/{id}/export` now sends the same sandbox CSP and sanitized file name as every other download.
+- `POST /vendors/new` without a name returns a message instead of a server error.
+- Editing a custom control that does not exist is refused instead of creating it (the "already exists" check
+  was skipped on that path).
+
 ### Changed
 - Uploads named `manifest.json`, `manifest.sig` or `SHA256SUMS` are refused (reserved names in the evidence store).
 

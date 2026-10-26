@@ -24,6 +24,8 @@ grcpal serve --demo          # http://localhost:8000
   `static/app.js` (progressive enhancement only) and styles in `static/app.css`.
 - **Tests with the change:** permissions (who can and cannot), tenant isolation where data is
   touched, and the audit record.
+- **New routes:** add them to `tests/authz_matrix.py` (who may call the route, its `{ids}`, and for a POST a
+  valid form). `tests/test_authz.py` fails until you do.
 - **No real organization data** in code, tests, fixtures or screenshots. Use `example.com`.
 - **New collectors:** add `grcpal/collectors/<name>.py` with `PLATFORM`, `DESCRIPTION` and
   `run(ctx, run)`, register it in `collectors/__init__.py`, and add a test with canned API data.

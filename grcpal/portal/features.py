@@ -443,6 +443,8 @@ class FeaturesMixin:
         current = self.custom_control(cid)
         if not existing_id and (current or self.base_catalog.control(cid)):
             raise self._invalid(f"{cid} already exists")
+        if existing_id and not current:  # editing never creates (it would also skip the "already exists" check)
+            raise self._invalid(f"{cid} is not a custom control")
         title = (form.get("title") or "").strip()
         if len(title) < 3:
             raise self._invalid("Give the control a title")
