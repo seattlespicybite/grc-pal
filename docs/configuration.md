@@ -60,7 +60,7 @@ Every Configuration save is in the audit log and is emailed to all admins (the p
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `GRCPAL_AUTH_MODE` | `local` | `local` (GRC-pal accounts with passwords, for a VM), `easyauth` (Azure Container Apps / App Service), `proxy` (trusted reverse proxy) or `dev` |
+| `GRCPAL_AUTH_MODE` | `local` | `local` (GRC-pal accounts with passwords, for a VM), `easyauth` (Azure Container Apps / App Service; the portal refuses to start anywhere else, because only Azure's built-in sign-in can set its identity header safely), `proxy` (trusted reverse proxy) or `dev` |
 | `GRCPAL_BOOTSTRAP_ADMINS` | (empty) | Comma-separated emails created as admins at first sign-in |
 | `GRCPAL_ALLOWED_TENANT_IDS` | (empty) | Entra directory IDs allowed to sign in (easyauth). **Required** when `GRCPAL_ENV=production`: the portal refuses to start without it (the Azure template sets your tenant). Outside production, empty allows any directory |
 | `GRCPAL_GROUP_ADMIN` / `_CONTRIBUTOR` / `_AUDITOR` | (empty) | Optional group object IDs that create a user with that role at first sign-in |
@@ -89,6 +89,11 @@ object ID and tenant the first time they sign in. Later, the same email from a d
 address given to a new employee, a deleted and recreated account) is refused and logged as a security event.
 After checking who now holds the address, an admin clicks **Unlink Entra account** on Users and roles; the next
 sign-in links the new account. Both steps are in the audit log (`user.identity_bound`, `user.identity_reset`).
+
+**Each sign-in is recorded (easyauth, proxy).** The first request of a new Easy Auth or proxy session writes
+`auth.signin` to the audit log with the method, the client address and, for Entra, the object and tenant ID. A new
+session means a new session cookie from the sign-in layer (a fresh Entra sign-in, or the next one after
+`sessionHours`). GRC-pal stores only a hash of that cookie.
 
 ## Storage
 

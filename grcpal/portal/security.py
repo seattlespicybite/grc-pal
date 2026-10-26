@@ -21,6 +21,9 @@ SECURITY_HEADERS = {
     "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
     "Cross-Origin-Opener-Policy": "same-origin",
+    # Other sites cannot embed our responses (an evidence file as an <img>, a JSON reply as a <script>), so a
+    # browser never hands them to another origin's page even through a side channel.
+    "Cross-Origin-Resource-Policy": "same-origin",
     "Cache-Control": "no-store",
 }
 

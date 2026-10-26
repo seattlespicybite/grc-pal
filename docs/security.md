@@ -9,6 +9,7 @@ remains your responsibility. To report a vulnerability, see [SECURITY.md](../SEC
 | Threat | Protection |
 | --- | --- |
 | Someone outside the organization opens the portal | Local accounts (VM): only people an admin added can set a password, one-time links, sessions on the server. On Azure: sign-in at the platform edge (Easy Auth); only listed directories (`GRCPAL_ALLOWED_TENANT_IDS`); only people in the users table; optional enterprise-app assignment |
+| Forged identity header (`X-MS-CLIENT-PRINCIPAL`) | Azure refuses that header from callers; the portal starts in `easyauth` mode only on Azure Container Apps or App Service, so a Docker or VM run cannot be set up to believe a typed header. Check after each deploy with the V-1 command in [deploy-azure.md, Step 3](deploy-azure.md) |
 | A contributor reads other teams' evidence | Visibility is computed in the service for every request: only assigned or owned controls; raw evidence store hidden; 404 rather than 403 for hidden objects |
 | An auditor changes something | Auditor role has no write paths; every write checks the role in the service layer |
 | One customer sees another's data (hosted use) | Separate deployment and storage account per customer; in addition every record key and evidence path carries the tenant prefix and reads outside it are refused (see [saas-architecture.md](saas-architecture.md)) |
@@ -23,6 +24,8 @@ remains your responsibility. To report a vulnerability, see [SECURITY.md](../SEC
 | Cross-site request forgery | HMAC token on every form, tied to the person and their sign-in session (local session, Easy Auth or proxy session cookie) and renewed at every sign-in, valid 12 to 24 hours, plus an Origin check |
 | Open redirect | Return URLs limited to same-site paths |
 | Clickjacking | `frame-ancestors 'none'` and `X-Frame-Options: DENY` |
+| Other sites embedding portal responses | `Cross-Origin-Resource-Policy: same-origin` |
+| No record of who signed in (Entra Free keeps sign-ins 7 days) | Each new Easy Auth or proxy session is written once to the hash-chained audit log as `auth.signin` (method, address, Entra object and tenant ID) |
 | Email abuse | One message per recipient, no recipient lists exposed, subject sanitized, reminder rate limit, sender restricted to one mailbox (Exchange RBAC for Applications) |
 | Stolen credentials in config | No storage keys (shared-key auth disabled); managed identities and GitHub OIDC; secrets only as Container Apps secrets |
 | Leaked integration credentials | Saved credentials encrypted with AES-256-GCM, bound to tenant and field, write-only in the UI, scrubbed from logs and audit records |

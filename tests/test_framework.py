@@ -215,8 +215,30 @@ def test_expected_findings(ctx, tmp_path):
     assert any("old@example.com" in f["title"] for f in findings("leaver_reconcile"))
     assert any("without independent approval" in f["title"] for f in findings("github_changes"))
     assert any(f["key"] == "legacy-auth-open" for f in findings("conditional_access"))
+    assert any(f["key"] == "no-device-compliance" for f in findings("conditional_access"))
     assert any("Owner" in f["title"] for f in findings("azure_rbac"))
     assert any("lodash" in f["title"] for f in findings("github_vulns"))
+
+
+def _ca_policy(controls, operator="AND", state="enabled"):
+    return {"displayName": "p", "state": state, "conditions": {"users": {"includeUsers": ["All"]}},
+            "grantControls": {"operator": operator, "builtInControls": controls}}
+
+
+@pytest.mark.parametrize("policy,ok", [
+    (_ca_policy(["mfa", "compliantDevice"], "AND"), True),       # MFA and a managed device
+    (_ca_policy(["compliantDevice"], "OR"), True),               # only one control: it is required
+    (_ca_policy(["compliantDevice", "domainJoinedDevice"], "OR"), True),  # either kind of managed device
+    (_ca_policy(["mfa", "compliantDevice"], "OR"), False),       # MFA alone also lets an unmanaged laptop in
+    (_ca_policy(["mfa"], "AND"), False),
+    (_ca_policy(["compliantDevice"], "AND", state="enabledForReportingButNotEnforced"), False),  # report-only
+])
+def test_conditional_access_device_compliance(policy, ok, tmp_path):
+    from types import SimpleNamespace
+    ca = collectors.get("conditional_access")
+    fake = SimpleNamespace(clients=SimpleNamespace(graph_list=lambda path: [policy]))
+    findings = ca.run(fake, EvidenceStore(tmp_path / "ev").new_run("conditional_access", [], {}))
+    assert any(f["key"] == "no-device-compliance" for f in findings) is not ok
 
 
 def test_tasks_due_dry_run(ctx):
