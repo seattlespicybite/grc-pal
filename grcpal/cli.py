@@ -16,6 +16,7 @@ Program operations
 Portal administration (uses GRCPAL_TABLES_URL or GRCPAL_SQLITE)
     grcpal users add you@example.com --role admin
     grcpal users list
+    grcpal access-pull                    store today's account list of every access review application
     grcpal remind --overdue [--dry-run]   email owners of overdue requests and vendor reviews due soon
     grcpal audit verify                   check the tamper-evident audit log
     grcpal evidence verify [--source S]   check hashes, signature and audit-log record of evidence runs
@@ -126,8 +127,30 @@ def cmd_collect(args) -> int:
     if getattr(args, "checks", False) and (os.getenv("GRCPAL_TABLES_URL") or os.getenv("GRCPAL_SQLITE")):
         failed += _run_checks(args, force=False)
     if args.all and (os.getenv("GRCPAL_TABLES_URL") or os.getenv("GRCPAL_SQLITE")):
+        failed += _access_pull(args)  # before the email, so a failed pull is in tonight's failure alert
         _automation_mail(args)
     return 1 if failed else 0
+
+
+def _access_pull(args) -> int:
+    """Store today's account list of every access review application. Returns how many failed."""
+    from grcpal.portal.auth import SYSTEM
+
+    try:
+        results = _admin_portal(args).pull_access_snapshots(SYSTEM)
+    except Exception as exc:  # noqa: BLE001 - report and carry on; the collectors' evidence is already stored
+        print(f"FAIL  access pull: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
+    for r in results:
+        if r["ok"]:
+            print(f"ok    accounts {r['app']}: {r['records']} accounts -> {r['run']}")
+        else:
+            print(f"FAIL  accounts {r['app']}: {r['error']}", file=sys.stderr)
+    return sum(1 for r in results if not r["ok"])
+
+
+def cmd_access_pull(args) -> int:
+    return 1 if _access_pull(args) else 0
 
 
 def _automation_mail(args) -> None:
@@ -733,6 +756,9 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--open-issues", action="store_true", help="open or update deficiency issues")
     c.add_argument("--checks", action="store_true", help="also run due custom checks (needs a portal store)")
     c.set_defaults(fn=cmd_collect)
+
+    sub.add_parser("access-pull", help="store today's account list of every access review application "
+                                      "(also runs after collect --all)").set_defaults(fn=cmd_access_pull)
 
     s = sub.add_parser("store")
     s.add_argument("--source", required=True)

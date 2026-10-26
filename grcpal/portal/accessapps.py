@@ -20,8 +20,16 @@ import json
 import re
 
 from grcpal import accesssources as src
-from grcpal.portal.accessreview import CsvProblem, MAX_ACCOUNTS, _read_csv, parse_accounts, parse_people
+from grcpal.portal.accessreview import (CONTROLS, DISABLED_WORDS, FLAGS, PRIVILEGED, CsvProblem, MAX_ACCOUNTS,
+                                        _read_csv, parse_accounts, parse_people)
+from grcpal.portal.security import csv_cell
 
+SNAPSHOT_PREFIX = "access-"   # evidence source per application: access-<application id>
+FRESH_HOURS = 24              # a review reuses a pull younger than this instead of pulling again
+HISTORY = 10                  # pulls shown on the Accounts page
+CHANGE_FIELDS = ("email", "status", "role", "mfa")
+SNAPSHOT_COLUMNS = ("app", "account_id", "email", "name", "status", "role", "last_login", "mfa", "is_service_account")
+ACCOUNT_FLAGS = {**{k: v for k, v in FLAGS.items() if k != "no_reviewer"}, "not_in_directory": "Not found in Entra ID"}
 APP_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
 SINGLE = {"entra_users", "azure_rbac", "grcpal"}      # one application of these kinds is enough
 MAX_IDENTITIES = 20000
@@ -282,16 +290,20 @@ class AccessAppsMixin:
             pulled, files, sources = {}, {}, []
             for i, app in enumerate(apps):
                 job.progress(i, len(apps) + 1, f"Reading {app['name']}")
-                pages: list[str] = []
-                try:
-                    rows = self._aa_pull(app, get_clients, get_ms, request_fn, notes, pages=pages)
-                except Exception as exc:  # noqa: BLE001
-                    raise src.SourceError(f"{app['name']}: {_plain(exc)}. Nothing was created") from exc
+                fresh = self._aa_fresh_snapshot(app["RowKey"])
+                if fresh:  # last night's (or a recent) pull: the review covers exactly that stored list
+                    snapshot, rows, pages, pulled_at = fresh
+                else:
+                    try:
+                        snapshot, rows, pages = self._aa_snapshot(actor, app, get_clients, get_ms, request_fn, notes)
+                    except Exception as exc:  # noqa: BLE001
+                        raise src.SourceError(f"{app['name']}: {_plain(exc)}. Nothing was created") from exc
+                    pulled_at = _now()
                 sources.append((app, rows))
-                pulled[app["name"]] = {"kind": app["kind"], "records": len(rows)}
+                pulled[app["name"]] = {"kind": app["kind"], "records": len(rows), "snapshot": snapshot}
                 files[f"source_{app['RowKey']}.json"] = json.dumps(
-                    {"application": app["name"], "kind": app["kind"], "pulled_at": _now(), "records": len(rows),
-                     "requests": pages, "accounts": rows}, indent=1, sort_keys=True).encode()
+                    {"application": app["name"], "kind": app["kind"], "pulled_at": pulled_at, "records": len(rows),
+                     "snapshot": snapshot, "requests": pages, "accounts": rows}, indent=1, sort_keys=True).encode()
             managers: dict[str, str] = {}
             if entra_managers:
                 job.progress(len(apps), len(apps) + 1, "Reading managers from Entra ID")
@@ -325,6 +337,192 @@ class AccessAppsMixin:
                     "without_account": len(camp["reviewers_without_account"]), "notes": camp["pull_notes"]}
 
         return self.jobs.submit("access_review", f"Start access review: {name}", actor.email, work)
+
+    # ------------------------------------------------------------------ daily account snapshots
+    def _aa_last_ok(self, aid: str) -> tuple[str, dict] | None:
+        """The newest successful snapshot run of one application and its manifest."""
+        source = snapshot_source(aid)
+        for run in reversed(self.evidence.list_runs(source)):
+            raw = self.evidence.read(source, run, "manifest.json")
+            manifest = json.loads(raw) if raw else {}
+            if manifest.get("status") == "ok":
+                return run, manifest
+        return None
+
+    def _aa_snapshot_file(self, aid: str, run: str, name: str, default):
+        raw = self.evidence.read(snapshot_source(aid), run, name)
+        return json.loads(raw) if raw else default
+
+    def _aa_fresh_snapshot(self, aid: str):
+        """(snapshot path, rows, requests, pulled at) when the last good pull is under FRESH_HOURS old, else None."""
+        last = self._aa_last_ok(aid)
+        if not last:
+            return None
+        run, manifest = last
+        started = dt.datetime.fromisoformat(manifest["started"])
+        if dt.datetime.now(dt.timezone.utc) - started > dt.timedelta(hours=FRESH_HOURS):
+            return None
+        return (f"{snapshot_source(aid)}/{run}", self._aa_snapshot_file(aid, run, "accounts.json", []),
+                self._aa_snapshot_file(aid, run, "requests.json", []), manifest["started"])
+
+    def _aa_snapshot(self, actor, app: dict, get_clients, get_ms, request_fn, notes: list) -> tuple[str, list, list]:
+        """Pull one application and store the full list write-once with what changed since the last good pull.
+        A failed or partial pull is stored as a failed run (calendar and failure email show it) and raises: nothing
+        partial is ever kept."""
+        aid, source = app["RowKey"], snapshot_source(app["RowKey"])
+        previous = self._aa_last_ok(aid)
+        run = self.evidence.new_run(source, CONTROLS, {"application": app["name"], "kind": app["kind"],
+                                                        "description": "Daily account list for access reviews"})
+        taken = set(self.evidence.list_runs(source))
+        while run.prefix.split("/", 1)[1] in taken:  # one folder per second
+            run.started += dt.timedelta(seconds=1)
+        pages: list[str] = []
+        mine: list[str] = []
+        try:
+            rows = self._aa_pull(app, get_clients, get_ms, request_fn, mine, pages=pages)
+            if rows:  # the same checks a review applies, so a stored list can always start a review
+                parse_accounts(_csv_bytes(app["name"], rows), None, self.today)
+        except Exception as exc:  # noqa: BLE001 - recorded, then raised to the caller
+            message = _plain(exc)
+            run.finish([], status="error", error=message)
+            self.store.update("arapps", "a", aid, {"last_pull": {"ok": False, "at": _now(), "run": run.prefix,
+                                                                  "error": message}})
+            self.audit(actor, "access_review.pull", aid, {"ok": False})
+            raise src.SourceError(message) from exc
+        notes.extend(mine)
+        old = self._aa_snapshot_file(aid, previous[0], "accounts.json", []) if previous else []
+        changes = diff_accounts(old, rows)
+        changes["previous"] = f"{source}/{previous[0]}" if previous else ""
+        counts = {"records": len(rows), "added": len(changes["added"]), "removed": len(changes["removed"]),
+                  "changed": len(changes["changed"])}
+        run.meta.update({**counts, "notes": mine})
+        run.add_bytes("accounts.json", json.dumps(rows, indent=1, sort_keys=True).encode())
+        run.add_bytes("accounts.csv", evidence_csv(app["name"], rows))
+        run.add_bytes("changes.json", json.dumps(changes, indent=1, sort_keys=True).encode())
+        run.add_bytes("requests.json", json.dumps(pages).encode())
+        run.finish(snapshot_findings(rows))
+        self.store.update("arapps", "a", aid, {"last_pull": {"ok": True, "at": _now(), "run": run.prefix, **counts}})
+        self.audit(actor, "access_review.pull", aid, {"ok": True, **counts})
+        return run.prefix, rows, pages
+
+    def pull_access_snapshots(self, actor, app_ids: list[str] | None = None, clients=None, request_fn=None) -> list[dict]:
+        """Pull every active application that has an API source (the nightly job), or the chosen ones. One failing
+        application never stops the others. Returns one result per application, without people."""
+        self._ar_admin(actor, "pull accounts")
+        apps = [a for a in self.store.list("arapps", "a") if a.get("active", True) and a["kind"] != "csv"]
+        if app_ids is not None:
+            wanted = set(app_ids)
+            apps = [a for a in apps if a["RowKey"] in wanted]
+        get_clients, get_ms, _ = self._aa_clients(clients)
+        results = []
+        for app in sorted(apps, key=lambda a: a["RowKey"]):
+            try:
+                path, rows, _ = self._aa_snapshot(actor, app, get_clients, get_ms, request_fn, [])
+                results.append({"app": app["name"], "ok": True, "run": path, "records": len(rows)})
+            except Exception as exc:  # noqa: BLE001 - recorded as a failed run; carry on with the others
+                results.append({"app": app["name"], "ok": False, "error": _plain(exc)})
+        return results
+
+    def request_access_pull(self, actor, aid: str = "", clients=None, request_fn=None) -> dict:
+        """The Pull now button: pull one application (or all) in the background."""
+        self._ar_admin(actor, "pull accounts")
+        ids = [self._aa_get(aid)["RowKey"]] if aid else None
+        if self.jobs.running("access_pull"):
+            raise self._invalid("A pull is already running. Wait for it to finish")
+
+        def work(job):
+            results = self.pull_access_snapshots(actor, ids, clients, request_fn)
+            failed = [r for r in results if not r["ok"]]
+            if failed:
+                raise src.SourceError("; ".join(f"{r['app']}: {r['error']}" for r in failed))
+            return {"pulled": len(results)}
+
+        return self.jobs.submit("access_pull", "Pull accounts now", actor.email, work)
+
+    def access_accounts(self, user, aid: str = "") -> dict:
+        """The Accounts page: every application's last pull, and for the chosen one its current accounts with flags,
+        what changed in the last pull, and the recent pull history. Admins and auditors only."""
+        self._aa_see(user)
+        apps = [self._aa_public(a) for a in self.store.list("arapps", "a") if a["kind"] != "csv"]
+        apps.sort(key=lambda a: (not a.get("active", True), a["name"].lower()))
+        out = {"apps": apps, "selected": None, "jobs": self.jobs.recent(3, "access_pull") if user.is_admin else []}
+        if not aid:
+            return out
+        app = self._aa_get(aid)
+        if app["kind"] == "csv":
+            raise self._invalid("This application's accounts come from a CSV upload, so there are no daily pulls")
+        last = self._aa_last_ok(aid)
+        rows = self._aa_snapshot_file(aid, last[0], "accounts.json", []) if last else []
+        directory = None
+        entra = next((a for a in self.store.list("arapps", "a") if a["kind"] == "entra_users" and a["RowKey"] != aid), None)
+        elast = self._aa_last_ok(entra["RowKey"]) if entra else None
+        if elast:
+            directory = {r["email"] for r in self._aa_snapshot_file(entra["RowKey"], elast[0], "accounts.json", [])
+                         if r["email"]}
+        flagged = parse_accounts(_csv_bytes(app["name"], rows), None, self.today) if rows else []
+        accounts = []
+        for r in flagged:
+            flags = [f for f in r["flags"] if f != "no_reviewer"]
+            if directory is not None and not r["service"] and r["email"] not in directory:
+                flags.append("not_in_directory")
+            accounts.append({**r, "flags": flags})
+        accounts.sort(key=lambda r: (not r["flags"], r["account_id"].lower()))
+        history = []
+        source = snapshot_source(aid)
+        for run in list(reversed(self.evidence.list_runs(source)))[:HISTORY]:
+            raw = self.evidence.read(source, run, "manifest.json")
+            m = json.loads(raw) if raw else {}
+            history.append({"run": run, "status": m.get("status", "error"), "records": m.get("records"),
+                            "added": m.get("added"), "removed": m.get("removed"), "changed": m.get("changed"),
+                            "error": m.get("error") or ""})
+        out["selected"] = {"app": self._aa_public(app), "run": f"{source}/{last[0]}" if last else "",
+                           "pulled_at": last[1]["started"] if last else "", "accounts": accounts,
+                           "changes": self._aa_snapshot_file(aid, last[0], "changes.json", {}) if last else {},
+                           "history": history, "directory": directory is not None}
+        return out
+
+
+def snapshot_source(aid: str) -> str:
+    """Evidence source of one application's daily account lists."""
+    return f"{SNAPSHOT_PREFIX}{aid}"
+
+
+def diff_accounts(old: list[dict], new: list[dict]) -> dict:
+    """What changed between two pulls of one application: account IDs added and removed, and field changes."""
+    before = {r["account_id"].lower(): r for r in old}
+    after = {r["account_id"].lower(): r for r in new}
+    changed = []
+    for key in sorted(before.keys() & after.keys()):
+        for f in CHANGE_FIELDS:
+            if (before[key].get(f) or "") != (after[key].get(f) or ""):
+                changed.append({"account_id": after[key]["account_id"], "field": f, "before": before[key].get(f) or "",
+                                "after": after[key].get(f) or ""})
+    return {"added": sorted(after[k]["account_id"] for k in after.keys() - before.keys()),
+            "removed": sorted(before[k]["account_id"] for k in before.keys() - after.keys()), "changed": changed}
+
+
+def snapshot_findings(rows: list[dict]) -> list[dict]:
+    """Findings for the run manifest: counts only, never people (manifests show on the calendar and in emails)."""
+    risky = sum(1 for r in rows if r.get("mfa") == "no" and r.get("status") not in DISABLED_WORDS
+                and PRIVILEGED.search(r.get("role") or ""))
+    if not risky:
+        return []
+    return [{"key": "privileged_without_mfa", "severity": "high",
+             "title": f"{risky} admin-type account{'s' if risky != 1 else ''} without MFA",
+             "detail": "Open Access reviews > Accounts to see which accounts"}]
+
+
+def evidence_csv(app: str, rows: list[dict]) -> bytes:
+    """The stored account list as CSV for auditors, safe against spreadsheet formula injection."""
+    import csv
+    import io
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\r\n")
+    writer.writerow(SNAPSHOT_COLUMNS)
+    for r in rows:
+        writer.writerow([csv_cell(app)] + [csv_cell(r.get(c, "")) for c in SNAPSHOT_COLUMNS[1:]])
+    return buf.getvalue().encode("utf-8")
 
 
 def _plain(exc: Exception) -> str:
