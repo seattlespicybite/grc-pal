@@ -26,7 +26,7 @@ controls:
     frequency: annual
     type: hybrid
     evidence:
-      - {artifact: Policy approval history (PR, approver, date), via: "git:policies/"}
+      - {artifact: "Policy approval history (PR, approver, date)", via: "git:policies/"}
       - {artifact: Annual policy review issue, via: "task:policy-review"}
     iso27001: [A.5.1, A.5.37]
 
@@ -53,7 +53,7 @@ controls:
     type: manual
     evidence:
       - {artifact: Meeting minutes and KPI report, via: "task:leadership-review"}
-    iso27001: [A.5.4, "Clause 9.3"]
+    iso27001: [A.5.4, Clause9.3]
 
   - id: GOV-04
     title: Code of Conduct and Acceptable Use acknowledged
@@ -75,7 +75,7 @@ controls:
     type: manual
     evidence:
       - {artifact: Disciplinary procedure, via: "git:policies/hr-security.md"}
-      - {artifact: Case log (sampled, confidential), via: event}
+      - {artifact: "Case log (sampled, confidential)", via: event}
     iso27001: [A.6.4]
 
   - id: GOV-06
@@ -87,7 +87,7 @@ controls:
     type: manual
     evidence:
       - {artifact: Objectives section with approval history, via: "git:policies/information-security-policy.md"}
-    iso27001: [A.5.1, "Clause 6.2"]
+    iso27001: [A.5.1, Clause6.2]
 
   - id: GOV-07
     title: External security communication
@@ -99,7 +99,7 @@ controls:
     frequency: annual
     type: manual
     evidence:
-      - {artifact: Contract security terms and SLA templates, trust page, reporting channel, via: "task:external-comms-review"}
+      - {artifact: "Contract security terms and SLA templates, trust page, reporting channel", via: "task:external-comms-review"}
     iso27001: [A.5.14, A.5.24]
 
   - id: GOV-08
@@ -124,7 +124,7 @@ controls:
     type: automated
     evidence:
       - {artifact: Catalog validation and coverage report, via: "collector:catalog_validate"}
-    iso27001: ["Clause 6.1.3"]
+    iso27001: [Clause6.1.3]
 
   - id: GOV-10
     title: System description maintained
@@ -150,7 +150,7 @@ controls:
     evidence:
       - {artifact: Risk register history, via: "git:registers/risks.yaml"}
       - {artifact: Risk assessment approval, via: "task:risk-assessment"}
-    iso27001: ["Clause 6.1.2", "Clause 8.2"]
+    iso27001: [Clause6.1.2, Clause8.2]
 
   - id: RSK-02
     title: Risk review on significant change
@@ -176,7 +176,7 @@ controls:
     frequency: daily
     type: automated
     evidence:
-      - {artifact: AWS GuardDuty, Config and Security Hub status per region, via: "collector:aws_security_services"}
+      - {artifact: "AWS GuardDuty, Config and Security Hub status per region", via: "collector:aws_security_services"}
       - {artifact: Prowler results, via: "tool:prowler"}
       - {artifact: Maester report, via: "tool:maester"}
       - {artifact: Azure Policy compliance summary, via: "collector:azure_policy_compliance"}
@@ -194,7 +194,7 @@ controls:
     evidence:
       - {artifact: Exceptions register history, via: "git:registers/exceptions.yaml"}
       - {artifact: Deficiency issues, via: "collector:issues_export"}
-    iso27001: ["Clause 10.2"]
+    iso27001: [Clause10.2]
 
   - id: MON-03
     title: Annual internal control review
@@ -205,7 +205,7 @@ controls:
     type: manual
     evidence:
       - {artifact: Internal review workpapers, via: "task:internal-control-review"}
-    iso27001: ["Clause 9.2", A.5.35]
+    iso27001: [Clause9.2, A.5.35]
 
   - id: MON-04
     title: Annual external penetration test

@@ -93,6 +93,16 @@ No data model change. Runs collected before this release show as **Legacy** (fil
     `GRCPAL_MAX_BODY_MB`) are refused with 413 before they are read.
   - New table `signinlimits` (not backed up, like sessions). No migration.
 
+### Fixed
+- **Evidence names in the built-in catalog are no longer cut short.** Four entries had an unquoted comma that YAML
+  treats as the end of the name (GOV-01 "Policy approval history (PR", GOV-05 "Case log (sampled", GOV-07 and the AWS
+  security services control), so the control page, control matrix report and data file showed a truncated name.
+- **ISO 27001 clause references in the catalog match the ISO framework file** (`Clause9.3`, not `Clause 9.3`; six
+  controls). With ISO switched on, saving one of those controls or importing the control matrix failed with
+  "unknown requirement".
+- New tests: every catalog evidence entry has a whole name and only `artifact`/`via`; every `iso27001:` reference
+  exists in the framework file.
+
 ## [0.6.0] - 2026-10-23 - Security hardening
 
 Security hardening release from the internal assessment of the Azure deployment (batches B1, B2, B3 and the CI

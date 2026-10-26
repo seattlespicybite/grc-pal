@@ -312,3 +312,22 @@ def test_load_yaml_is_safe_and_handles_empty():
     assert load_yaml("a: 1") == {"a": 1}
     with pytest.raises(yaml.YAMLError):  # no Python objects, even with the fast C loader
         load_yaml("!!python/object/apply:os.system ['echo pwned']")
+
+
+def test_catalog_evidence_names_complete():
+    """An unquoted comma inside a YAML flow mapping ends the value: "Policy approval history (PR, approver, date)"
+    became "Policy approval history (PR" plus junk keys. Names must be whole and entries carry only known keys."""
+    for c in Catalog.load().controls:
+        for e in c.get("evidence", []):
+            name = e["artifact"]
+            assert name.count("(") == name.count(")"), f"{c['id']}: evidence name cut short: {name!r}"
+            assert set(e) <= {"artifact", "via"}, f"{c['id']}: unexpected keys {sorted(set(e) - {'artifact', 'via'})}"
+
+
+def test_catalog_iso_references_exist():
+    """Every iso27001 reference in the catalog must be an id in the ISO framework file, or saving the control with
+    ISO switched on fails with "unknown requirement"."""
+    root = Path(__file__).resolve().parent.parent / "grcpal" / "starter"
+    ids = {r["id"] for r in yaml.safe_load((root / "frameworks" / "iso27001-2022.yaml").read_text())["requirements"]}
+    missing = {(c["id"], ref) for c in Catalog.load().controls for ref in c.get("iso27001", []) if ref not in ids}
+    assert not missing, sorted(missing)
