@@ -58,6 +58,15 @@ main
 No data model change. Runs collected before this release show as **Legacy** (file hashes still checked).
 
 ### Security
+- **Break-glass sign-in on Azure.** `deploy/azure/breakglass.sh` (`set-password`, `arm`, `disarm`, `status`)
+  opens password sign-in for the break-glass account when Microsoft sign-in to GRC-pal is broken. `arm` starts a
+  revision with local sign-in and a closing time, moves traffic there and only then turns Easy Auth off; `disarm`
+  turns Easy Auth on first, so a forged identity header is never believed. On Azure, local sign-in accepts only
+  the break-glass account, requires its two-step code, refuses "Forgot password", closes by itself at
+  `GRCPAL_BREAK_GLASS_UNTIL` (at most 24 hours; a missing or bad value means closed) and ends its sessions then.
+  Each break-glass sign-in is a security event, is marked in the audit log and is emailed to every admin.
+  `update.sh` refuses to run while break-glass is open.
+- `grcpal create-admin --two-step` sets up two-step sign-in on the server (always on Azure).
 - **Easy Auth only on Azure.** In `easyauth` mode the portal now refuses to start unless it runs on Azure
   Container Apps or App Service (`CONTAINER_APP_NAME` or `WEBSITE_SITE_NAME` is set by the platform). Anywhere else
   nothing removes a caller's `X-MS-CLIENT-PRINCIPAL` header, so anyone could forge one and sign in as anyone.
