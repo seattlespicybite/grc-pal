@@ -119,7 +119,9 @@ def register(app, h) -> None:
             if act["kind"] != "manual" or act["status"] != "active":
                 raise h.HTTPError(404, str(exc)) from exc
             occ = None
+        controls = [{"id": cid, "title": ctl["title"]} for cid in act["controls"] if (ctl := portal.catalog.control(cid))]
         return render(request, user, "calendar_popup.html", occ=occ, act=act, key=key, year=year, labels=STATUSES,
+                      controls=controls,
                       month_name=_cal.month_name[month], full_url=f"/calendar/o/{key}",
                       return_to=f"/calendar?year={year}#row-{act['id']}")
 

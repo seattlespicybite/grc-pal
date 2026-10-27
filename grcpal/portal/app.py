@@ -449,7 +449,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                       mappings=_mappings(portal, ctl, current_view(request)),
                       checks=portal.checks_for(control_id) if user.sees_everything else [],
                       ai=portal.ai_status() if user.sees_everything else None,
-                      ai_reviews=portal.ai_reviews(control_id)[:10] if user.sees_everything else [])
+                      ai_reviews=portal.ai_reviews(control_id)[:10] if user.sees_everything else [],
+                      schedule=portal.control_schedule(user, control_id) if user.is_admin else None)
 
     @app.post("/controls/{control_id}/upload")
     async def control_upload(request: Request, control_id: str, file: UploadFile = File(...), comment: str = Form(""),
