@@ -440,7 +440,7 @@ ADMIN_PAGES = ["/backups", "/updates", "/", "/controls", "/controls/IAM-04", "/c
                "/reviews", "/evidence", "/overrides", "/audit", "/audit?verify=1&action=user.", "/users", "/cycles",
                "/policies", "/policies/information-security-policy", "/dev/outbox", "/access-reviews", "/access-reviews/apps", "/access-reviews/accounts",
                "/controls?status=not_started&category=privacy&sort=owner", "/kb", "/kb/CC6.1", "/kb/CC1.2", "/kb/P5.1",
-               "/library?edit=1", "/library/trash", "/calendar/o/access-review~2026-07?popup=1"]
+               "/library?edit=1", "/library/trash", "/calendar/o/access-review~2026-07?popup=1", "/automation"]
 
 
 @pytest.mark.parametrize("path", ADMIN_PAGES)
@@ -487,7 +487,7 @@ def test_menu_groups_open_on_current_page_and_follow_roles(env):
     g = _groups(page)
     assert set(g) == {"program", "docs"}
     links = {h for _, ls in g.values() for h in ls}
-    assert not links & {"/evidence", "/overrides", "/cycles", "/ai", "/calendar", "/criteria", "/settings", "/audit",
+    assert not links & {"/evidence", "/overrides", "/cycles", "/ai", "/calendar", "/automation", "/criteria", "/settings", "/audit",
                         "/access-reviews"}  # access reviews appear only when one waits for them
 
 

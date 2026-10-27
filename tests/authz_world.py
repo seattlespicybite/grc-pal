@@ -141,6 +141,7 @@ def build(tmp: Path, base: SqliteStore, tenant: str) -> SimpleNamespace:
     w.section, w.step, w.framework, w.framework_off = "organization", "welcome", "soc2", "iso27001"
     w.admin_email = admin.email
     w.auto_source = next(iter(portal.automated_sources()))
+    w.collector = "catalog_validate"  # runs everywhere, needs no connection
     # ---- an evidence run that only this organization has (a source name the portal knows, a run id nobody else has)
     taken = set(base_runs(tmp, "portal_upload")) if tenant != "acme" else set()
     run = portal.evidence.new_run("portal_upload", [w.ctl_a], {"note": f"authz test {tenant}"})

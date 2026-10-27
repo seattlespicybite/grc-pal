@@ -1,0 +1,44 @@
+{% extends "base.html" %}{% from "_settings.html" import status_badge %}{% from "_macros.html" import when %}{% block title %}Automation{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Automation</h1>
+<div class="sub">Everything that collects evidence for you: connections, collectors and custom checks. Collectors run every day; each run is stored write-once and feeds the controls listed next to it.</div></div>
+<a class="btn ghost small" href="/setup">Setup guide</a></div>
+
+<section class="card">
+<div class="auto-counts">{% for st in ['passed', 'findings', 'failed', 'overdue', 'never', 'unconfigured', 'off'] %}{% if data.counts.get(st) %}<span class="pill au-{{ st }}">{{ labels[st] }}: {{ data.counts[st] }}</span> {% endif %}{% endfor %}</div>
+{% if data.running %}<p class="hint">A collection run is in progress. <a href="/jobs">See jobs</a>.</p>
+{% elif data.overdue %}<form method="post" action="/automation/run" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="overdue" value="1">
+<p>{{ data.overdue|length }} collector{{ 's' if data.overdue|length != 1 }} did not run in the last {{ data.overdue_hours }} hours. <button class="btn small" type="submit">Run them once now</button></p></form>
+<p class="hint">A manual run fills the evidence gap, but check why the daily schedule missed it (Jobs, Logs): an auditor will test that the schedule itself works.</p>{% endif %}
+<p class="hint"><strong>Verify</strong> runs a collector without saving anything and shows what it would collect, so you can check the connection and that it pulls the right data. <strong>Run once</strong> saves a real write-once run now, marked as manual. Both are recorded in the audit log.</p>
+</section>
+
+{% for g in data.groups %}
+<section class="card table-wrap auto-group">
+<div class="auto-head"><h2>{{ g.section.title if g.section else 'GRC-pal itself' }}</h2>
+{% if g.section %}{{ status_badge(g.status) }} <a class="btn small ghost" href="/settings/{{ g.section.id }}">{{ 'Set up' if g.status in ('not_configured', 'disabled') else 'Settings and test' }}</a>{% endif %}</div>
+{% if g.section %}<p class="sub">{{ g.section.summary }}</p>
+{% if g.needs and g.status in ('not_configured', 'disabled', 'configured', 'failed') %}<details class="auto-needs"{% if g.status == 'failed' %} open{% endif %}><summary>What you need to connect it</summary><ul>{% for n in g.needs %}<li>{{ n }}</li>{% endfor %}</ul>
+<p class="hint">The settings form explains every field and where to find it. Use <em>Test without saving</em> there: it checks each permission separately and says exactly what to grant.</p></details>{% endif %}{% endif %}
+<table><thead><tr><th>Collector</th><th>Status</th><th>Last run</th><th>Controls</th><th></th></tr></thead><tbody>
+{% for r in g.collectors %}<tr>
+<td><span class="mono">{{ r.name }}</span><div class="sub">{{ r.description }}</div>{% if r.error and r.status == 'failed' %}<div class="auto-err">{{ r.error }}</div>{% endif %}</td>
+<td><span class="pill au-{{ r.status }}">{{ labels[r.status] }}</span>{% if r.findings and r.status != 'failed' %}<div class="sub">{{ r.findings }} finding{{ 's' if r.findings != 1 }}</div>{% endif %}</td>
+<td>{% if r.last_run %}<a href="/evidence/{{ r.name }}/{{ r.last_run }}">{{ when(r.last_at) }}</a>{% else %}<span class="sub">-</span>{% endif %}</td>
+<td>{% for c in r.controls %}<a href="/controls/{{ c }}">{{ c }}</a>{% if not loop.last %}, {% endif %}{% else %}<span class="sub">none mapped</span>{% endfor %}</td>
+<td class="auto-actions">{% if r.runnable %}
+<form method="post" action="/automation/{{ r.name }}/verify" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small ghost" type="submit">Verify</button></form>
+<form method="post" action="/automation/run" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="name" value="{{ r.name }}"><button class="btn small ghost" type="submit"{% if data.running %} disabled{% endif %}>Run once</button></form>
+{% elif r.status == 'off' and g.section %}<a class="sub" href="/settings/{{ g.section.id }}">Turn on</a>{% endif %}</td>
+</tr>{% endfor %}
+</tbody></table></section>
+{% endfor %}
+
+<section class="card table-wrap"><h2>Custom checks</h2>
+<p class="sub">HTTP and TLS checks you add on a control's page (Automatic checks), plus command checks from the program repository. Each runs with the daily collection.</p>
+{% if data.checks %}<table><thead><tr><th>Check</th><th>Type</th><th>Control</th><th>Last result</th></tr></thead><tbody>
+{% for k in data.checks %}<tr><td>{{ k.title }}</td><td>{{ k.type }}</td><td>{% if k.control %}<a href="/controls/{{ k.control }}#checks">{{ k.control }}</a>{% endif %}</td>
+<td>{% if k.ok is none %}<span class="pill au-never">Never run</span>{% elif k.ok %}<span class="pill au-passed">Passed</span>{% else %}<span class="pill au-failed">Failed</span>{% endif %}{% if k.at %} <span class="sub">{{ when(k.at) }}</span>{% endif %}</td></tr>{% endfor %}
+</tbody></table>{% else %}<div class="empty">No custom checks yet. Open a control and use Automatic checks to add one (for example: is the status page up, does the TLS certificate expire in more than 30 days).</div>{% endif %}
+</section>
+{% endblock %}

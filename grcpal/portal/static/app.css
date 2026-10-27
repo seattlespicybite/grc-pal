@@ -523,3 +523,14 @@ table.diff td.now { color: var(--text); }
   .report-table thead { display: table-header-group; }
   .report-toc a { color: #000; text-decoration: none; }
 }
+
+/* Automation page */
+.pill.au-passed { color: var(--ok); } .pill.au-findings, .pill.au-unconfigured { color: var(--warn); }
+.pill.au-failed, .pill.au-overdue { color: var(--bad); } .pill.au-never { color: var(--info); } .pill.au-off { color: var(--idle); }
+.auto-counts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.auto-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.auto-head h2 { margin-right: auto; }
+.auto-actions { white-space: nowrap; }
+.auto-needs summary { cursor: pointer; font-weight: 600; }
+.auto-error { white-space: pre-wrap; overflow-wrap: anywhere; }
+.auto-err { color: var(--bad); font-size: 13px; overflow-wrap: anywhere; }

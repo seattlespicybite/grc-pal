@@ -701,9 +701,11 @@ class FeaturesMixin:
     def inbox_exists(self, name: str) -> bool:
         return self.inbox_read(name) is not None
 
-    def run_collection(self, actor, names: list[str] | None = None, clients=None, sessions: dict | None = None) -> dict:
-        """Run collectors (and due checks) as a background job with the saved configuration."""
-        from grcpal import collectors
+    def run_collection(self, actor, names: list[str] | None = None, clients=None, sessions: dict | None = None,
+                       trigger: str = "portal") -> dict:
+        """Run collectors (and due checks) as a background job with the saved configuration. Each run's manifest
+        records who started it and how (portal, manual), plus the API calls made, like the scheduled CLI run."""
+        from grcpal import __version__, collectors
 
         self._admin(actor)
         if self.jobs.running("collect"):
@@ -726,7 +728,11 @@ class FeaturesMixin:
                 mod = collectors.get(name)
                 if name == "portal_audit":
                     ctx.portal_store = self.store
-                run = self.evidence.new_run(name, sorted(source_controls.get(name, [])), {"description": mod.DESCRIPTION})
+                run = self.evidence.new_run(name, sorted(source_controls.get(name, [])),
+                                            {"description": mod.DESCRIPTION, "trigger": trigger,
+                                             "triggered_by": actor.email})
+                ctx.clients.queries = []
+                run.provenance = {"collector": name, "grcpal_version": __version__, "queries": ctx.clients.queries}
                 try:
                     findings = mod.run(ctx, run) or []
                     run.finish(findings)
