@@ -65,6 +65,10 @@ APP_ID=$(az containerapp show -g "$RG" -n "$APP" --query id -o tsv 2>/dev/null) 
 tag() { az tag list --resource-id "$APP_ID" --query "properties.tags.\"$1\"" -o tsv 2>/dev/null || true; }
 set_tags() { az tag update --resource-id "$APP_ID" --operation Merge --tags "$@" -o none; }
 CUR_IMAGE=$(az containerapp show -g "$RG" -n "$APP" --query "properties.template.containers[0].image" -o tsv)
+CUR_MODE=$(az containerapp show -g "$RG" -n "$APP" --query "properties.template.containers[0].env[?name=='GRCPAL_AUTH_MODE'].value | [0]" -o tsv)
+if [ "$CUR_MODE" = "local" ] && [ -z "$STATUS" ]; then  # a new revision would copy the break-glass settings
+  die "break-glass password sign-in is open on this instance. Run ./deploy/azure/breakglass.sh --name $NAME disarm first"
+fi
 CUR_VERSION=$(tag grcpal-version)
 if [ -z "$CUR_VERSION" ] && [[ "$CUR_IMAGE" =~ :([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then CUR_VERSION="${BASH_REMATCH[1]}"; fi
 traffic_rev() {  # the revision that serves users now

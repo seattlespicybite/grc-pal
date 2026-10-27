@@ -59,9 +59,10 @@ def portal_from_env() -> Portal:
         fetched = configbundle.fetch()  # your catalog from the program repo, published by its workflow
         base = str(fetched) if fetched else None
     event("starting", catalog=base or "built-in starter", tenant=os.getenv("GRCPAL_TENANT", "default"))
-    if os.getenv("GRCPAL_ENV", "").lower() == "production" and not os.getenv("GRCPAL_TABLES_URL"):
-        event("GRCPAL_TABLES_URL is not set: portal data is in a local SQLite file and is lost when the "
-              "container restarts", 30)
+    if (os.getenv("GRCPAL_ENV", "").lower() == "production" and not os.getenv("GRCPAL_TABLES_URL")
+            and store_mod.sqlite_is_temporary(os.getenv("GRCPAL_SQLITE", "grcpal.db"))):
+        event("Portal data is in a temporary SQLite file and is lost when the container restarts: set "
+              "GRCPAL_SQLITE to a file on a persistent volume (e.g. /data/grcpal.db) or GRCPAL_TABLES_URL", 30)
     store = store_mod.from_env()
     from grcpal import migrations
 

@@ -770,3 +770,140 @@ def test_oversized_request_bodies_are_refused_before_parsing(env, monkeypatch):
     r = client.post("/account/forgot", content=chunks(), headers={"content-type": "application/x-www-form-urlencoded"})
     assert r.status_code == 413
     assert client.post("/account/forgot", data={"email": CONTRIB.email, "csrf": form_csrf(page.text)}).status_code == 200
+
+
+# ================================================================ break-glass on Azure (deploy/azure/breakglass.sh)
+GLASS = "breakglass@example.com"
+GLASS_PW = "a long break glass sentence"
+FIXED_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+
+
+def _until(hours):
+    return (dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+@pytest.fixture()
+def azure_glass(env, monkeypatch):
+    """The armed break-glass revision: local sign-in on Azure Container Apps, window open for 2 hours, and a
+    break-glass account with two-step sign-in (as breakglass.sh set-password leaves it)."""
+    portal, client = env
+    monkeypatch.setenv("CONTAINER_APP_NAME", "grcpal-acme")
+    monkeypatch.setenv("GRCPAL_BREAK_GLASS_UNTIL", _until(2))
+    monkeypatch.setattr(accounts, "new_totp_secret", lambda: FIXED_SECRET)
+    portal.create_local_admin(GLASS, "Break glass", GLASS_PW)
+    who = auth.User(email=GLASS, name="Break glass", role="admin")
+    portal.mfa_start(who)
+    portal.mfa_confirm(who, accounts.totp_code(FIXED_SECRET, accounts._step()))
+    return portal, client
+
+
+def _glass_code(offset=1):
+    return accounts.totp_code(FIXED_SECRET, accounts._step() + offset)
+
+
+@pytest.mark.parametrize("value,open_", [
+    (None, False), ("", False), ("tomorrow", False), ("2026-01-01T00:00:00", False),  # no time zone
+    ("past", False), ("too-far", False), ("ok", True)])
+def test_break_glass_window_fails_closed(monkeypatch, value, open_):
+    raw = {"past": _until(-1), "too-far": _until(auth.BREAK_GLASS_MAX_HOURS + 1), "ok": _until(2)}.get(value, value)
+    if raw is None:
+        monkeypatch.delenv("GRCPAL_BREAK_GLASS_UNTIL", raising=False)
+    else:
+        monkeypatch.setenv("GRCPAL_BREAK_GLASS_UNTIL", raw)
+    assert auth.break_glass_open() is open_
+
+
+def test_break_glass_mode_is_only_local_sign_in_on_azure(monkeypatch):
+    monkeypatch.setenv("GRCPAL_AUTH_MODE", "local")
+    for var in auth.EASYAUTH_PLATFORM_VARS:
+        monkeypatch.delenv(var, raising=False)
+    assert not auth.break_glass_mode()  # a VM: ordinary local accounts
+    monkeypatch.setenv("CONTAINER_APP_NAME", "grcpal-acme")
+    assert auth.break_glass_mode()
+    monkeypatch.setenv("GRCPAL_AUTH_MODE", "easyauth")
+    assert not auth.break_glass_mode()
+
+
+def test_break_glass_sign_in_works_and_is_loud(azure_glass):
+    portal, client = azure_glass
+    portal.mailer.outbox.clear()
+    token = portal.sign_in(GLASS, GLASS_PW, ip="203.0.113.7", code=_glass_code())
+    assert portal.session_user(token).email == GLASS
+    signin = [x for x in portal.log.recent(50) if x["action"] == "auth.signin"][0]
+    assert signin["detail"] == {"method": "password+code", "ip": "203.0.113.7", "break_glass": True}
+    assert _security(portal, "Break-glass sign-in")
+    alerted = {m.to for m in portal.mailer.outbox if "break-glass sign-in" in m.subject}
+    assert {ADMIN.email, ADMIN2.email, GLASS} <= alerted  # every admin, the person signing in included
+
+
+def test_break_glass_sign_in_through_the_login_page(azure_glass):
+    portal, client = azure_glass
+    page = client.get("/login")
+    r = client.post("/login", data={"email": GLASS, "password": GLASS_PW, "code": _glass_code(), "next": "/",
+                                    "csrf": form_csrf(page.text)}, follow_redirects=False)
+    assert r.status_code == 303
+    assert client.get("/users").status_code == 200
+
+
+def test_only_the_break_glass_account_signs_in_on_azure(azure_glass):
+    portal, _ = azure_glass
+    set_password(portal, ADMIN)  # an ordinary admin who also has a password
+    with pytest.raises(auth.AuthError) as exc:
+        portal.sign_in(ADMIN.email, PW, ip="203.0.113.7")
+    assert exc.value.status == 401 and "incorrect" in str(exc.value)  # same answer as a wrong password
+    assert _security(portal, "not the break-glass account")
+
+
+def test_break_glass_needs_two_step_on_azure(azure_glass):
+    portal, _ = azure_glass
+    portal.create_local_admin(GLASS, "Break glass", GLASS_PW)  # a password reset on the server clears two-step
+    with pytest.raises(auth.AuthError) as exc:
+        portal.sign_in(GLASS, GLASS_PW, ip="203.0.113.7")
+    assert exc.value.status == 403 and "two-step" in str(exc.value)
+
+
+def test_closed_window_refuses_sign_in_and_ends_sessions(azure_glass, monkeypatch):
+    portal, _ = azure_glass
+    token = portal.sign_in(GLASS, GLASS_PW, ip="203.0.113.7", code=_glass_code())
+    monkeypatch.setenv("GRCPAL_BREAK_GLASS_UNTIL", _until(-0.01))  # the closing time passed, nobody disarmed
+    with pytest.raises(auth.AuthError):
+        portal.session_user(token)
+    with pytest.raises(auth.AuthError) as exc:
+        portal.sign_in(GLASS, GLASS_PW, ip="203.0.113.7", code=_glass_code(2))
+    assert exc.value.status == 403 and "closed" in str(exc.value)
+
+
+def test_no_reset_emails_on_azure(azure_glass):
+    portal, client = azure_glass
+    portal.mailer.outbox.clear()
+    page = client.get("/account/forgot")
+    r = client.post("/account/forgot", data={"email": CONTRIB.email, "csrf": form_csrf(page.text)})
+    assert r.status_code == 200 and not portal.mailer.outbox
+    assert _security(portal, "break-glass sign-in only")
+
+
+def test_cli_create_admin_on_azure_sets_up_two_step(env, tmp_path, monkeypatch):
+    monkeypatch.setenv("GRCPAL_SQLITE", str(tmp_path / "cli.db"))
+    monkeypatch.setenv("GRCPAL_TENANT", "acme")
+    monkeypatch.setenv("GRCPAL_ENCRYPTION_KEY", base64.b64encode(b"k" * 32).decode())
+    monkeypatch.setenv("CONTAINER_APP_NAME", "grcpal-acme")
+    monkeypatch.setattr(accounts, "new_totp_secret", lambda: FIXED_SECRET)
+    answers = iter([GLASS_PW, GLASS_PW])
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt="": next(answers))
+    good = accounts.totp_code(FIXED_SECRET, accounts._step())
+    codes = iter(["000001" if good != "000001" else "000002", good])  # one typo, then the right code
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(codes))
+    assert cli.main(["--evidence", str(tmp_path / "ev"), "create-admin", GLASS]) == 0
+    from grcpal.portal.store import from_env
+    row = from_env().get("users", "u", GLASS)
+    assert row["local_only"] and row["totp_secret"] and FIXED_SECRET not in json.dumps(row)
+
+
+def test_forged_identity_header_is_ignored_while_armed(azure_glass):
+    # Easy Auth is off while armed, so a caller can send X-MS-CLIENT-PRINCIPAL; local mode never reads it.
+    _, client = azure_glass
+    claims = {"claims": [{"typ": "preferred_username", "val": ADMIN.email}, {"typ": "tid", "val": "tenant-a"}]}
+    client.cookies.clear()
+    r = client.get("/users", headers={"X-MS-CLIENT-PRINCIPAL": base64.b64encode(json.dumps(claims).encode()).decode()},
+                   follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/login")
