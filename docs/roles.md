@@ -45,7 +45,7 @@ the person who defines controls from the people who operate them, which auditors
 | Security calendar: view, edit activities, record Performed or Missed, CSV | ✓ |  | (cycle export only) |
 | Vendors: see the register and vendor pages | all | only vendors where they are the internal owner or backup | all, without contact details |
 | Vendors: add a vendor | ✓ | request one (starts in Onboarding) |  |
-| Vendors: edit tier, status, contract and report details, CUECs, exceptions; start offboarding | ✓ (reason required) |  |  |
+| Vendors: edit tier, status, contract and report details, CUECs, exceptions; start offboarding | ✓ (edit reason optional, offboarding reason required; every change versioned) |  |  |
 | Vendors: edit contacts and support notes | ✓ | own vendors, except who the owner and backup are |  |
 | Vendors: upload files, answer review questions, checklist notes, download the questionnaire for a vendor | ✓ | own vendors |  |
 | Vendors: import from CSV (add only) | ✓ |  |  |

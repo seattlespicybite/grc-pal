@@ -231,13 +231,13 @@ To sign off anyway, write why these are accepted. The note and the list go to th
 </tbody></table></div>{% else %}<p class="sub">No activity yet.</p>{% endif %}
 <p class="hint mt">From the tamper-evident audit log. Contact changes are recorded without the contact details.</p></section>
 <section class="card"><h2>Versions of this record</h2><div class="table-wrap"><table><thead><tr><th>Version</th><th>When</th><th>Who</th><th>Reason</th></tr></thead><tbody>
-{% for ver in versions %}<tr><td class="mono">{{ ver.RowKey|int }}</td><td class="nowrap">{{ when(ver.at) }}</td><td>{{ ver.by }}</td><td>{{ ver.reason }}</td></tr>{% endfor %}
+{% for ver in versions %}<tr><td class="mono">{{ ver.RowKey|int }}</td><td class="nowrap">{{ when(ver.at) }}</td><td>{{ ver.by }}</td><td>{{ ver.reason or '—' }}</td></tr>{% endfor %}
 </tbody></table></div></section>
 {% endif %}
 </div>
 
 <aside>
-{% if not user.is_auditor %}<section class="card"><h2>Who to call</h2>
+{% if not user.is_auditor %}<section class="card"><h2>Internal contact</h2>
 {{ person(v.owner_name, v.owner_title, v.owner_email, v.owner_phone, 'Internal owner') }}
 {% if v.ext_name or v.ext_email %}<div class="mt">{{ person(v.ext_name, v.ext_title, v.ext_email, v.ext_phone, 'Vendor contact') }}</div>{% endif %}
 <p class="mt"><a href="/vendors/{{ v.RowKey }}?tab=contacts">All contacts and support steps</a></p></section>{% endif %}

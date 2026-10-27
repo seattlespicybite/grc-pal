@@ -26,6 +26,14 @@ feature/access-snapshots
 - The Microsoft connection test also checks **GroupMember.Read.All** (access reviews).
 
 ### Changed
+- **Clear result when a backup finishes.** The job page now shows a green "Backup completed" or red "Backup failed"
+  banner, and pops up the result once when the job has just ended. A backup that was written but failed its
+  verification is shown as a problem, not a success. The same applies to backup checks and other jobs.
+- **Vendor edits: the reason for the change is optional.** Every change is still saved as a new version and
+  written to the audit log with who, when and which fields changed. Offboarding still needs a reason.
+- **Vendor page: "Who to call" is now "Internal contact".**
+- **Document library register fits wide screens better:** smaller text, tighter cells, and folder and people
+  names wrap instead of widening the table. Other tables are unchanged.
 - The deployment step points to the VM installer instead of a sign-in proxy for running outside Azure.
 main
 - **Evidence integrity.** Every evidence run now also gets `SHA256SUMS` (check with `sha256sum -c`) and

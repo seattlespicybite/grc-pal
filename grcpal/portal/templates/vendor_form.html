@@ -5,7 +5,7 @@
 <div class="page-head"><div><h1>{{ ('Add vendor' if user.is_admin else 'Request a new vendor') if new else 'Edit vendor' }}</h1>
 <div class="sub">{% if new and not user.is_admin %}Tell security about a new provider before you share any company data with it. An admin reviews the request.
 {% elif new %}New vendors start in Onboarding. Approve them on the vendor page once the onboarding check is complete.
-{% else %}Every change keeps the previous version and asks for a reason, so the auditor can follow the history.{% endif %}</div></div></div>
+{% else %}Every change keeps the previous version, so the auditor can follow the history.{% endif %}</div></div></div>
 
 <form method="post" action="{{ '/vendors/new' if new else '/vendors/' ~ v.RowKey ~ '/edit' }}" class="card"><input type="hidden" name="csrf" value="{{ csrf }}">
 <h2>Vendor</h2>
@@ -45,7 +45,7 @@
 <textarea id="notes" name="notes" maxlength="2000">{{ v.notes or '' }}</textarea>
 <h2 class="mt-l">Contacts</h2>
 {{ contacts(v, user.is_admin) }}
-{% if not new %}<label for="reason">Reason for the change (required)</label><input id="reason" name="reason" required maxlength="500" value="{{ reason or '' }}" placeholder="For example: new SOC 2 report received">{% endif %}
+{% if not new %}<label for="reason">Reason for the change (optional)</label><input id="reason" name="reason" maxlength="500" value="{{ reason or '' }}" placeholder="For example: new SOC 2 report received">{% endif %}
 <div class="actions"><button class="btn" type="submit">{{ ('Add vendor' if user.is_admin else 'Send request') if new else 'Save vendor' }}</button></div>
 </form>
 {% endblock %}

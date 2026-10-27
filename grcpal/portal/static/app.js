@@ -35,6 +35,24 @@
     }
   }
 
+  // Job page: when a job (for example a backup) has just finished, pop up its result once per browser tab.
+  // The same result is always shown as a banner on the page, so nothing depends on this popup.
+  var jobDialog = document.querySelector('[data-job-dialog]');
+  if (jobDialog && typeof jobDialog.showModal === 'function') {
+    var seenKey = 'grcpal-job-seen-' + jobDialog.getAttribute('data-job-id');
+    var seen = false;
+    try { seen = window.sessionStorage.getItem(seenKey) === '1'; } catch (e) { seen = false; }
+    jobDialog.addEventListener('click', function (ev) {
+      if (ev.target === jobDialog || ev.target.closest('[data-pop-close]')) jobDialog.close();
+    });
+    if (!seen) {
+      try { window.sessionStorage.setItem(seenKey, '1'); } catch (e) { /* storage blocked: popup may repeat */ }
+      jobDialog.showModal();
+      var ok = jobDialog.querySelector('[data-pop-close]');
+      if (ok) ok.focus();
+    }
+  }
+
   // Calendar: open a month (or the + of an unscheduled month) in a popup instead of a new page. Saving posts
   // the form as usual and the calendar reloads at the same row. Without JavaScript the links open the page.
   var calDialog = document.querySelector('[data-cal-dialog]');
