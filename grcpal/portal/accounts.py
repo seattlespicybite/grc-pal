@@ -36,7 +36,7 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
 
 from grcpal.evidence import utcnow
-from grcpal.portal.auth import EMAIL_RE, AuthError, User
+from grcpal.portal.auth import EMAIL_RE, AuthError, User, break_glass_mode, break_glass_open
 from grcpal.settings import NoKey
 
 PASSWORD_MIN = 12
@@ -305,6 +305,9 @@ class AccountsMixin:
 
     def _reset_work(self, email: str, ip: str) -> None:
         email = (email or "").strip().lower()[:254]
+        if break_glass_mode():  # on Azure only the break-glass account signs in with a password; no reset emails
+            self.events.security("Password reset refused: break-glass sign-in only", actor=email[:120], ip=ip)
+            return
         for kind, value, limit in (("reset-ip", ip, RESET_PER_IP), ("reset-account", email, RESET_PER_ACCOUNT)):
             if self._count(kind, value, 60) > limit:
                 self.events.security(f"Password reset requests paused: more than {limit} in an hour from "
@@ -398,6 +401,11 @@ class AccountsMixin:
             self.events.security("Sign-in refused: locked after repeated failures", actor=email[:120], ip=ip)
             raise AuthError(f"Too many failed sign-in attempts. Wait {wait} minute{'s' if wait != 1 else ''} and try "
                             "again, or ask a GRC-pal admin.", 429)
+        glass = break_glass_mode()
+        if glass and not break_glass_open():
+            self.events.security("Sign-in refused: break-glass sign-in is closed", actor=email[:120], ip=ip)
+            raise AuthError("Password sign-in is closed. Staff sign in with Microsoft; an Azure administrator opens "
+                            "break-glass sign-in with deploy/azure/breakglass.sh arm.", 403)
         row = self.user_row(email) if EMAIL_RE.match(email) else None
         stored = (row or {}).get("password_hash") or ""
         try:
@@ -413,6 +421,14 @@ class AccountsMixin:
         except AuthError as exc:
             self.events.security(f"Sign-in refused: {exc}", actor=email, ip=ip)
             raise
+        if glass and not row.get("local_only"):
+            # Only the break-glass account: any other password on the instance stays useless on the internet.
+            self._sign_in_failed(email, ip, "not the break-glass account")
+            raise AuthError("Email or password is incorrect", 401)
+        if glass and not row.get("totp_secret"):
+            self.events.security("Break-glass sign-in refused: the account has no two-step sign-in", actor=email, ip=ip)
+            raise AuthError("The break-glass account needs two-step sign-in before it can be used on the internet. "
+                            "Set it with deploy/azure/breakglass.sh set-password.", 403)
         if row.get("totp_secret"):
             code = "".join((code or "").split())
             if not code:
@@ -426,9 +442,30 @@ class AccountsMixin:
         self.store.insert("sessions", {"PartitionKey": "s", "RowKey": _digest(token), "email": email,
                                        "created": now, "last_used": now, "expires": _later(SESSION_HOURS)})
         self.store.update("users", "u", email, {"last_seen": _now()})
-        self.audit(email, "auth.signin", email, {"method": "password+code" if row.get("totp_secret") else "password",
-                                                 "ip": ip})
+        details = {"method": "password+code" if row.get("totp_secret") else "password", "ip": ip}
+        if glass:
+            details["break_glass"] = True
+        self.audit(email, "auth.signin", email, details)
+        if glass:
+            self._break_glass_alert(row, ip)
         return token
+
+    def _break_glass_alert(self, row: dict, ip: str) -> None:
+        """Every use is loud: a security event (the Azure log alert looks for it) and an email to every admin,
+        the person signing in included, so a sign-in nobody expected is noticed at once."""
+        email = row["RowKey"]
+        self.events.security("Break-glass sign-in", actor=email, ip=ip, break_glass=True)
+        actor = User(email=email, name=row.get("name") or email, role="admin")
+        admins = [u["RowKey"] for u in self.users() if u.get("role") == "admin" and u.get("active", True)]
+        self._notify("security.break_glass", admins, actor, {
+            "subject": "GRC-pal security alert: break-glass sign-in", "title": "Someone signed in with the "
+                       "break-glass account",
+            "intro": "Password sign-in is open on this instance (break-glass) and the break-glass account was just "
+                     "used. If this is not a planned drill or a known emergency, treat it as a security incident: "
+                     "run deploy/azure/breakglass.sh disarm, change the break-glass password and check the audit log.",
+            "fields": [("Account", email), ("Address", ip or "unknown"),
+                       ("Open until", os.getenv("GRCPAL_BREAK_GLASS_UNTIL", ""))],
+            "button": ("Open the audit log", self.link("/audit"))}, include_actor=True)
 
     def session_user(self, token: str | None) -> User:
         if not token:
@@ -438,6 +475,9 @@ class AccountsMixin:
             if s:
                 self.store.delete("sessions", "s", s["RowKey"])
             raise AuthError("your session ended; sign in again")
+        if break_glass_mode() and not break_glass_open():
+            self.store.delete("sessions", "s", s["RowKey"])  # the window closed: so do the sessions opened in it
+            raise AuthError("break-glass sign-in has closed; staff sign in with Microsoft")
         row = self.user_row(s["email"])
         if not row:
             raise AuthError("not signed in")

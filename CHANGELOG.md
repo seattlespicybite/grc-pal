@@ -5,13 +5,11 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Added
-feature/access-snapshots
 - **Daily account pulls for access reviews.** Every night after `collect --all` (or `grcpal access-pull`, or **Pull now**),
   each access review application with an API source is read and stored write-once as `access-<application>` evidence:
   the full account list, what changed since the last good pull, and the request addresses. A failed pull is stored as a
   failure and alerted like a collector. New **Accounts** page (admins, auditors read-only) with flags, including accounts
   not found in Entra ID, and the pull history. A review started within 24 hours of a pull uses that stored list.
-=======
 - **Setup guide covers the whole program setup.** Eight new steps, each a checklist of what is done and what
   is missing with links to the page where the work is done: **audit period** (cycle dates set by an admin),
   **control owners** (controls without an owner, control library owner), **backups** (location, schedule, a
@@ -27,7 +25,6 @@ feature/access-snapshots
 
 ### Changed
 - The deployment step points to the VM installer instead of a sign-in proxy for running outside Azure.
-main
 - **Evidence integrity.** Every evidence run now also gets `SHA256SUMS` (check with `sha256sum -c`) and
   `manifest.sig`, an Ed25519 signature of `manifest.json` with a key derived from the instance's encryption key
   (or `GRCPAL_EVIDENCE_SIGNING_KEY`). The manifest's SHA-256 is recorded in the hash-chained audit log
@@ -58,6 +55,15 @@ main
 No data model change. Runs collected before this release show as **Legacy** (file hashes still checked).
 
 ### Security
+- **Break-glass sign-in on Azure.** `deploy/azure/breakglass.sh` (`set-password`, `arm`, `disarm`, `status`)
+  opens password sign-in for the break-glass account when Microsoft sign-in to GRC-pal is broken. `arm` starts a
+  revision with local sign-in and a closing time, moves traffic there and only then turns Easy Auth off; `disarm`
+  turns Easy Auth on first, so a forged identity header is never believed. On Azure, local sign-in accepts only
+  the break-glass account, requires its two-step code, refuses "Forgot password", closes by itself at
+  `GRCPAL_BREAK_GLASS_UNTIL` (at most 24 hours; a missing or bad value means closed) and ends its sessions then.
+  Each break-glass sign-in is a security event, is marked in the audit log and is emailed to every admin.
+  `update.sh` refuses to run while break-glass is open.
+- `grcpal create-admin --two-step` sets up two-step sign-in on the server (always on Azure).
 - **Easy Auth only on Azure.** In `easyauth` mode the portal now refuses to start unless it runs on Azure
   Container Apps or App Service (`CONTAINER_APP_NAME` or `WEBSITE_SITE_NAME` is set by the platform). Anywhere else
   nothing removes a caller's `X-MS-CLIENT-PRINCIPAL` header, so anyone could forge one and sign in as anyone.
@@ -220,8 +226,6 @@ New tables `arapps`, `matriximports` and `vendorimports` (no migration needed). 
   pending from before can be approved on **Reviews** or the control page with an approval note.
   No data model change (the new field is read with a default).
 
-release/0.6.0
-=======
 ### Security
 - **Session hygiene (hardening batch B5).**
   - In production every GRC-pal cookie is `Secure` and uses the `__Host-` prefix (`__Host-grcpal_session`,
@@ -265,7 +269,6 @@ release/0.6.0
   files; it opens only the workbook, shared text and worksheet parts.
 
 New tables `arapps`, `matriximports` and `vendorimports` (no migration needed). No other data model change.
-main
 
 ### Fixed
 - **Program repository knowledge articles and frameworks now reach Azure portals.** `grcpal publish-config`
