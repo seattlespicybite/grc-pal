@@ -515,6 +515,39 @@ class CalendarMixin:
                     out[cid] = done
         return out
 
+    def control_schedule(self, actor, cid: str) -> list[dict]:
+        """For the control page (admins only, like the calendar): every active activity linked to this control,
+        with its cadence, the last recorded month, the next month still Planned, and links into the calendar.
+        Read-only: nothing is written, so nothing is audited."""
+        self._admin(actor)
+        versions, records, start = self._versions(), self.calendar_records(), self.calendar_program_start()
+        today, year = self.today.isoformat(), self.today.year
+        out = []
+        for a in self.calendar_activities():
+            if cid not in a["controls"]:
+                continue
+            row = {"id": a["id"], "title": a["title"], "kind": a["kind"], "schedule": a["schedule"],
+                   "edit_url": f"/calendar/a/{a['id']}", "last": None, "next": None}
+            if a["kind"] == "manual":
+                row["calendar_url"] = f"/calendar?year={year}#row-{a['id']}"
+                occs = [o for y in (year - 1, year, year + 1) for m in range(1, 13)
+                        if (o := self._occurrence(a, y, m, versions.get(a["id"], []),
+                                                  records.get(f"{a['id']}~{y}-{m:02d}"), start))]
+                done = [o for o in occs if o["status"] != "planned" and o["due"][:7] <= today[:7]]
+                upcoming = [o for o in occs if o["status"] == "planned" and o["due"] >= today]
+                row["months_text"] = ", ".join(_cal.month_abbr[m] for m in a["months"])
+                row["last"] = {**done[-1], "label": STATUSES[done[-1]["status"]]} if done else None
+                row["next"] = upcoming[0] if upcoming else None
+                row["past_due"] = sum(1 for o in occs if o["past_due"])
+            else:
+                row["runs_url"] = f"/calendar/auto/{a['source']}"
+                runs = self.evidence.list_runs(a["source"])
+                if runs:
+                    status = self._run_status(a["source"], runs[-1])
+                    row["last"] = {"run": runs[-1], "status": status, "label": AUTO_STATUSES[status]}
+            out.append(row)
+        return out
+
     def calendar_export_rows(self, start: str, end: str) -> list[dict]:
         """Population for the auditor: every manual occurrence due between start and end, recorded or not."""
         rows = []

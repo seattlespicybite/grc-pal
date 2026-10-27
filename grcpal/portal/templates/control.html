@@ -46,15 +46,23 @@
 </section>
 </div>
 
+{% if schedule is not none %}<section class="card" id="schedule"><div class="row-between"><h2 class="m0">Schedule</h2><span class="sub">Security calendar · admins only</span></div>
+{% if schedule %}<div class="table-wrap mt-s"><table><thead><tr><th>Activity</th><th>Last</th><th>Next</th></tr></thead><tbody>
+{% for s in schedule %}<tr><td><a href="{{ s.calendar_url or s.runs_url }}"><b>{{ s.title }}</b></a><div class="sub">{{ s.schedule }}{% if s.months_text %} ({{ s.months_text }}){% endif %} · <a href="{{ s.edit_url }}">edit</a></div>{% if s.past_due %}<div class="mt-s"><a class="cal-cell cal-past_due" href="{{ s.calendar_url }}">{{ s.past_due }} past due, not recorded</a></div>{% endif %}</td>
+{% if s.kind == 'manual' %}<td>{% if s.last %}<a href="/calendar/o/{{ s.last.key }}">{{ s.last.year }}-{{ '%02d' % s.last.month }}</a> <span class="cal-cell cal-{{ s.last.status }}">{{ s.last.label }}</span>{% if s.last.completed_on %}<div class="sub">performed {{ s.last.completed_on }}</div>{% endif %}{% else %}<span class="sub">Nothing recorded yet</span>{% endif %}</td>
+<td>{% if s.next %}<a href="/calendar/o/{{ s.next.key }}">Due {{ s.next.due }}</a> <span class="cal-cell cal-planned">Planned</span>{% else %}<span class="sub">Not scheduled</span>{% endif %}</td>
+{% else %}<td>{% if s.last %}<a href="{{ s.runs_url }}">{{ s.last.run[:10] }}</a> <span class="cal-cell cal-{{ s.last.status }}">{{ s.last.label }}</span>{% else %}<span class="sub">No runs yet</span>{% endif %}</td><td><span class="sub">Runs automatically</span></td>{% endif %}</tr>{% endfor %}
+</tbody></table></div>{% else %}<div class="empty mt-s">No calendar activity covers this control. <a href="/calendar/a/new">Add an activity</a> and link this control to it.</div>{% endif %}</section>{% endif %}
+
 <section class="card" id="submissions"><div class="row-between"><h2>Submitted this cycle</h2><span class="sub">{{ cycle.name }}</span></div>
 {{ uploads_table(uploads, user, csrf, '/controls/' ~ ctl.id ~ '#submissions', review=True) }}</section>
 
-{% if prev %}<section class="card"><div class="row-between"><h2>Last cycle: {{ prev.name }}</h2><span class="sub">read-only, for reference</span></div>
+{% if prev %}<details class="card"><summary class="row-between"><h2 class="m0">Last cycle: {{ prev.name }}</h2><span class="sub">read-only, for reference</span></summary>
 {% if prev_uploads %}<div class="table-wrap"><table><thead><tr><th>File</th><th>What it shows</th><th>Uploaded</th><th>Review</th></tr></thead><tbody>
 {% for u in prev_uploads %}<tr><td>{{ file_link(u, user) }}</td><td>{{ u.comment }}</td><td>{{ u.uploaded_by }}<div class="sub">{{ when(u.uploaded_at) }}</div></td><td>{{ pill(u.status) }}</td></tr>{% endfor %}
 </tbody></table></div>{% else %}<div class="empty">No evidence was uploaded in the portal for this control last cycle.</div>{% endif %}
 {% for a in prev_assignments if a.instructions %}<details class="mt-s"><summary>Last cycle's request: {{ a.label.splitlines()[0] }}</summary><div class="note mt-s">{{ a.instructions }}</div></details>{% endfor %}
-</section>{% endif %}
+</details>{% endif %}
 
 <section class="card" id="comments"><h2>Discussion</h2>
 <p class="sub">Comments for this control in the current cycle, including those on its requests. Everyone involved is emailed.</p>

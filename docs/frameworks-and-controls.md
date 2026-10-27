@@ -212,9 +212,18 @@ controls.
 nothing has been recorded for it.
 
 **Recording a month** (click the cell): a small window opens on top of the calendar. Pick the status and
-save; the calendar reloads at the same row. **Open the full page** in that window shows the linked
-controls, evidence uploaded that month and the full history. Clicking **+** opens the same window to add a
-one-off month.
+save; the calendar reloads at the same row. The window also lists the controls the activity covers, each
+linking to its control page. **Open the full page** in that window shows the linked controls, evidence
+uploaded that month and the full history. Clicking **+** opens the same window to add a one-off month.
+Clicking anywhere in a date field opens the date picker.
+
+**From a control to the calendar.** For admins, each control page has a **Schedule** card listing every
+calendar activity linked to the control: its cadence and months, the last recorded month (Performed or
+Missed, with the date performed), the next planned due date, and how many past months are still not
+recorded. Every entry links straight to that month in the calendar, and the activity name opens its row.
+Automated activities show the latest run and its result, linking to the run history. Control owners and
+auditors do not see this card, because the calendar is for admins only. To keep the page short, **Last
+cycle** on the control page is now folded; click it to open.
 
 | Status | Meaning |
 | --- | --- |

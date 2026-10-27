@@ -35,6 +35,7 @@
     }
   }
 
+fix/backup-popup-vendor-reason-register
   // Job page: when a job (for example a backup) has just finished, pop up its result once per browser tab.
   // The same result is always shown as a banner on the page, so nothing depends on this popup.
   var jobDialog = document.querySelector('[data-job-dialog]');
@@ -52,6 +53,17 @@
       if (ok) ok.focus();
     }
   }
+=======
+  // Date fields: clicking anywhere in the field opens the browser's date picker, not only the small icon.
+  // Delegated, so it also works in the calendar popup that is loaded later. Typing a date still works.
+  document.addEventListener('click', function (ev) {
+    var input = ev.target;
+    if (!input || input.tagName !== 'INPUT' || input.type !== 'date' || input.disabled || input.readOnly) return;
+    if (typeof input.showPicker === 'function') {
+      try { input.showPicker(); } catch (e) { /* not allowed here (for example inside a cross-origin frame) */ }
+    }
+  });
+main
 
   // Calendar: open a month (or the + of an unscheduled month) in a popup instead of a new page. Saving posts
   // the form as usual and the calendar reloads at the same row. Without JavaScript the links open the page.
