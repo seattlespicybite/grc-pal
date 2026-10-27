@@ -27,6 +27,7 @@ explain choices in plain words, keep changes small, never leave the test suite r
   | migrations, `SCHEMA_VERSION`, `RELEASES` | `tests/test_migrations.py` |
   | `update.py`, `deploy/vm/*` (updater, installer) | `tests/test_update.py` |
   | `deploy/azure/update.sh` (fake az/curl/gh in `tests/fake_azure/`) | `tests/test_azure_update.py` |
+  | `deploy/azure/breakglass.sh`, break-glass rules in `accounts.py`/`auth.py` | `tests/test_azure_breakglass.py tests/test_accounts.py` |
   | templates, `app.js`, `app.css` | `tests/test_portal.py -k render` (also checks strict CSP), then the full suite |
 - Show diffs or changed parts only; do not paste whole files or full test output back.
 - Done means: full suite green, pyflakes clean, docs/CHANGELOG updated if behavior changed.
@@ -63,6 +64,7 @@ explain choices in plain words, keep changes small, never leave the test suite r
 | Updates: signed .grcupdate files, self-test, Azure trial, portal requests; Updates page | `grcpal/update.py`, `grcpal/portal/updates.py`, `updates.html`, routes in `routes_backups.py` |
 | VM installer and host updater (Debian 13 + Docker; standard library only, runs as root on the host) | `deploy/vm/install.sh`, `deploy/vm/grcpal-update`, `deploy/vm/systemd/`, docs `docs/deploy-vm.md` |
 | Azure updates (revisions, health gate, rollback) | `deploy/azure/update.sh`, starter workflow `grcpal/starter/github/workflows/grcpal-update.yml` |
+| Azure break-glass (password sign-in opened for hours: arm/disarm order, two-step required, closes itself) | `deploy/azure/breakglass.sh`, `auth.break_glass_mode`/`break_glass_open`, rules in `accounts.sign_in` |
 | Settings registry (Configuration page, Setup guide, encryption) | `grcpal/settings.py` (`SCHEMA`), validators in `grcpal/integrations/` |
 | Custom checks (HTTP, TLS, command) and SSRF guard | `grcpal/checks.py` |
 | AI review and mock audit | `grcpal/ai/providers.py`, `grcpal/ai/review.py` |

@@ -130,11 +130,40 @@ def auth_mode() -> str:
 EASYAUTH_PLATFORM_VARS = ("CONTAINER_APP_NAME", "WEBSITE_SITE_NAME")  # Azure Container Apps, App Service
 
 
+BREAK_GLASS_MAX_HOURS = 24
+
+
+def on_azure_web() -> bool:
+    return any(os.getenv(v) for v in EASYAUTH_PLATFORM_VARS)
+
+
+def break_glass_mode() -> bool:
+    """On Azure, local (password) sign-in exists only as break-glass: deploy/azure/breakglass.sh arm starts a
+    revision with GRCPAL_AUTH_MODE=local and a closing time, then turns Easy Auth off. In that mode only the
+    break-glass account may sign in, only with two-step sign-in, and only until GRCPAL_BREAK_GLASS_UNTIL."""
+    return on_azure_web() and os.getenv("GRCPAL_AUTH_MODE", "local") == "local"
+
+
+def break_glass_open(now=None) -> bool:
+    """Is the break-glass window open? A missing, unreadable, past or implausibly distant closing time (more than
+    BREAK_GLASS_MAX_HOURS ahead) means closed: forgetting to disarm, or a typo, fails closed."""
+    import datetime as dt
+    raw = os.getenv("GRCPAL_BREAK_GLASS_UNTIL", "").strip()
+    try:
+        until = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if until.tzinfo is None:
+        return False
+    now = now or dt.datetime.now(dt.timezone.utc)
+    return now < until <= now + dt.timedelta(hours=BREAK_GLASS_MAX_HOURS)
+
+
 def require_easyauth_platform(mode: str) -> None:
     """The web portal in easyauth mode believes the X-MS-CLIENT-PRINCIPAL header. Only Azure's built-in sign-in
     can set it safely (the platform refuses that header from callers). Anywhere else (docker run, a VM, a
     Kubernetes pod) anyone could type the header and be anyone, so refuse to start instead."""
-    if mode == "easyauth" and not any(os.getenv(v) for v in EASYAUTH_PLATFORM_VARS):
+    if mode == "easyauth" and not on_azure_web():
         raise RuntimeError("GRCPAL_AUTH_MODE=easyauth works only on Azure Container Apps or App Service with "
                            "built-in authentication turned on (CONTAINER_APP_NAME or WEBSITE_SITE_NAME is not set "
                            "here). Elsewhere anyone could forge the sign-in header: use local or proxy instead.")

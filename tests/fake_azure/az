@@ -14,8 +14,16 @@ def out(v):
     print(v)
 cmd = " ".join(x for x in a[:4] if not x.startswith("-"))
 q = opt("--query", "")
+def values(flag):  # the words after a flag, up to the next flag
+    if flag not in a:
+        return []
+    rest = a[a.index(flag) + 1:]
+    return rest[:next((i for i, x in enumerate(rest) if x.startswith("-")), len(rest))]
+env = st.setdefault("env", {"GRCPAL_AUTH_MODE": "easyauth"})
 if a[:2] == ["containerapp", "show"]:
-    if q == "id": out("/subscriptions/s/resourceGroups/rg/providers/Microsoft.App/containerApps/app")
+    if "GRCPAL_AUTH_MODE" in q: out(env.get("GRCPAL_AUTH_MODE", ""))
+    elif "ingress.fqdn" in q: out("app.example.com")
+    elif q == "id": out("/subscriptions/s/resourceGroups/rg/providers/Microsoft.App/containerApps/app")
     elif "image" in q: out(st["revisions"][st["serving"]]["image"])
     elif "latestReadyRevisionName" in q: out(st["serving"])
 elif a[:2] == ["tag", "list"]:
@@ -35,8 +43,19 @@ elif a[:4] == ["containerapp", "ingress", "traffic", "set"]:
 elif a[:3] == ["containerapp", "revision", "set-mode"]:
     pass
 elif a[:2] == ["containerapp", "update"]:
+    for kv in values("--set-env-vars"):
+        k, v = kv.split("=", 1); env[k] = v
+    for k in values("--remove-env-vars"):
+        env.pop(k, None)
     name = "grcpal-acme--" + opt("--revision-suffix")
-    st["revisions"][name] = {"image": opt("--image"), "active": True}; save()
+    st["revisions"][name] = {"image": opt("--image") or st["revisions"][st["serving"]]["image"], "active": True,
+                             "env": dict(env)}; save()
+elif a[:3] == ["containerapp", "auth", "update"]:
+    st["easyauth"] = opt("--enabled") == "true"; save()
+elif a[:3] == ["containerapp", "auth", "show"]:
+    out(str(st.get("easyauth", True)).lower())
+elif a[:2] == ["containerapp", "exec"]:
+    st["exec"] = opt("--command"); save()
 elif a[:3] == ["containerapp", "revision", "show"]:
     rev = opt("--revision")
     out("rev.example.com" if "fqdn" in q else st["revisions"][rev]["image"])

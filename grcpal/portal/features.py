@@ -979,9 +979,14 @@ class FeaturesMixin:
             "Set GRCPAL_ENCRYPTION_KEY (openssl rand -hex 32) as a secret. Keep a copy in a password manager: "
             "without it, saved credentials cannot be decrypted.")
         tables = bool(os.getenv("GRCPAL_TABLES_URL"))
-        add("Portal data storage", tables, "Azure Table Storage" if tables else "SQLite file",
-            "SQLite is fine on one server with a persistent disk. In containers, use Azure Table Storage "
-            "(GRCPAL_TABLES_URL) or data is lost on restart.")
+        from grcpal.portal import store as store_mod
+
+        sqlite_path = os.getenv("GRCPAL_SQLITE", "grcpal.db")
+        kept = tables or not store_mod.sqlite_is_temporary(sqlite_path)
+        add("Portal data storage", kept, "Azure Table Storage" if tables else f"SQLite file {sqlite_path}",
+            "SQLite is fine on one server with a persistent disk. This file is temporary and is lost on restart: "
+            "set GRCPAL_SQLITE to a file on a persistent volume (e.g. /data/grcpal.db), or use Azure Table Storage "
+            "(GRCPAL_TABLES_URL).")
         blob = bool(self.evidence.account_url)
         add("Evidence storage", blob, "Azure Blob (write-once)" if blob else f"local folder {self.evidence.root}",
             "Auditors rely on write-once storage. deploy.sh creates a container with time-based retention; lock it "

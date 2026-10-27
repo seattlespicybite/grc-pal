@@ -288,6 +288,7 @@ FORMS: dict[tuple[str, str], object] = {
     ("POST", "/access-reviews/apps/{aid}/identities"): {"__files__": {"identities": (
         "ids.csv", b"account_id,email\r\nx1,x1@example.com\r\n", "text/csv")}},
     ("POST", "/access-reviews/apps/{aid}/test"): {},
+    ("POST", "/access-reviews/accounts/pull"): {},
     ("POST", "/access-reviews/{cid}/decide"): _decisions,
     ("POST", "/access-reviews/{cid}/signoff"): {},
     ("POST", "/access-reviews/{cid}/reopen"): lambda w: {"reviewer": w.owner.email},
@@ -315,7 +316,11 @@ _GROUPS: list[tuple[frozenset, str]] = [
            GET /frameworks/new | GET /reviews | GET /settings | GET /settings/{section_id} | GET /setup
            GET /setup/{step_id} | GET /updates | GET /updates/progress | GET /users | GET /vendors/import
            GET /vendors/import/template.csv | GET /vendors/import/{token} | GET /vendors/{vid}/edit
+feature/automation-page
            POST /access-reviews/accounts/pull | POST /automation/run | POST /automation/{name}/verify
+=======
+           POST /access-reviews/accounts/pull
+main
            POST /access-reviews/apps/new | POST /access-reviews/apps/{aid} | POST /access-reviews/apps/{aid}/identities
            POST /access-reviews/apps/{aid}/test | POST /access-reviews/new | POST /access-reviews/{cid}/assign
            POST /access-reviews/{cid}/close | POST /access-reviews/{cid}/confirm | POST /access-reviews/{cid}/reopen
@@ -346,7 +351,12 @@ _GROUPS: list[tuple[frozenset, str]] = [
            POST /vendors/{vid}/review/decide | POST /vendors/{vid}/review/exception
            POST /vendors/{vid}/review/start"""),
     # --- admins and auditors (auditors read everything, change nothing)
+feature/automation-page
     (AU, """GET /access-reviews/accounts | GET /access-reviews/apps | GET /access-reviews/apps/{aid} | GET /access-reviews/{cid}/export.csv | GET /ai
+=======
+    (AU, """GET /access-reviews/accounts
+           GET /access-reviews/apps | GET /access-reviews/apps/{aid} | GET /access-reviews/{cid}/export.csv | GET /ai
+main
             GET /ai/audits/{audit_id} | GET /ai/audits/{audit_id}/report.html | GET /audit | GET /criteria
             GET /criteria/{crit_id} | GET /cycles | GET /cycles/{cycle_id}/export | GET /evidence
             GET /evidence-signing-key.pem | GET /evidence/{source}/{run} | GET /evidence/{source}/{run}/{filename}

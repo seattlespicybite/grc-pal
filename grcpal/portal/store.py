@@ -57,6 +57,18 @@ def _decode(entity: dict) -> dict:
     return out
 
 
+TEMP_DIRS = ("/tmp/", "/var/tmp/", "/dev/shm/")
+
+
+def sqlite_is_temporary(path: str) -> bool:
+    """Is this SQLite database thrown away on restart? In memory, under a temp folder, or a relative path (inside a
+    container that is the image's own disk). An absolute path elsewhere (the VM's /data volume) is persistent."""
+    path = (path or "").strip()
+    if not path or path == ":memory:" or not os.path.isabs(path):
+        return True
+    return os.path.normpath(path).startswith(tuple(d.rstrip("/") + "/" for d in TEMP_DIRS))
+
+
 class SqliteStore:
     def __init__(self, path: str = ":memory:") -> None:
         self.path = path
@@ -91,7 +103,8 @@ class SqliteStore:
         return _decode(entity)
 
     def get(self, table: str, pk: str, rk: str) -> dict | None:
-        row = self._db.execute("SELECT data FROM entities WHERE tbl=? AND pk=? AND rk=?", (table, pk, rk)).fetchone()
+        with self._lock:  # one connection is shared by every thread: reads take the lock too
+            row = self._db.execute("SELECT data FROM entities WHERE tbl=? AND pk=? AND rk=?", (table, pk, rk)).fetchone()
         return _decode(json.loads(row[0])) if row else None
 
     def delete(self, table: str, pk: str, rk: str) -> None:
@@ -100,12 +113,14 @@ class SqliteStore:
             self._db.commit()
 
     def list(self, table: str, pk: str) -> list[dict]:
-        rows = self._db.execute("SELECT data FROM entities WHERE tbl=? AND pk=?", (table, pk)).fetchall()
+        with self._lock:
+            rows = self._db.execute("SELECT data FROM entities WHERE tbl=? AND pk=?", (table, pk)).fetchall()
         return [_decode(json.loads(r[0])) for r in rows]
 
     def list_prefix(self, table: str, prefix: str) -> list[dict]:
-        rows = self._db.execute("SELECT data FROM entities WHERE tbl=? AND substr(pk, 1, ?) = ?",
-                                (table, len(prefix), prefix)).fetchall()
+        with self._lock:
+            rows = self._db.execute("SELECT data FROM entities WHERE tbl=? AND substr(pk, 1, ?) = ?",
+                                    (table, len(prefix), prefix)).fetchall()
         return [_decode(json.loads(r[0])) for r in rows]
 
     def snapshot(self, path: str) -> "SqliteStore":
