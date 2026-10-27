@@ -4,12 +4,14 @@
   --ok: #1b7f5b; --warn: #b7791f; --bad: #c8553d; --info: #2f6f9f; --idle: #6b7b83;
   --radius: 10px; --shadow: 0 1px 2px rgba(14, 42, 53, .06);
   --font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #0d1418; --surface: #131d22; --surface-2: #1a272d; --border: #26363d;
     --text: #e6edf0; --muted: #93a6ae; --brand: #0a1e26; --accent: #2bb3b5; --accent-ink: #06191d;
     --ok: #3fbf8f; --warn: #e0a84a; --bad: #e57b62; --info: #6aa8d8; --idle: #8a9aa1; --shadow: none;
+    color-scheme: dark;  /* native date pickers and their calendar icon follow the dark theme */
   }
 }
 * { box-sizing: border-box; }
@@ -523,3 +525,13 @@ table.diff td.now { color: var(--text); }
   .report-table thead { display: table-header-group; }
   .report-toc a { color: #000; text-decoration: none; }
 }
+
+/* Date fields: the whole field opens the date picker (app.js), so show that it is clickable. */
+input[type=date] { cursor: pointer; }
+input[type=date]::-webkit-calendar-picker-indicator { cursor: pointer; }
+#schedule .cal-cell { margin-left: 4px; }
+details.card > summary { list-style: none; }
+details.card > summary::-webkit-details-marker { display: none; }
+details.card > summary h2::before { content: "›"; display: inline-block; width: 14px; color: var(--muted); transition: transform .15s; }
+details.card[open] > summary h2::before { transform: rotate(90deg); }
+details.card[open] > summary { margin-bottom: 12px; }

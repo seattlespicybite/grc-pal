@@ -455,3 +455,44 @@ def test_calendar_popup_records_and_adds_without_leaving_the_calendar(portal, cl
     for who in (CONTRIB, AUDITOR):
         as_(client, who)
         assert client.get("/calendar/o/access-review~2026-07?popup=1").status_code in (403, 404)
+
+
+# ---------------------------------------------------------------- calendar <-> control links
+def test_control_schedule_shows_cadence_last_and_next(portal):
+    portal.update_occurrence(ADMIN, "access-review~2026-07", "performed", "2026-07-14")
+    sched = {s["id"]: s for s in portal.control_schedule(ADMIN, "IAM-05")}
+    ar = sched["access-review"]
+    assert ar["kind"] == "manual" and ar["schedule"] == "Quarterly, due 15th" and ar["months_text"] == "Jan, Apr, Jul, Oct"
+    assert ar["past_due"] == 2  # January and April were never recorded (observation period starts 1 January)
+    assert ar["last"]["key"] == "access-review~2026-07" and ar["last"]["status"] == "performed" \
+        and ar["last"]["completed_on"] == "2026-07-14"
+    assert ar["next"]["key"] == "access-review~2026-10" and ar["next"]["due"] == "2026-10-15"  # TODAY = 2026-10-12
+    assert ar["calendar_url"] == "/calendar?year=2026#row-access-review"
+    autos = [s for s in sched.values() if s["kind"] == "automated"]
+    assert autos and all(s["runs_url"].startswith("/calendar/auto/") for s in autos)
+
+
+def test_control_schedule_skips_retired_and_unlinked_and_is_admin_only(portal):
+    portal.set_activity_status(ADMIN, "access-review", "retired")
+    assert "access-review" not in {s["id"] for s in portal.control_schedule(ADMIN, "IAM-05")}
+    assert all("IAM-05" in portal.calendar_activity(s["id"])["controls"] for s in portal.control_schedule(ADMIN, "IAM-05"))
+    for who in (HR, CONTRIB, AUDITOR):
+        with pytest.raises(Forbidden):
+            portal.control_schedule(who, "IAM-05")
+
+
+def test_control_page_links_to_calendar_for_admins_only(portal, client):
+    as_(client, ADMIN)
+    page = client.get("/controls/IAM-05").text
+    assert 'id="schedule"' in page and "/calendar/o/access-review~2026-10" in page and "#row-access-review" in page
+    owned = next(c["id"] for c in portal.catalog.controls if portal.can_see_control(HR, c["id"]))
+    for who, path in ((HR, f"/controls/{owned}"), (AUDITOR, "/controls/IAM-05")):
+        as_(client, who)
+        r = client.get(path)
+        assert r.status_code == 200 and 'id="schedule"' not in r.text and "/calendar/" not in r.text
+
+
+def test_calendar_popup_lists_linked_controls(portal, client):
+    as_(client, ADMIN)
+    pop = client.get("/calendar/o/vulnerability-review~2026-10?popup=1").text
+    assert 'href="/controls/VUL-01"' in pop and 'href="/controls/VUL-03"' in pop
