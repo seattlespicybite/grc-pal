@@ -43,7 +43,7 @@
 {% elif lview == 'register' %}
 <div class="card-head mb"><p class="sub">The master list of documents for auditors: who owns and approves each one, the version in force and when it is next reviewed.</p>
 <a class="btn small" href="/library/register.xlsx">⬇ Export to Excel</a></div>
-<div class="card table-wrap">{% if register %}<table class="lib-table lib-index"><thead><tr><th>No.</th><th>Title</th><th>Folder</th><th>Owner</th><th>Approver</th><th>Current version</th><th>Status</th><th>Next review</th></tr></thead><tbody>
+<div class="card table-wrap">{% if register %}<table class="lib-table lib-index lib-register"><thead><tr><th>No.</th><th>Title</th><th>Folder</th><th>Owner</th><th>Approver</th><th>Current version</th><th>Status</th><th>Next review</th></tr></thead><tbody>
 {% for d in register %}<tr><td class="mono">{{ d.number or '—' }}</td><td><a href="/library/{{ d.id }}">{{ d.title }}</a></td><td>{{ d.folder_name }}</td>
 <td>{{ d.owner_name or '—' }}</td><td>{{ d.approver_name or '—' }}</td><td>{{ d.versions or '—' }}</td>
 <td><span class="pill {{ 'dl-approved' if d.current else 'dl-draft' if d.pending else 'dl-archived' }}">{{ d.state }}</span></td>
