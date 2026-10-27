@@ -99,6 +99,14 @@ No data model change. Runs collected before this release show as **Legacy** (fil
     `GRCPAL_MAX_BODY_MB`) are refused with 413 before they are read.
   - New table `signinlimits` (not backed up, like sessions). No migration.
 
+### Fixed
+- **SQLite reads take the store lock.** On VM installs (SQLite) every request shares one database connection;
+  reads ran without the lock that writes use, so pages loaded at the same moment as a save could fail. Azure Table
+  Storage was not affected.
+- **No false "data is lost on restart" warning on VM installs.** The startup warning and the Setup guide's
+  "Portal data storage" item now flag SQLite only when the file really is temporary (in memory, under `/tmp`, or a
+  relative path inside the container), not the VM installer's persistent `/data/grcpal.db`.
+
 ## [0.6.0] - 2026-10-23 - Security hardening
 
 Security hardening release from the internal assessment of the Azure deployment (batches B1, B2, B3 and the CI
