@@ -4,58 +4,25 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
-### Added
-- **Automation page** (admins, Compliance > Automation): every connection, collector and custom check in one place.
-  Each platform card shows its connection status, what you need to connect it and a link to its settings form; each
-  collector shows Passed, Findings, Failed, Overdue (no run in 36 hours), Never run, Not set up or Off, its last run
-  and the controls it feeds. **Verify** runs one collector without saving anything and shows the files, record
-  counts, field names, API calls and findings it would produce, to check the connection and the data before
-  relying on it. **Run once** saves a real write-once run now; **Run them once now** catches up every overdue
-  collector. Both are recorded in the audit log, and portal runs now record `trigger`, `triggered_by` and the API
-  call provenance in the manifest, like scheduled runs.
-- **Calendar and controls link both ways.** Each control page has a **Schedule** card (admins only) with the
-  linked calendar activities: cadence and months, last recorded month and result, next due date, months past due,
-  and links to the exact calendar month or run history. The calendar's popup lists the controls an activity covers.
-  Clicking anywhere in a date field opens the date picker, and the picker icon is now visible in dark mode.
-  **Last cycle** on the control page is folded by default.
-- **Daily account pulls for access reviews.** Every night after `collect --all` (or `grcpal access-pull`, or **Pull now**),
-  each access review application with an API source is read and stored write-once as `access-<application>` evidence:
-  the full account list, what changed since the last good pull, and the request addresses. A failed pull is stored as a
-  failure and alerted like a collector. New **Accounts** page (admins, auditors read-only) with flags, including accounts
-  not found in Entra ID, and the pull history. A review started within 24 hours of a pull uses that stored list.
-- **Setup guide covers the whole program setup.** Eight new steps, each a checklist of what is done and what
-  is missing with links to the page where the work is done: **audit period** (cycle dates set by an admin),
-  **control owners** (controls without an owner, control library owner), **backups** (location, schedule, a
-  recent backup, recovery kit exported), **updates** (policy chosen on a VM; how updates arrive elsewhere),
-  **email alerts** (email tested, admins receiving failure alerts), **access reviews** (applications added and
-  tested), **vendors** (register not empty) and **calendar and policies** (recommendations). These steps turn
-  Done by themselves when their checks pass; **Continue** no longer marks an unfinished step done. The finish
-  page lists them under **Program setup**. The welcome step lists what to have at hand.
-- **Certificate sign-in to Microsoft** (`GRCPAL_MS_AUTH=certificate`, recommended on a VM) and
-  `grcpal ms-cert`, which creates the certificate (private `.pem` readable by you only, public `.cer` for the app
-  registration, thumbprint and expiry printed). A certificate pasted on one line is rebuilt.
-- The Microsoft connection test also checks **GroupMember.Read.All** (access reviews).
+## [0.6.0] - 2026-10-29 - Automation page, access review pulls, calendar links, security hardening
+Security hardening release from the internal assessment of the Azure deployment (batches B1, B2, B3 and the CI
+security scan; findings F-01, F-02, F-04, F-05, F-10, F-11 and B-3). This was an internal assessment with
+automated scanning, not an independent penetration test.
 
-### Changed
-- **Clear result when a backup finishes.** The job page now shows a green "Backup completed" or red "Backup failed"
-  banner, and pops up the result once when the job has just ended. A backup that was written but failed its
-  verification is shown as a problem, not a success. The same applies to backup checks and other jobs.
-- **Vendor edits: the reason for the change is optional.** Every change is still saved as a new version and
-  written to the audit log with who, when and which fields changed. Offboarding still needs a reason.
-- **Vendor page: "Who to call" is now "Internal contact".**
-- **Document library register fits wide screens better:** smaller text, tighter cells, and folder and people
-  names wrap instead of widening the table. Other tables are unchanged.
-- The deployment step points to the VM installer instead of a sign-in proxy for running outside Azure.
-- **Evidence integrity.** Every evidence run now also gets `SHA256SUMS` (check with `sha256sum -c`) and
-  `manifest.sig`, an Ed25519 signature of `manifest.json` with a key derived from the instance's encryption key
-  (or `GRCPAL_EVIDENCE_SIGNING_KEY`). The manifest's SHA-256 is recorded in the hash-chained audit log
-  (`evidence.sealed`), so a rewritten run is caught even by someone holding the signing key.
-- `grcpal evidence verify` (hashes, signature, audit-log record; exit code 1 on failure) and
-  `grcpal evidence public-key`. Each evidence run page shows an **Integrity** card; admins and auditors can
-  download the public key.
-- Collector runs record provenance: each API call with its request or query, record count, pages, request ID
-  and the app registration used.
-- The auditor export adds `evidence_run_verification.csv` and `evidence_signing_key.pem`.
+No data model change.
+
+**Before you upgrade (action may be needed):**
+- **Azure:** nothing to do if you deployed with the template (it sets `GRCPAL_ENV=production`, your tenant in
+  `GRCPAL_ALLOWED_TENANT_IDS` and `GRCPAL_TRUSTED_PROXY_HOPS=1`). Custom deployments in easyauth mode must set
+  `GRCPAL_ALLOWED_TENANT_IDS`, or the portal refuses to start. After the upgrade run checks V-1 and V-2 in
+  [docs/deploy-azure.md](docs/deploy-azure.md).
+- **Proxy mode (VM with oauth2-proxy or Caddy):** set `GRCPAL_PROXY_SECRET` and have the proxy send it as
+  `X-GRCPAL-Proxy-Secret`, or the portal refuses to start.
+- **Self-hosted AI models or GitHub Enterprise Server on a private network:** set `GRCPAL_AI_ALLOW_PRIVATE=1` /
+  `GRCPAL_GITHUB_ALLOW_PRIVATE=1`, or those calls are refused.
+- **Backups:** in production the web page no longer downloads backup files or the recovery kit; use
+  `grcpal backup ...` or the backup job (`GRCPAL_WEB_BACKUP_DOWNLOAD=on` brings the buttons back).
+- **Anything that used `GRCPAL_AUTH_MODE=dev`** (demo containers, test setups) must also set `GRCPAL_ENV=dev`.
 
 ### Security
 - **Authorization test suite** (`tests/test_authz.py`, table in `tests/authz_matrix.py`): every route of the app, in
@@ -69,13 +36,6 @@ All notable changes are listed here. The project follows [semantic versioning](h
 - `POST /vendors/new` without a name returns a message instead of a server error.
 - Editing a custom control that does not exist is refused instead of creating it (the "already exists" check
   was skipped on that path).
-
-### Changed
-- Uploads named `manifest.json`, `manifest.sig` or `SHA256SUMS` are refused (reserved names in the evidence store).
-
-No data model change. Runs collected before this release show as **Legacy** (file hashes still checked).
-
-### Security
 - **Break-glass sign-in on Azure.** `deploy/azure/breakglass.sh` (`set-password`, `arm`, `disarm`, `status`)
   opens password sign-in for the break-glass account when Microsoft sign-in to GRC-pal is broken. `arm` starts a
   revision with local sign-in and a closing time, moves traffic there and only then turns Easy Auth off; `disarm`
@@ -119,45 +79,6 @@ No data model change. Runs collected before this release show as **Legacy** (fil
   - **Request size limit.** Bodies larger than the upload limit plus 5 MB (30 MB by default,
     `GRCPAL_MAX_BODY_MB`) are refused with 413 before they are read.
   - New table `signinlimits` (not backed up, like sessions). No migration.
-
-### Fixed
-- **Evidence names in the built-in catalog are no longer cut short.** Four entries had an unquoted comma that YAML
-  treats as the end of the name (GOV-01 "Policy approval history (PR", GOV-05 "Case log (sampled", GOV-07 and the AWS
-  security services control), so the control page, control matrix report and data file showed a truncated name.
-- **ISO 27001 clause references in the catalog match the ISO framework file** (`Clause9.3`, not `Clause 9.3`; six
-  controls). With ISO switched on, saving one of those controls or importing the control matrix failed with
-  "unknown requirement".
-- New tests: every catalog evidence entry has a whole name and only `artifact`/`via`; every `iso27001:` reference
-  exists in the framework file.
-- **SQLite reads take the store lock.** On VM installs (SQLite) every request shares one database connection;
-  reads ran without the lock that writes use, so pages loaded at the same moment as a save could fail. Azure Table
-  Storage was not affected.
-- **No false "data is lost on restart" warning on VM installs.** The startup warning and the Setup guide's
-  "Portal data storage" item now flag SQLite only when the file really is temporary (in memory, under `/tmp`, or a
-  relative path inside the container), not the VM installer's persistent `/data/grcpal.db`.
-
-## [0.6.0] - 2026-10-23 - Security hardening
-
-Security hardening release from the internal assessment of the Azure deployment (batches B1, B2, B3 and the CI
-security scan; findings F-01, F-02, F-04, F-05, F-10, F-11 and B-3). This was an internal assessment with
-automated scanning, not an independent penetration test.
-
-No data model change.
-
-**Before you upgrade (action may be needed):**
-- **Azure:** nothing to do if you deployed with the template (it sets `GRCPAL_ENV=production`, your tenant in
-  `GRCPAL_ALLOWED_TENANT_IDS` and `GRCPAL_TRUSTED_PROXY_HOPS=1`). Custom deployments in easyauth mode must set
-  `GRCPAL_ALLOWED_TENANT_IDS`, or the portal refuses to start. After the upgrade run checks V-1 and V-2 in
-  [docs/deploy-azure.md](docs/deploy-azure.md).
-- **Proxy mode (VM with oauth2-proxy or Caddy):** set `GRCPAL_PROXY_SECRET` and have the proxy send it as
-  `X-GRCPAL-Proxy-Secret`, or the portal refuses to start.
-- **Self-hosted AI models or GitHub Enterprise Server on a private network:** set `GRCPAL_AI_ALLOW_PRIVATE=1` /
-  `GRCPAL_GITHUB_ALLOW_PRIVATE=1`, or those calls are refused.
-- **Backups:** in production the web page no longer downloads backup files or the recovery kit; use
-  `grcpal backup ...` or the backup job (`GRCPAL_WEB_BACKUP_DOWNLOAD=on` brings the buttons back).
-- **Anything that used `GRCPAL_AUTH_MODE=dev`** (demo containers, test setups) must also set `GRCPAL_ENV=dev`.
-
-### Security
 - **Outbound endpoint controls (hardening B3, F-11).** AI provider, GitHub (connection test and collector client)
   and Microsoft Graph connection-test calls now go through the same guard as custom checks: public addresses
   only, every redirect re-checked, cloud metadata and private ranges blocked. Credential headers are dropped when a
@@ -201,8 +122,80 @@ No data model change.
   files; it opens only the workbook, shared text and worksheet parts.
 
 New tables `arapps`, `matriximports` and `vendorimports` (no migration needed). No other data model change.
+- **Session hygiene (hardening batch B5).**
+  - In production every GRC-pal cookie is `Secure` and uses the `__Host-` prefix (`__Host-grcpal_session`,
+    `__Host-grcpal_view`), so only this exact HTTPS host can set or read it. Cookies from before the upgrade are
+    accepted once and replaced, so nobody is signed out by the change.
+  - Form tokens are tied to the sign-in session as well as the person (the local session, the Azure Easy Auth
+    session cookie, or the proxy's session cookie). A token copied from another session is refused, and every
+    sign-in starts a new session and new tokens. Signing in also ends the session the browser had before.
+  - Local accounts: admin sessions end after 30 minutes without activity (`GRCPAL_ADMIN_IDLE_MINUTES`).
+    Admins signed in before the upgrade for more than 30 minutes sign in once more.
+  - Local accounts: **Sign out** is a form post with a token (`POST /logout`); `GET /logout` no longer signs
+    anyone out, so a link or image on another site cannot.
+- **Entra accounts are linked at first sign-in.** On Azure (easyauth) each person's Entra object ID and tenant
+  are stored the first time they sign in; the same email from another Entra account is refused and logged as a
+  security event until an admin clicks **Unlink Entra account** on Users and roles. In production the tenant
+  allow-list (`GRCPAL_ALLOWED_TENANT_IDS`) is now required; the Azure template already sets it.
+- **Proxy mode needs a shared secret.** `GRCPAL_AUTH_MODE=proxy` now requires `GRCPAL_PROXY_SECRET` (32+
+  characters), which the proxy sends as `X-GRCPAL-Proxy-Secret`; a request that reaches the app without it is
+  refused, so nobody can claim to be someone by sending `X-Forwarded-Email` directly. **Action for proxy users:**
+  set the secret on both sides before upgrading (examples in docs/configuration.md).
+- **Request logs name the person and hide password-link tokens.** Every request line now carries the signed-in
+  `actor` (it was always "-"), and `/account/password/<token>` is logged as `/account/password/[redacted]`.
+- **Backup files and the recovery kit are no longer downloadable from the web page in production.** One stolen
+  admin session could take every record plus the keys that open them and the saved integration credentials.
+  Operators get the kit on the command line: `grcpal backup kit` (VM) or the new `deploy.sh --kit-out FILE`
+  (Azure; `deploy.sh` no longer prints the encryption key). `GRCPAL_WEB_BACKUP_DOWNLOAD=on` brings the
+  downloads back, and each one is then emailed to every admin. Backing up, checking and restoring are unchanged.
+- **Caller addresses can no longer be forged.** The container trusted every `X-Forwarded-For` header, so the
+  address a client typed in was recorded in sign-in events and the audit log. Now only the address added by
+  our own proxy counts (`GRCPAL_TRUSTED_PROXY_HOPS`, set to 1 by the Azure template and the VM installer), and
+  request log lines carry it as `ip`.
+- **Development sign-in fails closed.** `GRCPAL_AUTH_MODE=dev` now needs `GRCPAL_ENV=dev` (or `development`) set
+  explicitly; before, only `GRCPAL_ENV=production` refused it, so a missing variable left a password-free
+  sign-in open. `grcpal serve --demo` sets it and refuses a non-local `--host` unless `--insecure-demo` is given.
+  **Action:** if you run dev mode outside `grcpal serve --demo` or Docker Compose, set `GRCPAL_ENV=dev`.
+- Custom application tokens are encrypted per organization and application, never shown, logged or audited, and only sent
+  to that application's host: no redirects, next-page links must stay on the same host, internal and metadata addresses
+  are blocked. `Clients.gh_list(..., complete=True)` raises instead of silently returning a partial list.
+- GRC-pal now reads one kind of uploaded spreadsheet (the control matrix). The reader in `grcpal/xlsx.py` is
+  standard library only and refuses large or zip-bomb files, DOCTYPE and entities, formulas and password-protected
+  files; it opens only the workbook, shared text and worksheet parts.
+
+New tables `arapps`, `matriximports` and `vendorimports` (no migration needed). No other data model change.
 
 ### Added
+- **Automation page** (admins, Compliance > Automation): every connection, collector and custom check in one place.
+  Each platform card shows its connection status, what you need to connect it and a link to its settings form; each
+  collector shows Passed, Findings, Failed, Overdue (no run in 36 hours), Never run, Not set up or Off, its last run
+  and the controls it feeds. **Verify** runs one collector without saving anything and shows the files, record
+  counts, field names, API calls and findings it would produce, to check the connection and the data before
+  relying on it. **Run once** saves a real write-once run now; **Run them once now** catches up every overdue
+  collector. Both are recorded in the audit log, and portal runs now record `trigger`, `triggered_by` and the API
+  call provenance in the manifest, like scheduled runs.
+- **Calendar and controls link both ways.** Each control page has a **Schedule** card (admins only) with the
+  linked calendar activities: cadence and months, last recorded month and result, next due date, months past due,
+  and links to the exact calendar month or run history. The calendar's popup lists the controls an activity covers.
+  Clicking anywhere in a date field opens the date picker, and the picker icon is now visible in dark mode.
+  **Last cycle** on the control page is folded by default.
+- **Daily account pulls for access reviews.** Every night after `collect --all` (or `grcpal access-pull`, or **Pull now**),
+  each access review application with an API source is read and stored write-once as `access-<application>` evidence:
+  the full account list, what changed since the last good pull, and the request addresses. A failed pull is stored as a
+  failure and alerted like a collector. New **Accounts** page (admins, auditors read-only) with flags, including accounts
+  not found in Entra ID, and the pull history. A review started within 24 hours of a pull uses that stored list.
+- **Setup guide covers the whole program setup.** Eight new steps, each a checklist of what is done and what
+  is missing with links to the page where the work is done: **audit period** (cycle dates set by an admin),
+  **control owners** (controls without an owner, control library owner), **backups** (location, schedule, a
+  recent backup, recovery kit exported), **updates** (policy chosen on a VM; how updates arrive elsewhere),
+  **email alerts** (email tested, admins receiving failure alerts), **access reviews** (applications added and
+  tested), **vendors** (register not empty) and **calendar and policies** (recommendations). These steps turn
+  Done by themselves when their checks pass; **Continue** no longer marks an unfinished step done. The finish
+  page lists them under **Program setup**. The welcome step lists what to have at hand.
+- **Certificate sign-in to Microsoft** (`GRCPAL_MS_AUTH=certificate`, recommended on a VM) and
+  `grcpal ms-cert`, which creates the certificate (private `.pem` readable by you only, public `.cer` for the app
+  registration, thumbprint and expiry printed). A certificate pasted on one line is rebuilt.
+- The Microsoft connection test also checks **GroupMember.Read.All** (access reviews).
 - **Security scanning in CI** (`.github/workflows/security-scan.yml`, on every pull request, nightly and on demand):
   bandit (medium and high, with a reviewed baseline of false positives), pip-audit on everything the image ships,
   a Trivy scan of the built image that fails on high or critical vulnerabilities with a fix, a CycloneDX SBOM kept
@@ -254,6 +247,28 @@ New tables `arapps`, `matriximports` and `vendorimports` (no migration needed). 
 - **Activity log table**: Enhanced the Updates page history table with status indicators and audit log fallback.
 
 ### Changed
+- **Clear result when a backup finishes.** The job page now shows a green "Backup completed" or red "Backup failed"
+  banner, and pops up the result once when the job has just ended. A backup that was written but failed its
+  verification is shown as a problem, not a success. The same applies to backup checks and other jobs.
+- **Vendor edits: the reason for the change is optional.** Every change is still saved as a new version and
+  written to the audit log with who, when and which fields changed. Offboarding still needs a reason.
+- **Vendor page: "Who to call" is now "Internal contact".**
+- **Document library register fits wide screens better:** smaller text, tighter cells, and folder and people
+  names wrap instead of widening the table. Other tables are unchanged.
+- The deployment step points to the VM installer instead of a sign-in proxy for running outside Azure.
+- **Evidence integrity.** Every evidence run now also gets `SHA256SUMS` (check with `sha256sum -c`) and
+  `manifest.sig`, an Ed25519 signature of `manifest.json` with a key derived from the instance's encryption key
+  (or `GRCPAL_EVIDENCE_SIGNING_KEY`). The manifest's SHA-256 is recorded in the hash-chained audit log
+  (`evidence.sealed`), so a rewritten run is caught even by someone holding the signing key.
+- `grcpal evidence verify` (hashes, signature, audit-log record; exit code 1 on failure) and
+  `grcpal evidence public-key`. Each evidence run page shows an **Integrity** card; admins and auditors can
+  download the public key.
+- Collector runs record provenance: each API call with its request or query, record count, pages, request ID
+  and the app registration used.
+- The auditor export adds `evidence_run_verification.csv` and `evidence_signing_key.pem`.
+- Uploads named `manifest.json`, `manifest.sig` or `SHA256SUMS` are refused (reserved names in the evidence store).
+
+No data model change. Runs collected before this release show as **Legacy** (file hashes still checked).
 - **Evidence uploaded by an admin is approved on upload.** Admins own the program and upload evidence that
   is already approved, so a second review made no sense, and with a single admin the upload stayed
   "pending" forever with nobody able to approve it. Admin uploads now require an approval note (who
@@ -263,51 +278,21 @@ New tables `arapps`, `matriximports` and `vendorimports` (no migration needed). 
   pending from before can be approved on **Reviews** or the control page with an approval note.
   No data model change (the new field is read with a default).
 
-### Security
-- **Session hygiene (hardening batch B5).**
-  - In production every GRC-pal cookie is `Secure` and uses the `__Host-` prefix (`__Host-grcpal_session`,
-    `__Host-grcpal_view`), so only this exact HTTPS host can set or read it. Cookies from before the upgrade are
-    accepted once and replaced, so nobody is signed out by the change.
-  - Form tokens are tied to the sign-in session as well as the person (the local session, the Azure Easy Auth
-    session cookie, or the proxy's session cookie). A token copied from another session is refused, and every
-    sign-in starts a new session and new tokens. Signing in also ends the session the browser had before.
-  - Local accounts: admin sessions end after 30 minutes without activity (`GRCPAL_ADMIN_IDLE_MINUTES`).
-    Admins signed in before the upgrade for more than 30 minutes sign in once more.
-  - Local accounts: **Sign out** is a form post with a token (`POST /logout`); `GET /logout` no longer signs
-    anyone out, so a link or image on another site cannot.
-- **Entra accounts are linked at first sign-in.** On Azure (easyauth) each person's Entra object ID and tenant
-  are stored the first time they sign in; the same email from another Entra account is refused and logged as a
-  security event until an admin clicks **Unlink Entra account** on Users and roles. In production the tenant
-  allow-list (`GRCPAL_ALLOWED_TENANT_IDS`) is now required; the Azure template already sets it.
-- **Proxy mode needs a shared secret.** `GRCPAL_AUTH_MODE=proxy` now requires `GRCPAL_PROXY_SECRET` (32+
-  characters), which the proxy sends as `X-GRCPAL-Proxy-Secret`; a request that reaches the app without it is
-  refused, so nobody can claim to be someone by sending `X-Forwarded-Email` directly. **Action for proxy users:**
-  set the secret on both sides before upgrading (examples in docs/configuration.md).
-- **Request logs name the person and hide password-link tokens.** Every request line now carries the signed-in
-  `actor` (it was always "-"), and `/account/password/<token>` is logged as `/account/password/[redacted]`.
-- **Backup files and the recovery kit are no longer downloadable from the web page in production.** One stolen
-  admin session could take every record plus the keys that open them and the saved integration credentials.
-  Operators get the kit on the command line: `grcpal backup kit` (VM) or the new `deploy.sh --kit-out FILE`
-  (Azure; `deploy.sh` no longer prints the encryption key). `GRCPAL_WEB_BACKUP_DOWNLOAD=on` brings the
-  downloads back, and each one is then emailed to every admin. Backing up, checking and restoring are unchanged.
-- **Caller addresses can no longer be forged.** The container trusted every `X-Forwarded-For` header, so the
-  address a client typed in was recorded in sign-in events and the audit log. Now only the address added by
-  our own proxy counts (`GRCPAL_TRUSTED_PROXY_HOPS`, set to 1 by the Azure template and the VM installer), and
-  request log lines carry it as `ip`.
-- **Development sign-in fails closed.** `GRCPAL_AUTH_MODE=dev` now needs `GRCPAL_ENV=dev` (or `development`) set
-  explicitly; before, only `GRCPAL_ENV=production` refused it, so a missing variable left a password-free
-  sign-in open. `grcpal serve --demo` sets it and refuses a non-local `--host` unless `--insecure-demo` is given.
-  **Action:** if you run dev mode outside `grcpal serve --demo` or Docker Compose, set `GRCPAL_ENV=dev`.
-- Custom application tokens are encrypted per organization and application, never shown, logged or audited, and only sent
-  to that application's host: no redirects, next-page links must stay on the same host, internal and metadata addresses
-  are blocked. `Clients.gh_list(..., complete=True)` raises instead of silently returning a partial list.
-- GRC-pal now reads one kind of uploaded spreadsheet (the control matrix). The reader in `grcpal/xlsx.py` is
-  standard library only and refuses large or zip-bomb files, DOCTYPE and entities, formulas and password-protected
-  files; it opens only the workbook, shared text and worksheet parts.
-
-New tables `arapps`, `matriximports` and `vendorimports` (no migration needed). No other data model change.
-
 ### Fixed
+- **Evidence names in the built-in catalog are no longer cut short.** Four entries had an unquoted comma that YAML
+  treats as the end of the name (GOV-01 "Policy approval history (PR", GOV-05 "Case log (sampled", GOV-07 and the AWS
+  security services control), so the control page, control matrix report and data file showed a truncated name.
+- **ISO 27001 clause references in the catalog match the ISO framework file** (`Clause9.3`, not `Clause 9.3`; six
+  controls). With ISO switched on, saving one of those controls or importing the control matrix failed with
+  "unknown requirement".
+- New tests: every catalog evidence entry has a whole name and only `artifact`/`via`; every `iso27001:` reference
+  exists in the framework file.
+- **SQLite reads take the store lock.** On VM installs (SQLite) every request shares one database connection;
+  reads ran without the lock that writes use, so pages loaded at the same moment as a save could fail. Azure Table
+  Storage was not affected.
+- **No false "data is lost on restart" warning on VM installs.** The startup warning and the Setup guide's
+  "Portal data storage" item now flag SQLite only when the file really is temporary (in memory, under `/tmp`, or a
+  relative path inside the container), not the VM installer's persistent `/data/grcpal.db`.
 - **Program repository knowledge articles and frameworks now reach Azure portals.** `grcpal publish-config`
   sent only `catalog/`, `registers/` and `policies/`, so your own `kb/` articles and `frameworks/` files worked
   on a VM (local folder) but were silently ignored on Azure. The bundle now carries `kb/` and `frameworks/` too.
