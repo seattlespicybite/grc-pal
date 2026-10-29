@@ -5,7 +5,6 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Added
-feature/automation-page
 - **Automation page** (admins, Compliance > Automation): every connection, collector and custom check in one place.
   Each platform card shows its connection status, what you need to connect it and a link to its settings form; each
   collector shows Passed, Findings, Failed, Overdue (no run in 36 hours), Never run, Not set up or Off, its last run
@@ -14,9 +13,11 @@ feature/automation-page
   relying on it. **Run once** saves a real write-once run now; **Run them once now** catches up every overdue
   collector. Both are recorded in the audit log, and portal runs now record `trigger`, `triggered_by` and the API
   call provenance in the manifest, like scheduled runs.
-feature/access-snapshots
-=======
-main
+- **Calendar and controls link both ways.** Each control page has a **Schedule** card (admins only) with the
+  linked calendar activities: cadence and months, last recorded month and result, next due date, months past due,
+  and links to the exact calendar month or run history. The calendar's popup lists the controls an activity covers.
+  Clicking anywhere in a date field opens the date picker, and the picker icon is now visible in dark mode.
+  **Last cycle** on the control page is folded by default.
 - **Daily account pulls for access reviews.** Every night after `collect --all` (or `grcpal access-pull`, or **Pull now**),
   each access review application with an API source is read and stored write-once as `access-<application>` evidence:
   the full account list, what changed since the last good pull, and the request addresses. A failed pull is stored as a
@@ -36,6 +37,14 @@ main
 - The Microsoft connection test also checks **GroupMember.Read.All** (access reviews).
 
 ### Changed
+- **Clear result when a backup finishes.** The job page now shows a green "Backup completed" or red "Backup failed"
+  banner, and pops up the result once when the job has just ended. A backup that was written but failed its
+  verification is shown as a problem, not a success. The same applies to backup checks and other jobs.
+- **Vendor edits: the reason for the change is optional.** Every change is still saved as a new version and
+  written to the audit log with who, when and which fields changed. Offboarding still needs a reason.
+- **Vendor page: "Who to call" is now "Internal contact".**
+- **Document library register fits wide screens better:** smaller text, tighter cells, and folder and people
+  names wrap instead of widening the table. Other tables are unchanged.
 - The deployment step points to the VM installer instead of a sign-in proxy for running outside Azure.
 - **Evidence integrity.** Every evidence run now also gets `SHA256SUMS` (check with `sha256sum -c`) and
   `manifest.sig`, an Ed25519 signature of `manifest.json` with a key derived from the instance's encryption key
@@ -112,6 +121,14 @@ No data model change. Runs collected before this release show as **Legacy** (fil
   - New table `signinlimits` (not backed up, like sessions). No migration.
 
 ### Fixed
+- **Evidence names in the built-in catalog are no longer cut short.** Four entries had an unquoted comma that YAML
+  treats as the end of the name (GOV-01 "Policy approval history (PR", GOV-05 "Case log (sampled", GOV-07 and the AWS
+  security services control), so the control page, control matrix report and data file showed a truncated name.
+- **ISO 27001 clause references in the catalog match the ISO framework file** (`Clause9.3`, not `Clause 9.3`; six
+  controls). With ISO switched on, saving one of those controls or importing the control matrix failed with
+  "unknown requirement".
+- New tests: every catalog evidence entry has a whole name and only `artifact`/`via`; every `iso27001:` reference
+  exists in the framework file.
 - **SQLite reads take the store lock.** On VM installs (SQLite) every request shares one database connection;
   reads ran without the lock that writes use, so pages loaded at the same moment as a save could fail. Azure Table
   Storage was not affected.

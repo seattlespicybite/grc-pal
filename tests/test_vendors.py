@@ -482,8 +482,16 @@ def test_forms_need_csrf_and_respect_roles(portal, client):
     r = client.post("/vendors/new", data={"csrf": token, "name": "Woodgrove", "tier": "low", "data_access": "No company data"},
                     follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].startswith("/vendors/woodgrove")
-    r = client.post("/vendors/woodgrove/edit", data={"csrf": token, "name": "Woodgrove", "tier": "moderate", "reason": ""})
-    assert r.status_code == 200 and "Say why" in r.text
+    r = client.post("/vendors/woodgrove/edit", data={"csrf": token, "name": "Woodgrove", "tier": "moderate", "reason": ""},
+                    follow_redirects=False)
+    assert r.status_code == 303  # the reason is optional; the change is still versioned and audited
+    assert portal.vendor(ADMIN, "woodgrove")["tier"] == "moderate"
+    ver = portal.vendor_versions(ADMIN, "woodgrove")[0]
+    assert ver["by"] == ADMIN.email and ver["at"] and ver["reason"] == ""
+    upd = [r for r in portal.log.records() if r["action"] == "vendor.update"][-1]
+    assert "tier" in upd["detail"]["changed"]
+    page = client.get("/vendors/woodgrove").text
+    assert "Internal contact" in page and "Who to call" not in page
     r = client.post("/vendors/questionnaire/edit", data={"csrf": token, "op": "add_section", "title": "AI use"},
                     follow_redirects=False)
     assert r.status_code == 303 and "AI use" in client.get("/vendors/questionnaire").text

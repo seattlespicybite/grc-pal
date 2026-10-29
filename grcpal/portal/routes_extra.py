@@ -84,6 +84,32 @@ def _form_dict(form) -> dict:
     return out
 
 
+_JOB_LABELS = {"backup": "Backup", "backup_verify": "Backup check", "update_verify": "Installation check"}
+
+
+def job_outcome(job: dict) -> dict:
+    """Plain-language result of a finished job for the banner and popup on the job page. A job that finished
+    but reports a failed verification ("verified"/"ok" is False) counts as a problem, not a success."""
+    label = _JOB_LABELS.get(job.get("kind", ""), job.get("title") or "Job")
+    res = job.get("result") or {}
+    if job.get("status") == "failed":
+        return {"ok": False, "title": f"{label} failed",
+                "text": job.get("message") or "See Logs for details.", "next": "Fix the problem and try again."}
+    if res.get("verified") is False or res.get("ok") is False:
+        problems = "; ".join(str(x) for x in (res.get("problems") or [])[:3])
+        return {"ok": False, "title": f"{label} finished with problems",
+                "text": problems or "The file could not be verified.", "next": "Do not rely on this backup."}
+    if job.get("kind") == "backup":
+        text = f"The backup was written and verified: {res.get('file', '')}"
+        if res.get("where"):
+            text += f" in {res['where']}"
+        return {"ok": True, "title": "Backup completed", "text": text + ".", "next": ""}
+    if job.get("kind") == "backup_verify":
+        return {"ok": True, "title": "Backup check passed", "text": "The backup file is complete and can be restored.",
+                "next": ""}
+    return {"ok": True, "title": f"{label} finished", "text": job.get("message") or "", "next": ""}
+
+
 def register(app, h) -> None:
     p, current_user, render, back = h.p, h.current_user, h.render, h.back
 
@@ -283,7 +309,14 @@ def register(app, h) -> None:
         job = p().jobs.get(job_id)
         if not job:
             raise h.HTTPError(404, "Job not found")
-        return render(request, user, "jobs.html", rows=[], job=job, refresh=job["status"] in ("queued", "running"))
+        running = job["status"] in ("queued", "running")
+        try:  # pop up the result only right after the job ends, not when someone opens an old job later
+            ended = dt.datetime.fromisoformat(job.get("finished_at", ""))
+            popup = dt.datetime.now(dt.timezone.utc) - ended < dt.timedelta(minutes=10)
+        except (TypeError, ValueError):
+            popup = False
+        return render(request, user, "jobs.html", rows=[], job=job, refresh=running,
+                      outcome=None if running else job_outcome(job), popup=popup)
 
     # ================================================================ knowledge base
     @app.get("/kb", response_class=HTMLResponse)

@@ -631,3 +631,27 @@ def test_verify_installation_blob_storage_skips_file_check(site):
 
 
 
+
+
+def test_finished_backup_shows_a_clear_success_popup(site):
+    _, client, _ = site
+    as_(client, ADMIN)
+    r = client.post("/backups/now", data={"destination": "local", "csrf": csrf(client, "/backups")},
+                    follow_redirects=False)
+    page = client.get(r.headers["location"]).text
+    assert "Backup completed" in page and "data-job-dialog" in page and 'class="flash ok"' in page
+    assert "this page refreshes" not in page
+
+
+def test_failed_backup_shows_a_clear_failure_popup(site, monkeypatch):
+    from grcpal import backup, backup_store
+    _, client, _ = site
+
+    def boom(*a, **k):
+        raise backup.BackupError("The backup folder is not writable")
+    monkeypatch.setattr(backup_store, "run", boom)
+    as_(client, ADMIN)
+    r = client.post("/backups/now", data={"destination": "local", "csrf": csrf(client, "/backups")},
+                    follow_redirects=False)
+    page = client.get(r.headers["location"]).text
+    assert "Backup failed" in page and "not writable" in page and 'class="flash err"' in page

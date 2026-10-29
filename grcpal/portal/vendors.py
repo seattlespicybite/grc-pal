@@ -388,14 +388,13 @@ class VendorsMixin:
         return row
 
     def update_vendor(self, actor, vid: str, form: dict, reason: str) -> dict:
-        """Admins change vendor details. A reason is required; the previous version is kept."""
+        """Admins change vendor details. The reason is optional: every change is still versioned and audited
+        (who, when, which fields), so a minor edit does not need an explanation."""
         self._admin(actor)
         v = self._vendor_row(vid)
         if not v:
             raise self._invalid("Vendor not found")
         reason = (reason or "").strip()
-        if not reason:
-            raise self._invalid("Say why you are changing this vendor (kept in the history for the auditor)")
         clean = self._clean_vendor(form, DETAIL_FIELDS + CONTACT_FIELDS, v)
         if clean.get("name") and clean["name"].lower() != v["name"].lower() and any(
                 x.get("name", "").lower() == clean["name"].lower() for x in self.store.list("vendors", "v")):

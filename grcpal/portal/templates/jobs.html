@@ -4,6 +4,12 @@
 <div class="page-head"><div><div class="sub"><a href="/jobs">Background jobs</a> /</div><h1>{{ job.title }}</h1>
 <div class="sub">Started by {{ job.by }} · {{ when(job.created_at) }} UTC{% if refresh %} · this page refreshes every 3 seconds{% endif %}</div></div>
 <div><span class="pill job-{{ job.status }}">{{ job.status }}</span></div></div>
+{% if outcome %}<div class="flash {{ 'ok' if outcome.ok else 'err' }}" role="{{ 'status' if outcome.ok else 'alert' }}"><strong>{{ outcome.title }}.</strong> {{ outcome.text }} {{ outcome.next }}</div>
+{% if popup %}<dialog class="cal-dialog" data-job-dialog data-job-id="{{ job.RowKey }}" aria-labelledby="job-pop-title">
+<h2 id="job-pop-title" class="{{ 'job-pop-ok' if outcome.ok else 'job-pop-err' }}">{{ '✓' if outcome.ok else '✕' }} {{ outcome.title }}</h2>
+<p>{{ outcome.text }}</p>{% if outcome.next %}<p class="sub">{{ outcome.next }}</p>{% endif %}
+<p class="mt"><button type="button" class="btn" data-pop-close>OK</button>{% if job.kind in ('backup', 'backup_verify') %} <a class="btn ghost" href="/backups">Back to Backups</a>{% endif %}</p>
+</dialog>{% endif %}{% endif %}
 <section class="card">{% if job.total %}<div class="progress"><svg class="bar" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label="Progress"><rect class="fill-ok" x="0" y="0" width="{{ (100 * job.done / job.total)|round(1) }}" height="10"/></svg>
 <div class="sub">{{ job.done }} of {{ job.total }} · {{ job.message }}</div></div>{% elif job.message %}<p>{{ job.message }}</p>{% endif %}
 {% if job.steps %}<pre class="note mono mt">{{ job.steps|join('\n') }}</pre>{% endif %}

@@ -121,6 +121,7 @@ Current bandit baseline (review by 2027-04-23):
 | `grcpal/catalog.py` | B506 yaml_load | False positive: the loader is `CSafeLoader`/`SafeLoader`, never the full loader. |
 | `grcpal/xlsx.py` | B314 xml fromstring | Uploaded workbooks are untrusted, so the reader refuses any DOCTYPE or entity declaration before parsing and caps part size, total unpacked size and entry count (zip bombs). The parser is the standard library's expat, which does not fetch external entities. |
 | `grcpal/configbundle.py` | B108 /tmp path | Default extract folder for a published catalog when `GRCPAL_CONFIG_DIR` is not set. Inside the container `/tmp` belongs to the app user alone. On a shared host, set `GRCPAL_CONFIG_DIR`. |
+| `grcpal/portal/store.py` | B108 /tmp path | False positive: `TEMP_DIRS` is a list of folder names that the storage check compares the SQLite path against, to warn when data would be lost on restart. Nothing is written there. |
 
 Updating the scanners: Dependabot proposes new bandit and pip-audit versions (`.github/security/requirements.txt`).
 Trivy and ZAP are updated by hand: change `TRIVY_VERSION`/`ZAP_VERSION` in the workflow and the matching

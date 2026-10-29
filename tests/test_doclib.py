@@ -586,7 +586,7 @@ def test_list_pencil_register_tab_and_export_route(portal, client):
                                                 "back": "list", "f": "//evil.example"}, follow_redirects=False)
     assert r.headers["location"].startswith("/library?edit=1") and "evil" not in r.headers["location"]
     page = client.get("/library?view=register").text
-    assert "Export to Excel" in page and "AC-05" in page and 'class="on">Register' in page
+    assert "Export to Excel" in page and "AC-05" in page and 'class="on">Register' in page and "lib-register" in page
     r = client.get("/library/register.xlsx")
     assert r.status_code == 200 and "attachment" in r.headers["content-disposition"] and r.content[:2] == b"PK"
     as_(client, AUDITOR)
