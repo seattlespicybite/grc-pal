@@ -5,6 +5,14 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Added
+- **Automation page** (admins, Compliance > Automation): every connection, collector and custom check in one place.
+  Each platform card shows its connection status, what you need to connect it and a link to its settings form; each
+  collector shows Passed, Findings, Failed, Overdue (no run in 36 hours), Never run, Not set up or Off, its last run
+  and the controls it feeds. **Verify** runs one collector without saving anything and shows the files, record
+  counts, field names, API calls and findings it would produce, to check the connection and the data before
+  relying on it. **Run once** saves a real write-once run now; **Run them once now** catches up every overdue
+  collector. Both are recorded in the audit log, and portal runs now record `trigger`, `triggered_by` and the API
+  call provenance in the manifest, like scheduled runs.
 - **Calendar and controls link both ways.** Each control page has a **Schedule** card (admins only) with the
   linked calendar activities: cadence and months, last recorded month and result, next due date, months past due,
   and links to the exact calendar month or run history. The calendar's popup lists the controls an activity covers.

@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% block title %}Verify {{ r.name }}{% endblock %}
+{% block content %}
+<div class="mb"><a href="/automation">‹ Automation</a></div>
+<div class="page-head"><div><h1>Verify: <span class="mono">{{ r.name }}</span></h1>
+<div class="sub">{{ r.description }} · {{ r.seconds }} s · nothing was saved as evidence</div></div>
+<form method="post" action="/automation/run" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="name" value="{{ r.name }}"><button class="btn small" type="submit">Run once and save</button></form></div>
+
+<section class="card">
+{% if r.ok %}<p><span class="pill au-passed">Connection works</span> The collector ran and would collect the data below. Check the record counts against what you expect (for example the number of users in Entra).</p>
+{% else %}<p><span class="pill au-failed">Failed</span> The collector could not finish. A scheduled run would fail the same way.</p>
+<pre class="auto-error">{{ r.error }}</pre>
+<p class="hint">Most failures are a missing permission, an expired secret or a wrong ID. Open the platform's settings and use Test without saving: it checks each permission separately.</p>{% endif %}
+</section>
+
+{% if r.files %}<section class="card table-wrap"><h2>What it would collect</h2>
+<table><thead><tr><th>File</th><th>Records</th><th>Fields</th></tr></thead><tbody>
+{% for f in r.files %}<tr><td class="mono">{{ f.name }}</td><td>{{ f.records if f.records is not none else '-' }}</td><td class="sub">{{ f.columns|join(', ') or '-' }}</td></tr>{% endfor %}
+</tbody></table><p class="hint">Only names and counts are shown here. The full data is visible in the evidence store after a saved run.</p></section>{% endif %}
+
+{% if r.queries %}<section class="card table-wrap"><h2>API calls</h2>
+<table><thead><tr><th>API</th><th>Request</th><th>Records</th><th>Pages</th></tr></thead><tbody>
+{% for q in r.queries %}<tr><td>{{ q.api }}</td><td class="mono">{{ q.request }}</td><td>{{ q.records }}</td><td>{{ q.pages }}</td></tr>{% endfor %}
+</tbody></table></section>{% endif %}
+
+<section class="card table-wrap"><h2>Findings ({{ r.findings_count }})</h2>
+{% if r.findings %}<table><thead><tr><th>Severity</th><th>Finding</th></tr></thead><tbody>
+{% for f in r.findings %}<tr><td><span class="pill sev-{{ f.severity }}">{{ f.severity or '-' }}</span></td><td>{{ f.title }}</td></tr>{% endfor %}
+</tbody></table>{% if r.findings_count > r.findings|length %}<p class="sub">Showing the first {{ r.findings|length }}.</p>{% endif %}
+{% else %}<div class="empty">No findings.</div>{% endif %}
+<p class="hint">Findings mean the collector works and found items to follow up; they are not errors.</p></section>
+{% endblock %}

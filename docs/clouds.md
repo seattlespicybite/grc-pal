@@ -13,6 +13,20 @@ Where collectors run decides the best sign-in method:
 | GitHub Actions in your program repository | GitHub OIDC (no secret) | GitHub OIDC with `aws-actions/configure-aws-credentials` | GitHub OIDC with `google-github-actions/auth` |
 | Your computer | `az login` | AWS profile (default chain) | `gcloud auth application-default login` |
 
+## Checking and running collectors: the Automation page
+
+**Compliance > Automation** (admins only) lists every platform and collector with its status and the controls it
+feeds. After you connect a platform:
+
+1. Press **Verify** on one of its collectors. It runs the collector without saving anything and shows the record
+   counts and field names it would collect (for example the number of users in Entra), the API calls it made and
+   any findings. If it fails, the error usually names the missing permission; fix it in the platform's settings
+   and use **Test without saving** there.
+2. Press **Run once** to save a real run now (stored write-once, marked as manual in the manifest). Use it when you
+   need evidence immediately or a scheduled run was missed.
+3. Leave the daily schedule on. A collector with no run in 36 hours shows **Overdue**; **Run them once now** fills
+   the gap, but also check why the schedule missed it (Jobs, Logs), because an auditor tests the schedule itself.
+
 ## Microsoft Entra ID, Microsoft 365 and Azure
 
 - **Permissions (Microsoft Graph, application):** User.Read.All, AuditLog.Read.All,

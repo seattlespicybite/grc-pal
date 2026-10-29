@@ -82,6 +82,7 @@ PARAMS: dict[str, dict[str, str]] = {
     "/calendar/a/{aid}/move": {"aid": "activity"},
     "/calendar/a/{aid}/status": {"aid": "activity"},
     "/calendar/auto/{source}": {"source": "auto_source"},
+    "/automation/{name}/verify": {"name": "collector"},
     "/library/{did}": {"did": "doc"},
     "/library/{did}/edit": {"did": "doc"},
     "/library/{did}/official": {"did": "doc"},
@@ -198,6 +199,8 @@ FORMS: dict[tuple[str, str], object] = {
     ("POST", "/policies/{policy_id}/remind"): {},
     ("POST", "/settings/{section_id}"): {"GRCPAL_ORG_NAME": "Authz Test Org", "action": "save"},
     ("POST", "/collect"): {"return_to": "/settings"},
+    ("POST", "/automation/run"): {"name": "catalog_validate"},
+    ("POST", "/automation/{name}/verify"): {},
     ("POST", "/setup/{step_id}"): {"action": "skip"},
     ("POST", "/frameworks/{fid}/use"): {"on": "true"},
     ("POST", "/frameworks/new"): {"fid": "authz-fw", "name": "Authz framework", "version": "1", "description": "x",
@@ -306,13 +309,13 @@ OWNER_ONLY = frozenset({"owner"})                             # a named person: 
 
 _GROUPS: list[tuple[frozenset, str]] = [
     # --- admins only (the control library owner is an admin; the library-owner-only routes are tested separately)
-    (A, """GET /backups | GET /calendar | GET /calendar.csv | GET /calendar/a/new | GET /calendar/a/{aid}
+    (A, """GET /automation | GET /backups | GET /calendar | GET /calendar.csv | GET /calendar/a/new | GET /calendar/a/{aid}
            GET /calendar/auto/{source} | GET /calendar/notifications | GET /calendar/o/{key}
            GET /controls/new | GET /controls/{cid}/definition | GET /controls/{cid}/edit | GET /dev/outbox
            GET /frameworks/new | GET /reviews | GET /settings | GET /settings/{section_id} | GET /setup
            GET /setup/{step_id} | GET /updates | GET /updates/progress | GET /users | GET /vendors/import
            GET /vendors/import/template.csv | GET /vendors/import/{token} | GET /vendors/{vid}/edit
-           POST /access-reviews/accounts/pull
+           POST /access-reviews/accounts/pull | POST /automation/run | POST /automation/{name}/verify
            POST /access-reviews/apps/new | POST /access-reviews/apps/{aid} | POST /access-reviews/apps/{aid}/identities
            POST /access-reviews/apps/{aid}/test | POST /access-reviews/new | POST /access-reviews/{cid}/assign
            POST /access-reviews/{cid}/close | POST /access-reviews/{cid}/confirm | POST /access-reviews/{cid}/reopen
@@ -408,6 +411,6 @@ DOWNLOAD_XFAIL: dict[tuple[str, str], str] = {}
 # IDs that are the same in every organization (starter catalog, fixed names). Routes with only these IDs cannot say
 # anything about two organizations; routes with at least one other ID are used in the two-organization test.
 SHARED = frozenset({"ctl_a", "ctl_b", "ctl_edited", "crit", "section", "step", "framework", "framework_off", "policy",
-                    "auto_source", "activity", "occurrence", "occ_new", "ev_source", "cycle_closed", "cycle_active"})
+                    "auto_source", "collector", "activity", "occurrence", "occ_new", "ev_source", "cycle_closed", "cycle_active"})
 # POSTs without an ID in the path whose form carries another organization's IDs
 CROSS_FORMS = {("POST", "/comments"), ("POST", "/library/trash"), ("POST", "/library/trash/restore")}
