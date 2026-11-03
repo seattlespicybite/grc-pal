@@ -38,11 +38,17 @@ _JSON_FIELDS = {"contributors", "points", "detail", "controls", "values", "secre
                 "headers", "steps", "last_test", "months", "edit", "before", "after", "owner_emails", "links",
                 "data_access", "cuecs", "legacy", "snapshot", "answers", "file_ids", "exceptions", "checklist",
                 "accepted_gaps", "sections", "flags", "reviewers", "attestations", "identities", "pulled",
-                "pull_notes", "domains", "baseline", "acceptance", "import_counts", "added_ids", "entra_apps", "signin_check"}
+                "pull_notes", "domains", "baseline", "acceptance", "import_counts", "added_ids", "entra_apps", "signin_check",
+                "history", "last_result", "last_pull"}
 TENANT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 
 
 def _encode(entity: dict) -> dict:
+    # Azure Tables stores only scalar values. Lists and dicts must be named in _JSON_FIELDS; refuse others here
+    # so the local store fails the same way Azure does (0.6.0 crashed on Azure, tests on SQLite passed).
+    bad = sorted(k for k, v in entity.items() if isinstance(v, (list, dict, tuple, set)) and k not in _JSON_FIELDS)
+    if bad:
+        raise TypeError(f"Fields {bad} hold lists or dicts; add them to store._JSON_FIELDS")
     return {k: (json.dumps(v) if k in _JSON_FIELDS and not isinstance(v, str) else v) for k, v in entity.items()}
 
 

@@ -1598,3 +1598,14 @@ def test_stylesheet_and_script_links_carry_a_content_version(env):
     assert f"/static/app.css?v={css}" in client.get("/settings").text  # the error page (403) too
     r = client.get(f"/static/app.css?v={css}")
     assert r.status_code == 200 and "max-age" in r.headers["cache-control"]
+
+
+def test_store_rejects_unlisted_list_fields_like_azure_tables():
+    # Azure Tables refuses lists and dicts; 0.6.0 crashed at startup on Azure ("history" in schema meta).
+    from grcpal.portal import store as st
+    with pytest.raises(TypeError):
+        st._encode({"PartitionKey": "p", "RowKey": "r", "not_listed": [1]})
+    out = st._encode({"PartitionKey": "p", "RowKey": "r", "history": [], "last_result": {"ok": True},
+                      "last_pull": {"ok": False}})
+    assert all(isinstance(v, str) for v in out.values())
+    assert st._decode(out)["last_result"] == {"ok": True}
