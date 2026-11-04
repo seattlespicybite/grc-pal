@@ -34,6 +34,13 @@ All notable changes are listed here. The project follows [semantic versioning](h
 - **Access reviews: schedule.** Every 3, 6 or 12 months from the applications read every night, started by the nightly
   job once per period, with invitations and an email to admins (table `arschedules`).
 
+- **Layout like a modern GRC tool.** Controls open in a **side panel** next to the Controls list and the criterion
+  pages (tabs: Overview, Evidence, Tests, Documents, History, Comments; Esc closes; `#control=ID` links), with the
+  full page one click away. Same visibility as the full page (route `/controls/{id}/panel`, in the authorization
+  table). The **SOC 2 view is two panes**: the criteria list with status dots stays on the left. The menu **folds to
+  icons** (remembered per browser). The control page has section links and a **Documents** section listing the
+  policies and document-library documents that name the control.
+
 ### Changed
 - **Azure:** Easy Auth asks Microsoft to show the account picker at every sign-in (`prompt=select_account` in
   `main.bicep`), so an open Microsoft session in the browser no longer signs a person in to GRC-pal without a

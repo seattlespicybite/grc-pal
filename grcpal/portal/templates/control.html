@@ -10,6 +10,10 @@
 {% if user.is_admin %}<form method="post" action="/controls/{{ ctl.id }}/remind" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}">
 <button class="btn small" type="submit" title="Email the people responsible for this control with a link back here">Send reminder</button></form>{% endif %}</div></div>
 
+<nav class="section-nav" aria-label="Sections of this control"><a href="#what">Overview</a><a href="#notes">How we meet it</a><a href="#submissions">Evidence</a>
+{% if user.sees_everything %}<a href="#checks">Tests</a>{% endif %}<a href="#documents">Documents</a><a href="#comments">Comments</a>
+{% if user.sees_everything %}<a href="#ai">AI review</a>{% endif %}{% if def_history or ctl.edited or history %}<a href="#history">History</a>{% endif %}</nav>
+
 {% if trail %}<nav class="nav-bar" aria-label="Move between controls"><div class="nav-bar-group">
 <a class="btn small" href="/criteria/{{ trail.criterion }}">← Back to {{ trail.criterion }}</a><a class="btn ghost small" href="/criteria">All SOC 2 criteria</a></div>
 <div class="nav-bar-group">{% if trail.prev %}<a class="btn ghost small" href="/controls/{{ trail.prev }}?from={{ trail.criterion }}">‹ {{ trail.prev }}</a>{% endif %}
@@ -22,7 +26,7 @@
 <p class="sub mt">By {{ status.override.created_by }} on {{ status.override.created_at[:10] }}{% if status.override.evidence_ref %} · evidence: {{ status.override.evidence_ref }}{% endif %}{% if user.sees_everything %} · <a href="/overrides">manage overrides</a>{% endif %}</p></div>{% endif %}
 
 <div class="grid g2">
-<section class="card"><h2>What this control does</h2><p>{{ ctl.description }}</p>
+<section class="card" id="what"><h2>What this control does</h2><p>{{ ctl.description }}</p>
 <h3>Evidence we are looking for</h3><ul class="list">{% for w in wanted %}<li>{{ w }}</li>{% endfor %}
 {% for a in assignments if a.instructions and a.status not in ('approved', 'cancelled') %}<li class="note-li">{{ a.instructions }}</li>{% endfor %}</ul>
 {% for fw, reqs in mappings %}<h3 class="mt">{{ 'SOC 2 criteria this control meets' if fw.id == 'soc2' else fw.name }}</h3><div class="tags">{% for rid, title in reqs %}<span class="{{ 'hit' if trail and rid == trail.criterion }}">{% if user.sees_everything %}<a href="{{ '/criteria/' ~ rid if fw.id == 'soc2' else '/frameworks/' ~ fw.id }}">{{ rid }}</a>{% else %}{{ rid }}{% endif %} {{ title }}{% if trail and rid == trail.criterion %} · <em>you came from here</em>{% endif %}</span>{% endfor %}</div>{% endfor %}
@@ -89,6 +93,10 @@
 <div class="actions"><button class="btn" type="submit">Send reminder</button></div></form></details>{% endif %}
 </section>
 </div>
+
+<section class="card" id="documents"><h2>Documents</h2><div class="grid g2">
+<div><h3>Policies</h3>{% if documents.policies %}<ul class="list">{% for d in documents.policies %}<li><a href="{{ d.href }}">{{ d.title }}</a>{% if d.version %} <span class="sub">v{{ d.version }}</span>{% endif %}</li>{% endfor %}</ul>{% else %}<div class="sub">No policy names this control.</div>{% endif %}</div>
+<div><h3>Document library</h3>{% if documents.docs %}<ul class="list">{% for d in documents.docs %}<li><a href="{{ d.href }}">{% if d.number %}{{ d.number }} {% endif %}{{ d.title }}</a> {% if d.approved %}{{ pill('approved', 'Approved') }}{% else %}{{ pill('not_started', 'No approved version') }}{% endif %}</li>{% endfor %}</ul>{% else %}<div class="sub">No document in the library names this control.</div>{% endif %}</div></div></section>
 
 {% if user.sees_everything %}
 <section class="card" id="checks"><div class="row-between"><h2 class="m0">Automated checks</h2><span class="sub">Results are stored as write-once evidence; failures become findings</span></div>
@@ -161,6 +169,7 @@
 </tbody></table></section>{% endif %}
 
 {% if ctl.edited and ctl.edited.starter_changed and user.sees_everything %}<div class="flash err" role="status">The starter definition of {{ ctl.id }} changed in a GRC-pal update after it was edited here. Your version is still in use; compare it with the starter text {% if is_lib %}and edit or reset it{% endif %} below.</div>{% endif %}
+<div id="history"></div>
 {% if user.sees_everything and (def_history or ctl.edited) %}<section class="card" id="definition-history"><h2>Definition history</h2>
 <p class="sub">Every change to this control's owners, wording, evidence wanted or mappings, with the reason given. Included in the auditor export.</p>
 <div class="table-wrap"><table><thead><tr><th>Version</th><th>When</th><th>By</th><th>Changed</th><th>Reason</th></tr></thead><tbody>

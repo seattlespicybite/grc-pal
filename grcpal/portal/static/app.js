@@ -239,6 +239,124 @@
     }
     setTimeout(tick, 2000);
   });
+  // Slim menu: the sidebar folds to icons. The choice is a per-browser convenience (localStorage), never needed:
+  // without it the full menu shows. Narrow windows start slim.
+  var navToggle = document.querySelector('[data-nav-toggle]');
+  if (navToggle) {
+    var NAV_KEY = 'grcpal-nav-slim';
+    var navGroups = Array.prototype.slice.call(document.querySelectorAll('.nav-group'));
+    var groupOpen = navGroups.map(function (g) { return g.open; });
+    function setSlim(slim) {
+      document.body.classList.toggle('nav-slim', slim);
+      navToggle.setAttribute('aria-expanded', slim ? 'false' : 'true');
+      navToggle.setAttribute('aria-label', slim ? 'Expand the menu' : 'Collapse the menu');
+      navToggle.title = navToggle.getAttribute('aria-label');
+      // Icons only: every item must be reachable, so groups open; their labels become tooltips.
+      navGroups.forEach(function (g, i) { g.open = slim ? true : groupOpen[i]; });
+      document.querySelectorAll('.nav a, .nav-group > summary').forEach(function (a) {
+        var label = a.querySelector('.nav-item span');
+        if (slim && label) a.title = label.textContent; else a.removeAttribute('title');
+      });
+    }
+    var saved = null;
+    try { saved = window.localStorage.getItem(NAV_KEY); } catch (e) { saved = null; }
+    navToggle.hidden = false;
+    setSlim(saved === null ? window.innerWidth < 1180 && window.innerWidth > 960 : saved === '1');
+    navToggle.addEventListener('click', function () {
+      var slim = !document.body.classList.contains('nav-slim');
+      setSlim(slim);
+      try { window.localStorage.setItem(NAV_KEY, slim ? '1' : '0'); } catch (e) { /* storage blocked: not remembered */ }
+    });
+  }
+
+  // Tabs inside a fragment (control side panel): arrow keys move between tabs, as screen reader users expect.
+  function initTabs(root) {
+    root.querySelectorAll('[data-tabs]').forEach(function (list) {
+      var tabs = Array.prototype.slice.call(list.querySelectorAll('[role=tab]'));
+      function show(tab, focus) {
+        tabs.forEach(function (t) {
+          var on = t === tab;
+          t.setAttribute('aria-selected', on ? 'true' : 'false');
+          t.tabIndex = on ? 0 : -1;
+          var panel = root.querySelector('#' + t.getAttribute('aria-controls'));
+          if (panel) panel.hidden = !on;
+        });
+        if (focus) tab.focus();
+      }
+      tabs.forEach(function (t, i) {
+        t.addEventListener('click', function () { show(t, false); });
+        t.addEventListener('keydown', function (ev) {
+          var next = ev.key === 'ArrowRight' ? i + 1 : ev.key === 'ArrowLeft' ? i - 1 : ev.key === 'Home' ? 0 :
+            ev.key === 'End' ? tabs.length - 1 : null;
+          if (next === null) return;
+          ev.preventDefault();
+          show(tabs[(next + tabs.length) % tabs.length], true);
+        });
+      });
+      if (tabs.length) show(tabs[0], false);
+    });
+  }
+
+  // Control side panel: a control link in a list opens the control beside the list (Overview, Evidence, Tests,
+  // Documents, History, Comments) instead of a new page. Ctrl/Cmd-click, middle-click and no JavaScript open the
+  // full page. The address bar keeps #control=ID so the panel can be shared or reloaded.
+  var drawer = document.querySelector('[data-drawer]');
+  if (drawer) {
+    var drawerBody = drawer.querySelector('[data-drawer-body]');
+    var opener = null;
+    var ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+    function closeDrawer(keepHash) {
+      if (drawer.hidden) return;
+      drawer.hidden = true;
+      document.body.classList.remove('drawer-open');
+      drawerBody.innerHTML = '';
+      document.querySelectorAll('[data-panel-row].selected').forEach(function (r) { r.classList.remove('selected'); });
+      if (!keepHash && /^#control=/.test(window.location.hash)) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+      if (opener && document.body.contains(opener)) opener.focus();
+    }
+    function openPanel(id, link) {
+      if (!ID_RE.test(id)) return;
+      opener = link || null;
+      fetch('/controls/' + encodeURIComponent(id) + '/panel', { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+        .then(function (html) {
+          drawerBody.innerHTML = html;  // our own server-rendered, escaped template
+          initTabs(drawerBody);
+          drawerBody.querySelectorAll('form[data-confirm]').forEach(function (f) {
+            f.addEventListener('submit', function (ev) { if (!window.confirm(f.getAttribute('data-confirm'))) ev.preventDefault(); });
+          });
+          drawer.hidden = false;
+          document.body.classList.add('drawer-open');
+          document.querySelectorAll('[data-panel-row]').forEach(function (r) {
+            r.classList.toggle('selected', r.getAttribute('data-panel-row') === id);
+          });
+          window.history.replaceState(null, '', window.location.pathname + window.location.search + '#control=' + id);
+          var title = drawerBody.querySelector('#drawer-title');
+          if (title) title.focus();
+        })
+        .catch(function () { if (link) window.location.href = link.getAttribute('href'); });
+    }
+    document.addEventListener('click', function (ev) {
+      if (ev.target.closest('[data-drawer-close]')) { closeDrawer(false); return; }
+      var a = ev.target.closest('a[data-panel]');
+      if (!a || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey || ev.button !== 0) return;
+      ev.preventDefault();
+      openPanel(a.getAttribute('data-panel'), a);
+    });
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && !drawer.hidden) closeDrawer(false);
+    });
+    function fromHash() {
+      var m = /^#control=([A-Za-z0-9._-]+)$/.exec(window.location.hash);
+      if (m && document.querySelector('a[data-panel]')) openPanel(m[1], document.querySelector('a[data-panel="' + m[1] + '"]'));
+      else if (!m) closeDrawer(true);
+    }
+    window.addEventListener('hashchange', fromHash);
+    fromHash();
+  }
+
   // Access reviews: one click keeps every account that has no flag; flagged accounts are always decided one by one.
   document.querySelectorAll('[data-ar-keep-unflagged]').forEach(function (btn) {
     btn.addEventListener('click', function () {
