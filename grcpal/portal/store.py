@@ -26,7 +26,7 @@ TABLES = ("users", "cycles", "assignments", "uploads", "comments", "overrides", 
           "reminders", "acks", "config", "events", "jobs", "customcontrols", "checks", "frameworks",
           "aireviews", "aiaudits", "controledits", "controlhistory", "controlnotes", "calendardecisions",
           "calendaractivities", "calendarversions", "vendors", "vendorversions", "vendorreviews", "vendorfiles",
-          "questionnaires", "vendorimports", "docs", "docversions", "arcampaigns", "arentries", "arapps",
+          "questionnaires", "vendorimports", "docs", "docversions", "arcampaigns", "arentries", "arapps", "arschedules",
           "matriximports", "sessions", "account_links", "signinlimits", "signinflows", "meta")
 # Sign-in sessions, one-time setup/reset links, sign-in failure counters and Microsoft sign-ins in progress are
 # never backed up: restoring them
@@ -40,7 +40,7 @@ _JSON_FIELDS = {"contributors", "points", "detail", "controls", "values", "secre
                 "data_access", "cuecs", "legacy", "snapshot", "answers", "file_ids", "exceptions", "checklist",
                 "accepted_gaps", "sections", "flags", "reviewers", "attestations", "identities", "pulled",
                 "pull_notes", "domains", "baseline", "acceptance", "import_counts", "added_ids", "entra_apps", "signin_check",
-                "history", "last_result", "last_pull"}
+                "history", "last_result", "last_pull", "invited", "reminded", "tickets", "app_ids"}
 TENANT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 
 

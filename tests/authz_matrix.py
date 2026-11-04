@@ -124,6 +124,10 @@ PARAMS: dict[str, dict[str, str]] = {
     "/access-reviews/{cid}/assign": {"cid": "campaign_a"},
     "/access-reviews/{cid}/confirm": {"cid": "campaign_e"},
     "/access-reviews/{cid}/close": {"cid": "campaign_f"},
+    "/access-reviews/{cid}/invite": {"cid": "campaign_a"},
+    "/access-reviews/{cid}/tickets": {"cid": "campaign_e"},
+    "/access-reviews/{cid}/check": {"cid": "campaign_e"},
+    "/access-reviews/{cid}/confirm-checked": {"cid": "campaign_e"},
     "/access-reviews/{cid}/export.csv": {"cid": "campaign_a"},
     "/matrix/import/{import_id}/apply": {"import_id": "matrix_import"},
     "/matrix/import/{import_id}/discard": {"import_id": "matrix_import"},
@@ -298,6 +302,12 @@ FORMS: dict[tuple[str, str], object] = {
     ("POST", "/access-reviews/{cid}/assign"): lambda w: {"entry": w.entry_a, "reviewer": w.other_owner.email},
     ("POST", "/access-reviews/{cid}/confirm"): lambda w: {"entry": w.entry_e, "note": "Removed in the app"},
     ("POST", "/access-reviews/{cid}/close"): {"note": ""},
+    ("POST", "/access-reviews/{cid}/invite"): {},
+    ("POST", "/access-reviews/{cid}/tickets"): {},
+    ("POST", "/access-reviews/{cid}/check"): {},
+    ("POST", "/access-reviews/{cid}/confirm-checked"): {},
+    ("POST", "/access-reviews/schedule"): {"name": "User access review", "every": "3", "first_month": "1",
+                                           "start_day": "1", "days": "14"},
     ("POST", "/matrix/import"): lambda w: {"__files__": {"file": ("matrix.xlsx", w.matrix_file, "application/octet-stream")}},
     ("POST", "/matrix/import/{import_id}/apply"): lambda w: {
         "plan": w.matrix_plan, "reason": "Applying the previewed change in the authz suite.", "accept_gaps": ""},
@@ -323,6 +333,8 @@ _GROUPS: list[tuple[frozenset, str]] = [
            POST /access-reviews/apps/new | POST /access-reviews/apps/{aid} | POST /access-reviews/apps/{aid}/identities
            POST /access-reviews/apps/{aid}/test | POST /access-reviews/new | POST /access-reviews/{cid}/assign
            POST /access-reviews/{cid}/close | POST /access-reviews/{cid}/confirm | POST /access-reviews/{cid}/reopen
+           POST /access-reviews/{cid}/invite | POST /access-reviews/{cid}/tickets | POST /access-reviews/{cid}/check
+           POST /access-reviews/{cid}/confirm-checked | POST /access-reviews/schedule
            POST /ai/audits | POST /assignments | POST /assignments/{assignment_id}/cancel
            POST /assignments/{assignment_id}/edit | POST /assignments/{assignment_id}/remind
            POST /backups/download | POST /backups/kit | POST /backups/now | POST /backups/restore
@@ -402,6 +414,8 @@ NO_WRITE: set[tuple[str, str]] = {
     ("POST", "/vendors/{vid}/review/acceptance"),                        # needs the owner's signed note first
     ("POST", "/users/{email}/mfa"),                                      # the target has no two-step sign-in to remove
     ("POST", "/users/{email}/signin"),                                   # Sign in with Microsoft is not set up here
+    ("POST", "/access-reviews/{cid}/tickets"),                           # no ticket system is set up here
+    ("POST", "/access-reviews/{cid}/confirm-checked"),                   # nothing was checked against a pull yet
     ("POST", "/account/mfa/confirm"), ("POST", "/account/mfa/off"),      # a wrong code / password changes nothing
     ("POST", "/account/mfa/start"),                                      # the test people have no password or key
 }

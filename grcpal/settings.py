@@ -245,6 +245,34 @@ SCHEMA: tuple[Section, ...] = (
                   options=("starttls", "ssl", "none"), default="starttls", show_when="GRCPAL_MAIL_BACKEND=smtp"),
         ), category="general"),
     Section(
+        "tickets", "Remediation tickets", "Jira or GitHub issues for access removals and changes.",
+        "When an access review decides that accounts must be removed or changed, GRC-pal opens one ticket per "
+        "application listing those accounts, so the people who run the application make the change. GRC-pal never "
+        "disables accounts itself; an admin confirms each change in the review (the nightly account pull can show it "
+        "is done). Jira Cloud: your site address, the email of the account that opens tickets and an API token "
+        "(id.atlassian.com > Security > API tokens). Jira Data Center: leave the email empty and use a personal "
+        "access token. GitHub: issues are opened with the GitHub token from the GitHub section, which then needs "
+        "Issues: read and write on the repository below.",
+        (
+            Field("GRCPAL_TICKETS_SYSTEM", "Open tickets in", "Off: removals are tracked in GRC-pal only.",
+                  kind="select", options=("off", "jira", "github"), default="off"),
+            Field("GRCPAL_JIRA_URL", "Jira address", "For example https://acme.atlassian.net.", kind="url",
+                  placeholder="https://acme.atlassian.net", show_when="GRCPAL_TICKETS_SYSTEM=jira",
+                  required_when="GRCPAL_TICKETS_SYSTEM=jira"),
+            Field("GRCPAL_JIRA_EMAIL", "Jira account email", "Jira Cloud only. Leave empty for a Data Center personal "
+                  "access token.", show_when="GRCPAL_TICKETS_SYSTEM=jira"),
+            Field("GRCPAL_JIRA_TOKEN", "Jira API token", "Stored encrypted. Use an account that can only create issues "
+                  "in the project below.", kind="secret", show_when="GRCPAL_TICKETS_SYSTEM=jira",
+                  required_when="GRCPAL_TICKETS_SYSTEM=jira"),
+            Field("GRCPAL_JIRA_PROJECT", "Jira project key", "The project for access tickets, for example IT.",
+                  placeholder="IT", show_when="GRCPAL_TICKETS_SYSTEM=jira", required_when="GRCPAL_TICKETS_SYSTEM=jira"),
+            Field("GRCPAL_JIRA_ISSUE_TYPE", "Issue type", "Must exist in the project.", default="Task",
+                  show_when="GRCPAL_TICKETS_SYSTEM=jira", advanced=True),
+            Field("GRCPAL_TICKETS_REPO", "GitHub repository for tickets", "owner/repo. Leave empty to use the program "
+                  "repository from the GitHub section.", placeholder="acme/it-requests",
+                  show_when="GRCPAL_TICKETS_SYSTEM=github"),
+        ), category="general"),
+    Section(
         "ai", "AI assistant", "Evidence review and mock audits with Claude or a model you run.",
         "AI review sends a control's definition and an evidence summary to the provider you choose. Nothing is sent "
         "until an admin presses a review button. Results are suggestions: a person accepts or dismisses each one, "
@@ -293,7 +321,7 @@ OPTION_LABELS = {
     "off": "Off", "anthropic": "Claude (Anthropic API)",
     "openai_compatible": "OpenAI-compatible (Ollama, vLLM, LM Studio, Azure OpenAI, OpenAI)",
     "demo": "Demo reviewer (offline rules, no AI)", "starttls": "STARTTLS (port 587)", "ssl": "SSL/TLS (port 465)",
-    "none": "None (local test servers only)",
+    "none": "None (local test servers only)", "jira": "Jira", "github": "GitHub Issues",
 }
 
 SECTIONS = {s.id: s for s in SCHEMA}
@@ -306,6 +334,7 @@ ENDPOINT_SECRETS = {
     "GRCPAL_AI_BASE_URL": ("GRCPAL_AI_API_KEY",),
     "GRCPAL_GITHUB_API_URL": ("GRCPAL_GITHUB_TOKEN",),
     "GRCPAL_SMTP_HOST": ("GRCPAL_SMTP_PASSWORD",),
+    "GRCPAL_JIRA_URL": ("GRCPAL_JIRA_TOKEN",),
 }
 
 

@@ -21,6 +21,18 @@ All notable changes are listed here. The project follows [semantic versioning](h
 - Connection test for the sign-in app: settings, certificate validity, Microsoft's signing keys for the tenant, and
   a client-credentials request that proves the certificate is uploaded to the app registration.
 - The Users CSV export has `signin_method` and `entra_linked` columns.
+- **Access reviews: emails to reviewers.** Invitations when a review starts (option) or with *Email reviewers who have
+  not signed off*, optionally giving managers without a portal account a Control owner account first. Reminders from the
+  nightly job from 7 days before the due date, every 3 days, until each reviewer signs off; overdue emails and one
+  overdue notice to admins. Emails carry counts and application names, never the accounts.
+- **Access reviews: remediation tickets** in Jira (Cloud or Data Center) or GitHub Issues, one per application, opened
+  when the last reviewer signs off or with a button (Configuration > Remediation tickets, with a connection test).
+  GRC-pal never disables accounts. Ticket keys are kept on each account and in the audit log.
+- **Access reviews: check removals against the account pulls.** A nightly pull taken after the decision shows whether an
+  account is gone, disabled or has a new role; *Confirm all shown as done* confirms them with a note naming the stored
+  pull.
+- **Access reviews: schedule.** Every 3, 6 or 12 months from the applications read every night, started by the nightly
+  job once per period, with invitations and an email to admins (table `arschedules`).
 
 ### Changed
 - **Azure:** Easy Auth asks Microsoft to show the account picker at every sign-in (`prompt=select_account` in
