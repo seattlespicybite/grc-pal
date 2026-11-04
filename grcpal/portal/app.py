@@ -782,12 +782,12 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     @app.get("/users", response_class=HTMLResponse)
     def users(request: Request, user: User = Depends(current_user)):
         need(user, "admin")
-        return render(request, user, "users.html", rows=p().users())
+        return render(request, user, "users.html", rows=p().users(), ms_ready=mode == "local" and p().ms_signin_ready())
 
     def users_page_with_link(request: Request, user: User, email: str, url: str, msg: str) -> HTMLResponse:
         # The link is shown once on this page, never put in a redirect URL (it would land in logs and history).
         return render(request, user, "users.html", rows=p().users(), new_link={"email": email, "url": url},
-                      page_msg=msg)
+                      page_msg=msg, ms_ready=mode == "local" and p().ms_signin_ready())
 
     @app.get("/users.csv")
     def users_csv(user: User = Depends(current_user)):
@@ -795,22 +795,27 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         buf = io.StringIO()
         w = csv.writer(buf)
         w.writerow(["email", "name", "role", "active", "source", "created_by", "created_at", "last_seen",
-                    "access_until", "password_set"])
+                    "access_until", "password_set", "signin_method", "entra_linked"])
         for u in p().users():
             w.writerow([u["RowKey"], u.get("name", ""), ROLE_LABELS.get(u["role"], u["role"]), u.get("active", True),
                         u.get("source", ""), u.get("created_by", ""), u.get("created_at", ""), u.get("last_seen", ""),
-                        u.get("access_until", ""), bool(u.get("password_hash"))])
+                        u.get("access_until", ""), bool(u.get("password_hash")),
+                        "microsoft" if u.get("signin") == "microsoft" else ("password" if mode == "local" else mode),
+                        bool(u.get("entra_oid"))])
         p().audit(user, "users.export", "users.csv", {"rows": len(p().users())})
         return _attachment(f"grcpal-users-{p().today}.csv", buf.getvalue().encode())
 
     @app.post("/users")
     def add_user(request: Request, email: str = Form(...), name: str = Form(""), role: str = Form(...),
-                 access_until: str = Form(""), csrf: str = Form(""), user: User = Depends(current_user)):
+                 access_until: str = Form(""), signin: str = Form("password"), csrf: str = Form(""),
+                 user: User = Depends(current_user)):
         check_csrf(request, user.email, csrf)
         try:
-            row = p().add_user(user, email, name, role, access_until)
+            row = p().add_user(user, email, name, role, access_until, signin if mode == "local" else "password")
             msg = f"{row['RowKey']} added as {ROLE_LABELS.get(role, role)}"
-            if mode == "local":
+            if row.get("signin") == "microsoft":
+                msg += ". They sign in with Microsoft; their first sign-in links their Entra account"
+            elif mode == "local":
                 return users_page_with_link(request, user, row["RowKey"], p().setup_link(user, row["RowKey"]), msg)
         except (Invalid, Forbidden) as exc:
             return back("/users", err=str(exc))
@@ -862,6 +867,18 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         except (Invalid, Forbidden) as exc:
             return back("/users", err=str(exc))
         return back("/users", msg=f"{email} is no longer linked to a Microsoft Entra account; their next sign-in links one")
+
+    @app.post("/users/{email}/signin")
+    def set_signin_method(request: Request, email: str, method: str = Form(...), csrf: str = Form(""),
+                          user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        try:
+            p().set_signin_method(user, email, method)
+        except (Invalid, Forbidden) as exc:
+            return back("/users", err=str(exc))
+        if method == "password":
+            return back("/users", msg=f"{email.lower()} now signs in with a password. Use Password link to send them one")
+        return back("/users", msg=f"{email.lower()} now signs in with Microsoft; their password was removed")
 
     @app.post("/users/{email}/mfa")
     def reset_mfa(request: Request, email: str, csrf: str = Form(""), user: User = Depends(current_user)):

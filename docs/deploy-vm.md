@@ -5,8 +5,12 @@ container, HTTPS in front, and all data in one folder. People sign in with GRC-p
 Updates come as signed files, are tried on a copy of the data first, and roll back by themselves if a
 check fails. Backups run every night and are managed on the **Backups** page.
 
+People can also **Sign in with Microsoft** (their Entra work account, with Microsoft's MFA): set it up on
+**Configuration > Sign in with Microsoft** and add people with that sign-in method (see [roles.md](roles.md)).
+The break-glass admin from `grcpal create-admin` always keeps a password.
+
 For staff who work remotely over the internet, use [Azure](deploy-azure.md) instead (Entra ID sign-in with MFA
-and Conditional Access). Local accounts have no MFA yet, so keep this VM reachable only from your network or VPN.
+and Conditional Access). Keep this VM reachable only from your network or VPN.
 
 ## What you need
 

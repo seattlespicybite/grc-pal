@@ -154,6 +154,13 @@ def _later_min(minutes: int) -> str:
 _DUMMY: list[str] = []
 
 
+def checks_errors() -> tuple:
+    """Errors that mean "could not reach Microsoft" (network, TLS, the outbound guard), not "refused"."""
+    from grcpal.checks import Blocked
+
+    return (OSError, Blocked)
+
+
 def _dummy_hash() -> str:
     """Checked when the email is unknown, so a wrong email takes as long as a wrong password."""
     if not _DUMMY:
@@ -283,6 +290,9 @@ class AccountsMixin:
             raise self._invalid("User not found")
         if not row.get("active", True):
             raise self._invalid("Enable the account first")
+        if row.get("signin") == "microsoft":
+            raise self._invalid(f"{row['RowKey']} signs in with Microsoft and has no GRC-pal password. Switch their "
+                                "sign-in method to password first if they really need one.")
         purpose = "reset" if row.get("password_hash") else "setup"
         url = self._issue_link(row["RowKey"], purpose, actor.email, ADMIN_LINK_HOURS)
         self._mail_link(row["RowKey"], url, purpose, ADMIN_LINK_HOURS)
@@ -317,6 +327,9 @@ class AccountsMixin:
         row = self.user_row(email) if EMAIL_RE.match(email) else None
         if not row or not row.get("active", True):
             self.events.security("Password reset requested for an unknown or disabled account", actor=email[:120], ip=ip)
+            return
+        if row.get("signin") == "microsoft":
+            self.events.security("Password reset refused: the account signs in with Microsoft", actor=email, ip=ip)
             return
         if row.get("role") == "admin" or row.get("local_only"):
             # A mailbox compromise must not become a GRC-pal admin compromise. Admins get a link from another
@@ -437,18 +450,150 @@ class AccountsMixin:
                 self._sign_in_failed(email, ip, "wrong two-step code")
                 raise AuthError("The code is not correct, or was already used. Wait for the next code and try again.", 401)
         self._clear_limit("login-account", email)
+        details = {"method": "password+code" if row.get("totp_secret") else "password", "ip": ip}
+        if glass:
+            details["break_glass"] = True
+        token = self._new_session(email, details)
+        if glass:
+            self._break_glass_alert(row, ip)
+        return token
+
+    def _new_session(self, email: str, details: dict) -> str:
+        """Start a server-side session (only its hash is stored) and record the sign-in. Returns the cookie value."""
         token = secrets.token_urlsafe(32)
         now = _now()
         self.store.insert("sessions", {"PartitionKey": "s", "RowKey": _digest(token), "email": email,
                                        "created": now, "last_used": now, "expires": _later(SESSION_HOURS)})
         self.store.update("users", "u", email, {"last_seen": _now()})
-        details = {"method": "password+code" if row.get("totp_secret") else "password", "ip": ip}
-        if glass:
-            details["break_glass"] = True
         self.audit(email, "auth.signin", email, details)
-        if glass:
-            self._break_glass_alert(row, ip)
         return token
+
+    # ================================================================ sign in with Microsoft (local mode)
+    def ms_signin_config(self) -> dict:
+        """The sign-in app registration when "Sign in with Microsoft" can be offered, else {}. Never in break-glass
+        mode on Azure (there only the break-glass account signs in, with a password and a code)."""
+        from grcpal.portal import msauth
+
+        if break_glass_mode():
+            return {}
+        try:
+            return msauth.settings_of(self.settings)
+        except NoKey:
+            return {}
+
+    def ms_signin_ready(self) -> bool:
+        return bool(self.ms_signin_config())
+
+    def ms_begin(self, next_path: str = "/") -> tuple[str, str]:
+        """Start a sign-in: returns (Microsoft URL to send the browser to, flow token for the browser cookie).
+        The flow (state, nonce, PKCE verifier) is kept server-side under the hash of the cookie value, used once."""
+        from grcpal.portal import msauth
+
+        cfg = self.ms_signin_config()
+        if not cfg:
+            raise AuthError("Sign in with Microsoft is not set up on this GRC-pal instance", 404)
+        flow = msauth.new_flow()
+        token = secrets.token_urlsafe(32)
+        for r in self.store.list("signinflows", "f"):  # drop abandoned flows
+            if r.get("expires", "") < _now():
+                self.store.delete("signinflows", "f", r["RowKey"])
+        self.store.insert("signinflows", {"PartitionKey": "f", "RowKey": _digest(token), **flow,
+                                          "next": next_path[:500], "expires": _later_min(msauth.FLOW_MINUTES)})
+        return msauth.authorize_url(cfg, flow, msauth.redirect_uri(self.public_url)), token
+
+    def ms_finish(self, flow_token: str, state: str, code: str, error: str = "", ip: str = "",
+                  fetch_keys=None) -> tuple[str, str]:
+        """Finish a sign-in from Microsoft's redirect. Returns (session token, where to go next).
+        Every refusal is a security event; the person sees a short reason."""
+        from grcpal.portal import msauth
+
+        row = self.store.get("signinflows", "f", _digest(flow_token)) if flow_token else None
+        if row:
+            self.store.delete("signinflows", "f", row["RowKey"])  # one use, whatever happens next
+        if not row or row.get("expires", "") < _now() or not secrets.compare_digest(row.get("state", ""), state or ""):
+            self.events.security("Microsoft sign-in refused: unknown, used or expired sign-in attempt", ip=ip)
+            raise AuthError("This sign-in attempt expired or was already used. Start again from the sign-in page.", 400)
+        if error:
+            self.events.security(f"Microsoft sign-in did not complete: {error[:60]}", ip=ip)
+            raise AuthError("Microsoft did not complete the sign-in"
+                            + (" (cancelled)" if error == "access_denied" else f" ({error[:60]})")
+                            + ". Try again, or ask a GRC-pal admin.", 401)
+        cfg = self.ms_signin_config()
+        if not cfg or not code:
+            raise AuthError("Sign in with Microsoft is not set up on this GRC-pal instance", 404)
+        if self._locked_minutes("login-ip", ip):
+            raise AuthError("Too many failed sign-in attempts from this address. Wait a few minutes and try again.", 429)
+        try:
+            id_token = msauth.exchange_code(cfg, code[:4000], row["verifier"], msauth.redirect_uri(self.public_url))
+            claims = msauth.validate_id_token(id_token, cfg, row["nonce"], fetch=fetch_keys)
+        except msauth.SignInFailed as exc:
+            self._sign_in_failed("", ip, f"Microsoft sign-in: {exc}")
+            raise AuthError(str(exc), 401) from exc
+        except checks_errors() as exc:
+            self.events.error("system", f"Microsoft sign-in: could not reach Microsoft ({type(exc).__name__})")
+            raise AuthError("Could not reach Microsoft to finish the sign-in. Try again in a moment.", 503) from exc
+        oid, tid = str(claims["oid"]).lower(), cfg["tenant"]
+        email = msauth.username(claims)
+        user = self._ms_user(oid, tid, email)
+        if not user:
+            self._sign_in_failed(email, ip, "Microsoft account not added to GRC-pal")
+            raise AuthError(f"{email or 'This Microsoft account'} has not been given access to GRC-pal. Ask a GRC-pal "
+                            "admin to add you with \"Sign in with Microsoft\".", 403)
+        email = user["RowKey"]
+        if user.get("local_only") or user.get("signin") != "microsoft":
+            self._sign_in_failed(email, ip, "account signs in with a password, not Microsoft")
+            raise AuthError("This GRC-pal account signs in with a password. Use the password form, or ask an admin "
+                            "to switch it to Sign in with Microsoft.", 403)
+        try:
+            self._check_access(user)
+            from grcpal.portal.auth import Identity
+
+            user = self._check_identity_binding(user, Identity(email=email, name=str(claims.get("name") or email),
+                                                               tenant_id=tid, object_id=oid))
+        except AuthError as exc:
+            self.events.security(f"Microsoft sign-in refused: {exc}", actor=email, ip=ip)
+            raise
+        if claims.get("name") and (user.get("name") or email) == email:
+            self.store.update("users", "u", email, {"name": str(claims["name"])[:120]})
+        self._clear_limit("login-account", email)
+        token = self._new_session(email, {"method": "microsoft", "ip": ip, "entra_oid": oid, "entra_tid": tid})
+        return token, row.get("next") or "/"
+
+    def _ms_user(self, oid: str, tid: str, email: str) -> dict | None:
+        """The users row for this Entra account: the one already linked to its object ID, else the invited row with
+        its sign-in name (linked on this first sign-in)."""
+        for u in self.store.list("users", "u"):
+            if u.get("entra_oid") == oid and u.get("entra_tid") == tid:
+                return u
+        return self.user_row(email) if email and EMAIL_RE.match(email) else None
+
+    def set_signin_method(self, actor: User, email: str, method: str) -> None:
+        """Admin: one sign-in method per person. "microsoft" removes the password and two-step key (they are no
+        longer used); "password" removes the Entra link (the admin then sends a password link). Sessions end."""
+        self._admin(actor)
+        row = self.user_row(email)
+        if not row:
+            raise self._invalid("User not found")
+        if method not in ("microsoft", "password"):
+            raise self._invalid("Sign-in method must be Microsoft or password")
+        if row.get("local_only"):
+            raise self._invalid("The break-glass admin always signs in with a password, never with Microsoft")
+        current = "microsoft" if row.get("signin") == "microsoft" else "password"
+        if current == method:
+            return
+        if method == "microsoft":
+            if not self.ms_signin_ready():
+                raise self._invalid("Set up Sign in with Microsoft on the Configuration page first")
+            fields = {"signin": "microsoft", "password_hash": "", "password_set_at": "", "totp_secret": "",
+                      "totp_pending": "", "totp_last_step": 0}
+        else:
+            fields = {"signin": "", "entra_oid": "", "entra_tid": ""}
+        self.store.update("users", "u", row["RowKey"], fields)
+        for r in self.store.list("account_links", "l"):
+            if r.get("email") == row["RowKey"]:
+                self.store.delete("account_links", "l", r["RowKey"])
+        self.revoke_sessions(row["RowKey"])
+        self.audit(actor, "user.signin_method", row["RowKey"], {"from": current, "to": method})
 
     def _break_glass_alert(self, row: dict, ip: str) -> None:
         """Every use is loud: a security event (the Azure log alert looks for it) and an email to every admin,

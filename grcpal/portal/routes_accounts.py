@@ -10,6 +10,7 @@ from fastapi import Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from grcpal.portal.accounts import FORM_LINK_MINUTES, PASSWORD_MIN, SESSION_COOKIE, SESSION_HOURS
+from grcpal.portal import msauth
 from grcpal.portal.auth import AuthError, User
 from grcpal.portal.observability import request_id
 from grcpal.portal.security import clear_cookie, read_cookie, set_cookie
@@ -29,11 +30,43 @@ def register(app, h) -> None:
                    password_min=PASSWORD_MIN)
         return h.templates.TemplateResponse(request, name, ctx, status_code=status)
 
-    def login_page(request: Request, next: str = "/", error: str = "", status: int = 200, email: str = ""):
+    def login_page(request: Request, next: str = "/", error: str = "", status: int = 200, email: str = "",
+                   password_open: bool = False):
+        ms = h.p().ms_signin_ready()
         return page(request, "login.html", status, next=h.safe_dest(next, "/"), error=error, email=email,
-                    csrf=h.form_token(request, LOGIN_CSRF), first_admin=not h.p().any_password_set(),
+                    csrf=h.form_token(request, LOGIN_CSRF), first_admin=not h.p().any_password_set() and not ms,
                     signed_out=request.query_params.get("out") == "1",
-                    done=request.query_params.get("done") == "1")
+                    done=request.query_params.get("done") == "1", ms_ready=ms,
+                    password_open=password_open or not ms or bool(email) or request.query_params.get("done") == "1")
+
+    # ------------------------------------------------------------------ sign in with Microsoft (msauth.py)
+    @app.get("/auth/microsoft")
+    def ms_start(request: Request, next: str = "/"):
+        """The Sign in with Microsoft button. Nothing happens silently: the person clicked it, and Microsoft asks
+        them to pick the account (prompt=select_account)."""
+        try:
+            url, flow = h.p().ms_begin(h.safe_dest(next, "/"))
+        except AuthError as exc:
+            return login_page(request, next, str(exc), exc.status)
+        resp = RedirectResponse(url, status_code=303)
+        set_cookie(resp, request.url.scheme, msauth.FLOW_COOKIE, flow, max_age=msauth.FLOW_MINUTES * 60)
+        return resp
+
+    @app.get(msauth.CALLBACK_PATH)
+    def ms_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+        flow = read_cookie(request.cookies, msauth.FLOW_COOKIE)
+        try:
+            token, dest = h.p().ms_finish(flow, state[:200], code, error[:100], ip=h.ip_of(request))
+        except AuthError as exc:
+            resp = login_page(request, "/", str(exc), exc.status)
+            clear_cookie(resp, request.url.scheme, msauth.FLOW_COOKIE)
+            return resp
+        h.p().sign_out(read_cookie(request.cookies, SESSION_COOKIE))  # a new session at every sign-in
+        resp = RedirectResponse(h.safe_dest(dest, "/"), status_code=303)
+        clear_cookie(resp, request.url.scheme, msauth.FLOW_COOKIE)
+        clear_cookie(resp, request.url.scheme, SESSION_COOKIE)
+        set_cookie(resp, request.url.scheme, SESSION_COOKIE, token, max_age=SESSION_HOURS * 3600)
+        return resp
 
     @app.get("/login", response_class=HTMLResponse)
     def login(request: Request, next: str = "/"):
@@ -46,7 +79,10 @@ def register(app, h) -> None:
         try:
             token = h.p().sign_in(email, password, ip=h.ip_of(request), code=code)
         except AuthError as exc:
-            return login_page(request, next, str(exc), exc.status, email=email)
+            msg = str(exc)
+            if exc.status == 401 and h.p().ms_signin_ready() and not code:
+                msg += ". If you sign in with your Microsoft work account, use Sign in with Microsoft above."
+            return login_page(request, next, msg, exc.status, email=email, password_open=True)
         # A new session at every sign-in: the one this browser had before (if any) ends, so a session ID planted
         # or seen before sign-in is worthless after it, and form tokens (bound to the session) rotate too.
         h.p().sign_out(read_cookie(request.cookies, SESSION_COOKIE))

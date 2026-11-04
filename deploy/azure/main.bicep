@@ -507,6 +507,9 @@ resource auth 'Microsoft.App/containerApps/authConfigs@2024-03-01' = {
     identityProviders: {
       azureActiveDirectory: {
         enabled: true
+        // Microsoft always asks which account to use: nobody is signed in to GRC-pal silently by an open
+        // Microsoft session on a shared or borrowed browser.
+        login: { loginParameters: ['prompt=select_account'] }
         registration: {
           clientId: entraClientId
           clientSecretSettingName: 'microsoft-provider-authentication-secret'

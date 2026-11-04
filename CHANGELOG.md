@@ -4,6 +4,29 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Added
+- **Sign in with Microsoft on a VM** (local sign-in mode). Configuration > Sign in with Microsoft takes a separate
+  Entra app registration (no API permissions) with a certificate from `grcpal ms-cert`; the sign-in page then shows
+  a Sign in with Microsoft button. The person always clicks it and picks the account at Microsoft
+  (`prompt=select_account`); nobody is signed in silently. OpenID Connect authorization code flow with PKCE, a
+  certificate client assertion (no client secret), and full ID token checks (signature against Microsoft's
+  published keys, issuer, audience, tenant, expiry, nonce, object ID). The flow is single-use, bound to the browser
+  by a cookie and kept server-side (table `signinflows`, not backed up).
+- Invite only, one sign-in method per person: Users and roles has *Signs in with: Microsoft work account / GRC-pal
+  password* when adding someone, and a switch per person (`user.signin_method` in the audit log). Switching to
+  Microsoft deletes the GRC-pal password and two-step key; password links and "Forgot password" are refused for
+  Microsoft accounts. The first sign-in links the person to their Entra object ID and tenant (renamed accounts keep
+  working, another Entra account with the same email is refused). The break-glass admin from
+  `grcpal create-admin` always keeps a password and cannot be switched. Not offered in break-glass mode on Azure.
+- Connection test for the sign-in app: settings, certificate validity, Microsoft's signing keys for the tenant, and
+  a client-credentials request that proves the certificate is uploaded to the app registration.
+- The Users CSV export has `signin_method` and `entra_linked` columns.
+
+### Changed
+- **Azure:** Easy Auth asks Microsoft to show the account picker at every sign-in (`prompt=select_account` in
+  `main.bicep`), so an open Microsoft session in the browser no longer signs a person in to GRC-pal without a
+  click. Applies at the next `deploy.sh` run.
+
 ## [0.6.1] - 2026-11-03 - Fix startup crash on Azure
 ### Fixed
 - The portal crashed at startup on Azure (Azure Tables: "Type not supported ... <class 'list'>"). The data model

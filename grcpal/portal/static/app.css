@@ -553,3 +553,10 @@ details.card > summary::-webkit-details-marker { display: none; }
 details.card > summary h2::before { content: "›"; display: inline-block; width: 14px; color: var(--muted); transition: transform .15s; }
 details.card[open] > summary h2::before { transform: rotate(90deg); }
 details.card[open] > summary { margin-bottom: 12px; }
+
+/* Sign in with Microsoft (Microsoft's sign-in button guidance: four-square logo, neutral button) */
+.btn.ms-signin { background: #fff; color: #2f2f2f; border-color: #8c8c8c; font-weight: 600; padding: 9px 16px; gap: 12px; }
+.ms-logo { display: grid; grid-template-columns: 9px 9px; gap: 2px; }
+.ms-logo i { display: block; width: 9px; height: 9px; background: #f25022; }
+.ms-logo i:nth-child(2) { background: #7fba00; } .ms-logo i:nth-child(3) { background: #00a4ef; }
+.ms-logo i:nth-child(4) { background: #ffb900; }

@@ -107,6 +107,31 @@ SCHEMA: tuple[Section, ...] = (
                   kind="secret", show_when="GRCPAL_MS_AUTH=client_secret", required_when="GRCPAL_MS_AUTH=client_secret"),
         ), enable_key="GRCPAL_MS_ENABLED"),
     Section(
+        "signin", "Sign in with Microsoft", "People sign in to GRC-pal with their Microsoft work account.",
+        "For GRC-pal on a VM (password sign-in). On Azure Container Apps, Microsoft sign-in is done by the platform "
+        "and this section is not used. Create a separate app registration just for sign-in (not the monitoring one): "
+        "Entra admin center > App registrations > New registration, \"Accounts in this organizational directory "
+        "only\", redirect URI type Web = your GRC-pal address followed by /auth/microsoft/callback (for example "
+        "https://grc.example.com/auth/microsoft/callback). It needs no API permissions. On the server run grcpal "
+        "ms-cert --name \"GRC-pal sign-in\", upload the .cer file (Certificates & secrets > Certificates) and paste "
+        "the .pem file below. Then in Enterprise applications > this app > Properties set \"Assignment required\" to "
+        "Yes and assign the people who use GRC-pal. GRC-pal still decides who gets in and with which role: add each "
+        "person on Users and roles with \"Sign in with Microsoft\". MFA comes from Microsoft (Security Defaults or "
+        "Conditional Access). The break-glass admin from grcpal create-admin always signs in with a password.",
+        (
+            Field("GRCPAL_SSO_ENABLED", "Offer Sign in with Microsoft", "Shows the Sign in with Microsoft button on "
+                  "the sign-in page.", kind="bool", default="false"),
+            Field("GRCPAL_SSO_TENANT_ID", "Directory (tenant) ID", "Entra admin center > Overview > Tenant ID. Only "
+                  "accounts from this directory can sign in.", placeholder="00000000-0000-0000-0000-000000000000",
+                  show_when="GRCPAL_SSO_ENABLED=true", required_when="GRCPAL_SSO_ENABLED=true"),
+            Field("GRCPAL_SSO_CLIENT_ID", "Application (client) ID", "The sign-in app registration's Application "
+                  "(client) ID.", placeholder="00000000-0000-0000-0000-000000000000",
+                  show_when="GRCPAL_SSO_ENABLED=true", required_when="GRCPAL_SSO_ENABLED=true"),
+            Field("GRCPAL_SSO_CERTIFICATE", "Certificate with private key (.pem)", "From grcpal ms-cert. Paste the "
+                  "whole .pem file. Stored encrypted. Create a new one before it expires (2 years).", kind="secret",
+                  show_when="GRCPAL_SSO_ENABLED=true", required_when="GRCPAL_SSO_ENABLED=true"),
+        ), enable_key="GRCPAL_SSO_ENABLED", category="general"),
+    Section(
         "azure", "Microsoft Azure", "Resources, RBAC, Azure Policy compliance, backups.",
         "Uses the same identity as Microsoft Entra ID above. Give it the Reader role at the management group or on "
         "each subscription in scope (deploy/azure/grant-permissions.ps1 does this). Assign the built-in Azure "

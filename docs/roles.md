@@ -85,6 +85,28 @@ look back at last year's evidence for their controls).
 4. Sessions last 8 hours and end at once when the person is disabled, changes role or sets a new
    password.
 
+### Sign in with Microsoft on a VM (optional)
+
+With **Configuration > Sign in with Microsoft** set up (a separate Entra app registration with a
+certificate and no API permissions; the page explains each step), the sign-in page shows a **Sign in
+with Microsoft** button. Nothing happens on its own: the person clicks it and Microsoft asks them to
+pick their account every time. MFA is Microsoft's (Security Defaults or Conditional Access).
+
+- **Invite only.** An admin adds the person on **Users and roles** with *Signs in with: Microsoft work
+  account*. A Microsoft account that was not added gets "You have not been given access" and no
+  account is created.
+- **One method per person.** A person signs in either with Microsoft or with a GRC-pal password, never
+  both. Switching to Microsoft deletes their GRC-pal password and two-step key; switching back removes
+  the Microsoft link (then send a password link). Password links and "Forgot password" do not work
+  for Microsoft accounts. External auditors without an account in your directory keep a password.
+- **Linked to the Entra account.** The first sign-in links the person to their Entra object ID and
+  tenant. A later sign-in with the same email from another Entra account is refused until an admin
+  clicks **Unlink Entra account**. A renamed sign-in name still works (the object ID is the same).
+- **The break-glass admin** (`grcpal create-admin`) always signs in with a password and can never be
+  switched to Microsoft, so a Microsoft outage or a broken app registration cannot lock you out.
+- Every sign-in is in the audit log as `auth.signin` with method `microsoft`, the address, object ID
+  and tenant; refusals are security events on the Logs page.
+
 ### Auditor access end date
 
 Every auditor account has an end date (default 90 days from when it is added or switched to
