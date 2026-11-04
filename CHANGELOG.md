@@ -22,6 +22,11 @@ All notable changes are listed here. The project follows [semantic versioning](h
   a client-credentials request that proves the certificate is uploaded to the app registration.
 - The Users CSV export has `signin_method` and `entra_linked` columns.
 
+### Changed
+- **Azure:** Easy Auth asks Microsoft to show the account picker at every sign-in (`prompt=select_account` in
+  `main.bicep`), so an open Microsoft session in the browser no longer signs a person in to GRC-pal without a
+  click. Applies at the next `deploy.sh` run.
+
 ## [0.6.1] - 2026-11-03 - Fix startup crash on Azure
 ### Fixed
 - The portal crashed at startup on Azure (Azure Tables: "Type not supported ... <class 'list'>"). The data model

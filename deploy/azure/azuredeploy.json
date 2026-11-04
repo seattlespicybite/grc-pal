@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "4800100442311900352"
+      "templateHash": "10129026421410471540"
     }
   },
   "parameters": {
@@ -1004,6 +1004,11 @@
         "identityProviders": {
           "azureActiveDirectory": {
             "enabled": true,
+            "login": {
+              "loginParameters": [
+                "prompt=select_account"
+              ]
+            },
             "registration": {
               "clientId": "[parameters('entraClientId')]",
               "clientSecretSettingName": "microsoft-provider-authentication-secret",
