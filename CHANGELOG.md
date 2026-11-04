@@ -11,7 +11,7 @@ All notable changes are listed here. The project follows [semantic versioning](h
   are now stored as text like other list fields. Local and Docker installs (SQLite) were not affected.
 - The local store now refuses unlisted list or dict fields the same way Azure Tables does, so tests catch this
   kind of bug before release.
-- A calendar test depended on the current month; it now pins the upload date.
+- Two tests (calendar, vendor sign-in check) depended on the current date; they now pin or follow it.
 
 No data model change.
 
