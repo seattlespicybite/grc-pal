@@ -262,8 +262,10 @@ class AccessAppsMixin:
 
     def start_access_review(self, actor, name: str, due: str, app_ids: list[str], accounts: bytes | None = None,
                             people: bytes | None = None, entra_managers: bool = False, clients=None,
-                            request_fn=None) -> dict:
-        """Start a review from applications (and optionally a CSV) as a background job. Returns the job."""
+                            request_fn=None, invite: bool = False, runner=None) -> dict:
+        """Start a review from applications (and optionally a CSV) as a background job. Returns the job.
+        invite: email the reviewers once the review exists. runner: another job runner (the schedule runs the job
+        to the end before the nightly process exits)."""
         self._ar_admin(actor, "start an access review")
         name, due = self._ar_check_start(name, due)
         apps = [self._aa_get(a) for a in dict.fromkeys(app_ids or [])]
@@ -333,10 +335,16 @@ class AccessAppsMixin:
             files.update({"accounts.csv": accounts, "people.csv": people})
             camp = self._ar_create(actor, name, due, rows, files, pulled,
                                    {a["name"]: a.get("owner_email", "") for a in apps}, sorted(set(notes)))
-            return {"campaign": camp["RowKey"], "records": camp["records"],
+            invited = 0
+            if invite and camp["reviewers"]:
+                try:
+                    invited = len(self.invite_access_reviewers(actor, camp["RowKey"])["sent"])
+                except Exception as exc:  # noqa: BLE001 - the review exists; an email problem must not undo it
+                    notes.append(f"Reviewers were not emailed: {type(exc).__name__}")
+            return {"campaign": camp["RowKey"], "records": camp["records"], "invited": invited,
                     "without_account": len(camp["reviewers_without_account"]), "notes": camp["pull_notes"]}
 
-        return self.jobs.submit("access_review", f"Start access review: {name}", actor.email, work)
+        return (runner or self.jobs).submit("access_review", f"Start access review: {name}", actor.email, work)
 
     # ------------------------------------------------------------------ daily account snapshots
     def _aa_last_ok(self, aid: str) -> tuple[str, dict] | None:

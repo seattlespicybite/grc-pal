@@ -427,6 +427,7 @@ class AccessReviewMixin:
                    "modify": stats["modify"]}
         self.store.update("arcampaigns", "c", cid, {"attestations": att})
         self.audit(actor, "access_review.signoff", cid, att[me])
+        self._ar_after_signoff(cid)  # last sign-off: open remediation tickets when they are set up
         return att[me]
 
     def reopen_access_signoff(self, actor, cid: str, reviewer: str) -> None:
