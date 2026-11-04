@@ -4,6 +4,17 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-03 - Fix startup crash on Azure
+### Fixed
+- The portal crashed at startup on Azure (Azure Tables: "Type not supported ... <class 'list'>"). The data model
+  version record (`history`), custom check results (`last_result`) and access-review pull results (`last_pull`)
+  are now stored as text like other list fields. Local and Docker installs (SQLite) were not affected.
+- The local store now refuses unlisted list or dict fields the same way Azure Tables does, so tests catch this
+  kind of bug before release.
+- Two tests (calendar, vendor sign-in check) depended on the current date; they now pin or follow it.
+
+No data model change.
+
 ## [0.6.0] - 2026-10-29 - Automation page, access review pulls, calendar links, security hardening
 Security hardening release from the internal assessment of the Azure deployment (batches B1, B2, B3 and the CI
 security scan; findings F-01, F-02, F-04, F-05, F-10, F-11 and B-3). This was an internal assessment with

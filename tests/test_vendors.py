@@ -839,7 +839,8 @@ def test_signin_check_needs_recent_runs_and_something_to_look_for(portal):
     with pytest.raises(Invalid):
         portal.vendor_signin_check(CONTRIB, vid)  # not their vendor: looks like it does not exist
     entra_runs(portal, [], [])
-    portal._today = portal.today + dt.timedelta(days=30)  # the runs are now a month old
+    # The runs carry the real clock time, so age them against the real date, not the pinned TODAY
+    portal._today = dt.datetime.now(dt.timezone.utc).date() + dt.timedelta(days=30)  # the runs are now a month old
     result = portal.vendor_signin_check(ADMIN, vid)
     assert not result["ok"] and any("run it again" in n for n in result["notes"])
 

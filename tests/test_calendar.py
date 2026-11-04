@@ -294,7 +294,9 @@ def test_pages_save_activity_and_occurrence(client, portal):
     assert r.status_code == 303 and "badge-audit" not in {a["id"] for a in portal.calendar_activities()}
 
 
-def test_occurrence_page_lists_evidence_from_its_month(client, portal):
+def test_occurrence_page_lists_evidence_from_its_month(client, portal, monkeypatch):
+    from grcpal.portal import service
+    monkeypatch.setattr(service, "_now", lambda: "2026-10-12T15:00:00+00:00")  # pin the upload time to TODAY
     portal.upload(HR, "q4-training.pdf", PDF, "October export", control_id="HR-02")  # uploaded 12 Oct
     as_(client, ADMIN)
     assert "q4-training.pdf" in client.get("/calendar/o/training-completion~2026-10").text
