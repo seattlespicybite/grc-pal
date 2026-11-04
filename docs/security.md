@@ -171,9 +171,11 @@ the infrastructure around the app.
 Local accounts lock after repeated failed sign-ins and offer optional two-step sign-in with an
 authenticator app, but two-step sign-in is not enforced, and an address-based limit can be spread
 over many addresses. Failed sign-ins and locks are recorded on the Logs page (category security).
-Turn on two-step sign-in for every admin. For a portal reachable from outside the internal network,
-use Entra sign-in (Azure Easy Auth or a proxy) with Conditional Access MFA, and keep local sign-in
-for the break-glass admin only. Also:
+Turn on two-step sign-in for every admin, or move staff to **Sign in with Microsoft** (OpenID Connect
+authorization code flow with PKCE, a certificate as the client credential, full ID token checks, invite
+only, accounts linked to their Entra object ID; see `grcpal/portal/msauth.py`). For a portal reachable
+from outside the internal network, use Entra sign-in (Azure Easy Auth or a proxy) with MFA, and keep
+local sign-in for the break-glass admin only. Also:
 
 - Use HTTPS; without it passwords cross the network in clear text. The Setup guide flags it.
 - Whoever administers the VM can read the database and evidence folder. Limit VM admin access and

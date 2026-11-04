@@ -503,7 +503,8 @@ def cmd_ms_cert(args) -> int:
           f"Expires:                     {cert.not_valid_after_utc:%Y-%m-%d}\n\n"
           "1. Entra admin center > App registrations > your GRC-pal app > Certificates & secrets > Certificates >\n"
           f"   Upload certificate: choose {cer_file.name}. Check the thumbprint matches.\n"
-          "2. GRC-pal > Configuration > Microsoft: How GRC-pal signs in = certificate; paste the whole .pem file.\n"
+          "2. GRC-pal > Configuration > Microsoft (monitoring app: How GRC-pal signs in = certificate) or\n"
+          "   Sign in with Microsoft (sign-in app): paste the whole .pem file. Use a separate certificate for each app.\n"
           f"3. Then remove {key_file.name} from this server, or keep it only in your password manager.")
     return 0
 

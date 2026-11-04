@@ -29,6 +29,8 @@ PUBLIC = {
     ("GET", "/account/password/{token}"),    # old link format: redirects to the form below, sets nothing
     # choosing a password from an emailed link: the link's token (then a short-lived cookie) is the identity
     ("POST", "/account/password/open"), ("GET", "/account/password"), ("POST", "/account/password"),
+    # Sign in with Microsoft: the button (starts a one-time flow) and Microsoft's redirect back (state + flow cookie)
+    ("GET", "/auth/microsoft"), ("GET", "/auth/microsoft/callback"),
 }
 
 # {placeholder} -> world attribute, per route template. Control A is the owner's, control B belongs to someone else.
@@ -55,6 +57,7 @@ PARAMS: dict[str, dict[str, str]] = {
     "/users/{email}/identity": {"email": "user_target"},
     "/users/{email}/active": {"email": "user_target"},
     "/users/{email}/mfa": {"email": "user_target"},
+    "/users/{email}/signin": {"email": "user_target"},
     "/cycles/{cycle_id}/export": {"cycle_id": "cycle_closed"},
     "/policies/{policy_id}": {"policy_id": "policy"},
     "/policies/{policy_id}/ack": {"policy_id": "policy"},
@@ -189,6 +192,7 @@ FORMS: dict[tuple[str, str], object] = {
     ("POST", "/users/{email}/identity"): {},
     ("POST", "/users/{email}/active"): {"active": "0"},
     ("POST", "/users/{email}/mfa"): {},
+    ("POST", "/users/{email}/signin"): {"method": "microsoft"},
     ("POST", "/account/mfa/start"): {},
     ("POST", "/account/mfa/confirm"): {"code": "000000"},
     ("POST", "/account/mfa/off"): {"password": "not-the-password"},
@@ -338,7 +342,7 @@ _GROUPS: list[tuple[frozenset, str]] = [
            POST /updates/approve | POST /updates/check | POST /updates/policy | POST /updates/verify
            POST /uploads/{upload_id}/review | POST /users | POST /users/{email}/active | POST /users/{email}/identity
            POST /users/{email}/library-owner | POST /users/{email}/link | POST /users/{email}/mfa
-           POST /users/{email}/role
+           POST /users/{email}/role | POST /users/{email}/signin
            POST /users/{email}/until | POST /vendors/import | POST /vendors/import/upload
            POST /vendors/import/{token}/apply | POST /vendors/import/{token}/discard
            POST /vendors/questionnaire/edit | POST /vendors/questionnaire/publish | POST /vendors/{vid}/cuecs
@@ -397,6 +401,7 @@ NO_WRITE: set[tuple[str, str]] = {
     ("POST", "/vendors/questionnaire/publish"),                          # nothing to publish without edits
     ("POST", "/vendors/{vid}/review/acceptance"),                        # needs the owner's signed note first
     ("POST", "/users/{email}/mfa"),                                      # the target has no two-step sign-in to remove
+    ("POST", "/users/{email}/signin"),                                   # Sign in with Microsoft is not set up here
     ("POST", "/account/mfa/confirm"), ("POST", "/account/mfa/off"),      # a wrong code / password changes nothing
     ("POST", "/account/mfa/start"),                                      # the test people have no password or key
 }

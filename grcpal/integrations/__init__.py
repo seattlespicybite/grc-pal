@@ -64,11 +64,11 @@ class TestContext:
 
 
 def validators() -> dict:
-    from grcpal.integrations import ai_check, aws, email_check, gcp, github, microsoft, sources
+    from grcpal.integrations import ai_check, aws, email_check, gcp, github, microsoft, signin_check, sources
 
     return {"microsoft": microsoft.validate, "azure": microsoft.validate_azure, "aws": aws.validate,
             "gcp": gcp.validate, "github": github.validate, "email": email_check.validate,
-            "ai": ai_check.validate, "sources": sources.validate}
+            "ai": ai_check.validate, "sources": sources.validate, "signin": signin_check.validate}
 
 
 def validate(section_id: str, settings, ctx: TestContext) -> dict:

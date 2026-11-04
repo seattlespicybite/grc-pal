@@ -201,8 +201,15 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Automat
         self.audit(by, "user.create", email, {"role": role, "source": source})
         return row
 
-    def add_user(self, actor: User, email: str, name: str, role: str, access_until: str = "") -> dict:
+    def add_user(self, actor: User, email: str, name: str, role: str, access_until: str = "",
+                 signin: str = "password") -> dict:
+        """signin: "password" (local mode: the admin gets a one-time password link) or "microsoft" (local mode with
+        Sign in with Microsoft set up: no password; the first Microsoft sign-in links their Entra account)."""
         self._admin(actor)
+        if signin not in ("password", "microsoft"):
+            raise Invalid("Sign-in method must be Microsoft or password")
+        if signin == "microsoft" and not self.ms_signin_ready():
+            raise Invalid("Set up Sign in with Microsoft on the Configuration page first")
         email = (email or "").strip().lower()
         if not EMAIL.match(email):
             raise Invalid(f"'{email}' is not a valid email address")
@@ -212,6 +219,9 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Automat
             raise Invalid(f"{email} already has access; change their role instead")
         until = self._auditor_until(access_until) if role == "auditor" else ""
         row = self._create_user(email, (name or "").strip()[:120], role, "admin", actor.email)
+        if signin == "microsoft":
+            row = self.store.update("users", "u", email, {"signin": "microsoft"})
+            self.audit(actor, "user.signin_method", email, {"from": "", "to": "microsoft"})
         if until:
             row = self.store.update("users", "u", email, {"access_until": until})
             self.audit(actor, "user.access_until", email, {"from": "", "to": until})

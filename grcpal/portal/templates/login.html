@@ -5,11 +5,16 @@
 {% if error %}<div class="flash err" role="alert">{{ error }}</div>{% endif %}
 <div class="card">
 <h1>Sign in</h1>
+{% if ms_ready %}<p class="sub">Use your Microsoft work account.</p>
+<div class="actions"><a class="btn ms-signin" href="/auth/microsoft?next={{ next|urlencode }}"><span class="ms-logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Sign in with Microsoft</a></div>
+<details class="mt-l" {{ 'open' if password_open }}><summary>Sign in with a password instead</summary>
+<p class="sub">For accounts an admin set up with a GRC-pal password, and the break-glass admin.</p>{% endif %}
 <form method="post" action="/login"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ next }}">
-<label for="e">Work email</label><input id="e" name="email" type="email" value="{{ email }}" autocomplete="username" required autofocus>
+<label for="e">Work email</label><input id="e" name="email" type="email" value="{{ email }}" autocomplete="username" required {{ 'autofocus' if not ms_ready }}>
 <label for="pw">Password</label><input id="pw" name="password" type="password" autocomplete="current-password" required>
 <label for="otp">Code from your authenticator app <span class="sub">(only if you set up two-step sign-in)</span></label><input id="otp" name="code" type="text" inputmode="numeric" pattern="[0-9 ]*" maxlength="8" autocomplete="one-time-code">
-<div class="actions"><button class="btn" type="submit">Sign in</button> <a href="/account/forgot">Forgot password?</a></div></form>
+<div class="actions"><button class="btn {{ 'ghost' if ms_ready }}" type="submit">Sign in</button> <a href="/account/forgot">Forgot password?</a></div></form>
+{% if ms_ready %}</details>{% endif %}
 </div>
 {% if first_admin %}<div class="card"><h2>First time here?</h2>
 <p class="sub">Nobody has a password yet. On the server that runs GRC-pal, create the first admin:</p>
