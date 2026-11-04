@@ -36,6 +36,7 @@ PUBLIC = {
 # {placeholder} -> world attribute, per route template. Control A is the owner's, control B belongs to someone else.
 PARAMS: dict[str, dict[str, str]] = {
     "/controls/{control_id}": {"control_id": "ctl_a"},
+    "/controls/{control_id}/panel": {"control_id": "ctl_a"},
     "/controls/{control_id}/upload": {"control_id": "ctl_a"},
     "/controls/{control_id}/note": {"control_id": "ctl_a"},
     "/controls/{control_id}/remind": {"control_id": "ctl_a"},
@@ -375,7 +376,7 @@ _GROUPS: list[tuple[frozenset, str]] = [
                   GET /kb/{crit_id} | GET /library | GET /policies | GET /policies/{policy_id} | GET /vendors
                   GET /vendors/questionnaire | GET /vendors/questionnaire.xlsx | GET /view | GET /work"""),
     # --- one object: its owner or assignee, an admin, an auditor. Anyone else gets 404 (rule 7)
-    (OWNER_OR_READER, """GET /access-reviews/{cid} | GET /assignments/{assignment_id} | GET /controls/{control_id}
+    (OWNER_OR_READER, """GET /access-reviews/{cid} | GET /assignments/{assignment_id} | GET /controls/{control_id} | GET /controls/{control_id}/panel
                          GET /library/{did} | GET /library/{did}/review/{vid} | GET /uploads/{upload_id}/download
                          GET /vendors/{vid} | GET /vendors/{vid}/files/{fid}"""),
     # --- an admin or the owner of that object

@@ -869,3 +869,19 @@ class DocLibMixin:
         content = notify.doc_approval(self, kind, d.get("number", ""), d.get("title", did), did, v, note, actor)
         return self._notify("doc_approval", [r for r in recipients if r], actor, content, GOV_CONTROLS)
 
+
+    # ------------------------------------------------------------------ links from a control
+    def control_documents(self, user, control_id: str) -> dict:
+        """Policies and document-library documents that name this control, for the control page and side panel.
+        Same visibility as the library: staff see only documents with an approved version."""
+        pols = [{"id": p["id"], "title": p.get("title") or p["id"], "version": str(p.get("version") or ""),
+                 "href": f"/policies/{p['id']}"}
+                for p in self.catalog.policies if control_id in (p.get("controls") or [])]
+        docs = []
+        for d in self.library(user)["docs"]:
+            raw = d.get("controls") or ""
+            ids = set(raw) if isinstance(raw, list) else {x for x in re.split(r"[,;\s]+", str(raw)) if x}
+            if control_id in ids:
+                docs.append({"id": d["id"], "number": d["number"], "title": d["title"], "href": f"/library/{d['id']}",
+                             "approved": bool(d["current"]), "pending": d["pending"]})
+        return {"policies": pols, "docs": docs}

@@ -28,7 +28,7 @@
 <thead><tr><th><a href="/controls?{{ qs }}&sort=id">ID</a></th><th><a href="/controls?{{ qs }}&sort=title">Control</a></th>
 {% for fw in columns %}<th>{{ fw.name.split(' (')[0].split(':')[0] ~ (' criteria' if fw.id == 'soc2' else '') }}</th>{% endfor %}
 <th>Evidenced by</th><th><a href="/controls?{{ qs }}&sort=owner">Owner</a></th><th><a href="/controls?{{ qs }}&sort=status">Status</a></th></tr></thead>
-<tbody>{% for c in rows %}{% set h = how[c.id] %}<tr><td class="nowrap"><a href="/controls/{{ c.id }}{% if list_qs %}?list={{ list_qs|urlencode }}{% endif %}"><b>{{ c.id }}</b></a></td><td>{{ c.title }}</td>
+<tbody>{% for c in rows %}{% set h = how[c.id] %}{% set href = '/controls/' ~ c.id ~ ('?list=' ~ list_qs|urlencode if list_qs else '') %}<tr data-panel-row="{{ c.id }}"><td class="nowrap"><a href="{{ href }}" data-panel="{{ c.id }}"><b>{{ c.id }}</b></a></td><td><a class="row-title" href="{{ href }}" data-panel="{{ c.id }}">{{ c.title }}</a></td>
 {% for fw in columns %}<td class="tags">{% set ids = refs[c.id][fw.id] %}{% for x in ids[:6] %}<span class="{{ 'hit' if fw.id == 'soc2' and x in hits }}">{{ x }}</span>{% endfor %}{% if ids|length > 6 %}<span>+{{ ids|length - 6 }}</span>{% endif %}{% if c.custom and loop.first %}<span class="custom-tag">custom</span>{% endif %}</td>{% endfor %}
 <td>{{ h.label }}<div class="sub">{{ h.sources|join(', ') if h.sources else c.frequency }}</div></td>
 <td>{{ c.owner }}</td><td>{{ pill(c.status) }}</td></tr>

@@ -399,8 +399,9 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                       crit_options=crit_options, hits={criterion} if criterion else (set(crit_options) if family else set()),
                       list_qs=_list_query(str(request.url.query)))
 
-    @app.get("/controls/{control_id}", response_class=HTMLResponse)
-    def control_detail(request: Request, control_id: str, user: User = Depends(current_user)):
+    def control_context(request: Request, user: User, control_id: str) -> dict:
+        """Everything the control page and the control side panel show. Same visibility rule for both: a Control
+        owner sees only their own controls (404 otherwise), auditors read, admins act."""
         from grcpal.collectors import disabled_sources
         from grcpal.portal import soc2
 
@@ -429,7 +430,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         if user.is_contributor:
             mine = [a for a in assignments if user.email in portal.participants(a)]
             assignments = mine or assignments
-        return render(request, user, "control.html", ctl=ctl, status=status_of(control_id), points=points,
+        return dict(ctl=ctl, status=status_of(control_id), points=points,
                       assignments=assignments, uploads=portal.uploads(control=control_id),
                       prev=prev, prev_uploads=portal.uploads(control=control_id, cycle=prev["RowKey"]) if prev else [],
                       prev_assignments=portal.assignments(control=control_id, cycle=prev["RowKey"]) if prev else [],
@@ -450,7 +451,20 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                       checks=portal.checks_for(control_id) if user.sees_everything else [],
                       ai=portal.ai_status() if user.sees_everything else None,
                       ai_reviews=portal.ai_reviews(control_id)[:10] if user.sees_everything else [],
-                      schedule=portal.control_schedule(user, control_id) if user.is_admin else None)
+                      schedule=portal.control_schedule(user, control_id) if user.is_admin else None,
+                      documents=portal.control_documents(user, control_id))
+
+    @app.get("/controls/{control_id}", response_class=HTMLResponse)
+    def control_detail(request: Request, control_id: str, user: User = Depends(current_user)):
+        return render(request, user, "control.html", **control_context(request, user, control_id))
+
+    @app.get("/controls/{control_id}/panel", response_class=HTMLResponse)
+    def control_panel(request: Request, control_id: str, user: User = Depends(current_user)):
+        """The control as a side panel next to a list (loaded by app.js). Without JavaScript the link opens the full
+        page. The fragment has no page layout of its own; same data and rules as the full page."""
+        resp = render(request, user, "control_panel.html", **control_context(request, user, control_id))
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
 
     @app.post("/controls/{control_id}/upload")
     async def control_upload(request: Request, control_id: str, file: UploadFile = File(...), comment: str = Form(""),
@@ -517,7 +531,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             s = stat.get(c, "not_started")
             totals[s if s in totals else "not_started"] += 1
         categories = [cat for cat in soc2.CATEGORY_ORDER if any(f["category"] == cat and f["in_scope"] for f in fams)]
-        return render(request, user, "criteria.html", families=fams, totals=totals, open_family=open,
+        return render(request, user, "criteria.html", families=fams, tree=fams, totals=totals, open_family=open,
                       scoped_criteria=len(portal.catalog.in_scope_criteria), scoped_controls=len(scoped_controls),
                       scope_names=[CATEGORY_NAMES.get(c, c) for c in categories])
 
@@ -543,6 +557,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         how = {c["id"]: soc2.evidenced_by(c, skip) for c in controls}
         family = soc2.family_of(crit_id)
         return render(request, user, "criterion.html", crit_id=crit_id, crit=crit, stat=stat,
+                      tree=soc2.families(portal.catalog, stat), nav_active="framework",
                       points=portal.catalog.points_of_focus.get(crit_id, []), open_by_point=open_by_point,
                       controls=controls, how=how, prev_id=prev_id, next_id=next_id, position=position,
                       order_total=len(order), family=family, family_name=soc2.FAMILY_NAMES.get(family, family),

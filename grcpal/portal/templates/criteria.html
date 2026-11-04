@@ -1,5 +1,6 @@
 {% extends "base.html" %}{% from "_macros.html" import pill, status_bar %}{% block title %}SOC 2 criteria{% endblock %}
 {% block content %}
+<div class="fw-split">{% include "_fw_tree.html" %}<div class="fw-pane">
 <div class="page-head"><div><div class="sub">SOC 2 /</div><h1>SOC 2 Trust Services Criteria</h1>
 <div class="sub">In scope: {{ scope_names|join(', ') }} · {{ scoped_criteria }} criteria · {{ scoped_controls }} controls · cycle {{ cycle.name }}</div></div>
 <div class="head-actions"><a class="btn ghost small" href="/controls">All SOC 2 controls</a></div></div>
@@ -19,4 +20,5 @@
 {% endfor %}
 <p class="sub">Criterion titles are short paraphrases for navigation; the AICPA publication is authoritative. Scope (which
 categories are in the report) is set in catalog/scope.yaml. Points of focus are on each criterion's page.</p>
+</div></div>
 {% endblock %}
