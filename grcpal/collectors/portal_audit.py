@@ -27,7 +27,7 @@ def run(ctx, run):
     from grcpal.portal.auditlog import AuditLog
 
     log = AuditLog(store)
-    verification = log.verify()
+    verification = log.verify(record=True)
     run.add("audit_chain_verification", verification)
     run.add("audit_log", log.records())
     for table, pk in (("users", "u"), ("cycles", "c"), ("assignments", "a"), ("uploads", "u"), ("comments", "m"),
