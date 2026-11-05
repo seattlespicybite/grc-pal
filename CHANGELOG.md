@@ -43,6 +43,12 @@ No data model change: upgrade in place from 0.7.0, roll back to 0.7.0 without a 
   carries the version it started from. If someone saved in between, nothing is written and the page shows both
   texts side by side, keeps what you typed, and lets you save again on top of the newer version. Two saves landing
   at the same moment no longer end in an error page. Approvals, vendor reviews and access-review decisions follow.
+### Fixed
+- **Backups page on Azure says what is really kept** (B-020). It showed *Keep: 7 daily, 4 weekly, 12 monthly*, but
+  Azure storage keeps every backup for `backupRetentionDays` (35 by default), write-once, then deletes it. The page
+  now shows that number (new setting `GRCPAL_BACKUP_RETENTION_DAYS`, filled from `main.bicep`) and hides the Keep
+  numbers when Azure storage is the only location; with folder locations as well, it says the numbers apply to the
+  folders only. Re-run `deploy.sh` (or an update) to set the new value; until then the page names the default.
 
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 

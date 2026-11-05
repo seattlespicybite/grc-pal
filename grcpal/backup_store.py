@@ -10,6 +10,8 @@ into the browser, so the portal can only write backups where the operator allowe
     GRCPAL_BACKUP_DIR_2_LABEL    its name on the page (default "Second location")
     GRCPAL_BACKUP_DIR_2_HOST     its host path, for display
     GRCPAL_BACKUP_CONTAINER      Azure: blob container for backups (default "backups" when evidence is in Azure)
+    GRCPAL_BACKUP_RETENTION_DAYS Azure: days the container keeps each backup (write-once, then the lifecycle rule
+                                 deletes it); set from main.bicep `backupRetentionDays`, shown on the Backups page
 
 File names: grcpal-<tenant>-<YYYYMMDDTHHMMSSZ>-<kind>.grcbak, kind = scheduled | manual | pre-update.
 Next to each backup a small <name>.json holds its summary and verification result (no data, no keys).
@@ -129,6 +131,15 @@ class BlobDestination:
     container: object
     kind: str = "blob"
     can_delete = False
+
+    @property
+    def retention_days(self) -> int | None:
+        """What Azure storage keeps, set at deployment. The Keep numbers on the Backups page do not apply here."""
+        try:
+            days = int(os.getenv("GRCPAL_BACKUP_RETENTION_DAYS", ""))
+        except ValueError:
+            return None
+        return days if days > 0 else None
 
     def where(self, name: str = "") -> str:
         cname = getattr(self.container, "container_name", "backups")

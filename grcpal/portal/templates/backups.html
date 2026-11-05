@@ -41,13 +41,14 @@
 <div><label for="dest">Save to</label><select id="dest" name="destination">{% for d in data.places %}<option value="{{ d.id }}"{% if d.id == data.schedule.destination %} selected{% endif %}>{{ d.label }}</option>{% endfor %}</select></div>
 </div>
 <h3 class="mt">Keep</h3>
-<div class="form-row">
+{% set sr = data.storage_retention %}{% if sr.any %}<div class="hint-box" role="note">Azure backup storage keeps every backup for {% if sr.days %}<strong>{{ sr.days }} days</strong>{% else %}the number of days set at deployment (<code>backupRetentionDays</code>, 35 by default){% endif %}, write-once, then deletes it. Nobody can delete it earlier, so the numbers below {% if sr.only %}do not apply on this instance{% else %}apply only to the folder locations{% endif %}. To keep backups longer, change <code>backupRetentionDays</code> and deploy again.</div>{% endif %}
+{% if not sr.only %}<div class="form-row">
 <div><label for="kd">Daily backups</label><input id="kd" name="keep_daily" type="number" min="1" max="60" value="{{ data.schedule.keep_daily }}"></div>
 <div><label for="kw">Weekly</label><input id="kw" name="keep_weekly" type="number" min="0" max="52" value="{{ data.schedule.keep_weekly }}"></div>
 <div><label for="km">Monthly</label><input id="km" name="keep_monthly" type="number" min="0" max="120" value="{{ data.schedule.keep_monthly }}"></div>
 <div><label for="kp">Before updates</label><input id="kp" name="keep_pre_update" type="number" min="1" max="20" value="{{ data.schedule.keep_pre_update }}"></div>
 </div>
-<p class="sub">Older backups are removed automatically after each new one, except the newest one that passed its check. Azure storage keeps backups write-once and removes old ones by its own retention rule.</p>
+<p class="sub">Older backups in a folder are removed automatically after each new one, except the newest one that passed its check.</p>{% else %}{% for k in ('keep_daily', 'keep_weekly', 'keep_monthly', 'keep_pre_update') %}<input type="hidden" name="{{ k }}" value="{{ data.schedule[k] }}">{% endfor %}{% endif %}
 <div class="actions"><button class="btn" type="submit">Save schedule</button></div></form></section>
 </div>
 
