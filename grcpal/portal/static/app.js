@@ -1,7 +1,9 @@
 // Progressive enhancement only: every page works without JavaScript.
 (function () {
+  // Form helpers that also run inside the control side panel, which is loaded after the page: enhance(root).
+  function enhance(root) {
   // Drag and drop onto the upload area fills the file input.
-  document.querySelectorAll('[data-drop]').forEach(function (zone) {
+  root.querySelectorAll('[data-drop]').forEach(function (zone) {
     var input = zone.querySelector('input[type=file]');
     var label = zone.querySelector('[data-file-label]');
     function show() { if (input.files.length && label) label.textContent = input.files[0].name; }
@@ -17,6 +19,46 @@
       if (ev.dataTransfer.files.length) { input.files = ev.dataTransfer.files; show(); }
     });
   });
+
+  // Confirm destructive actions.
+  root.querySelectorAll('form[data-confirm]').forEach(function (f) {
+    f.addEventListener('submit', function (ev) {
+      if (!window.confirm(f.getAttribute('data-confirm'))) ev.preventDefault();
+    });
+  });
+
+  // Filter selects and checkboxes submit their form when changed.
+  // Buttons only needed without JavaScript (an upload that sends itself once a file is chosen).
+  root.querySelectorAll('[data-nojs]').forEach(function (b) { b.hidden = true; });
+  root.querySelectorAll('[data-autosubmit]').forEach(function (s) {
+    s.addEventListener('change', function () { s.form.submit(); });
+  });
+
+  // Show fields only when another field has a matching value: data-show-when="KEY=a|b".
+  root.querySelectorAll('[data-show-when]').forEach(function (el) {
+    var rule = el.getAttribute('data-show-when').split('=');
+    var form = el.closest('form');
+    var ctrl = form && form.querySelector('[name="' + rule[0] + '"]');
+    if (!ctrl) return;
+    var allowed = rule[1].split('|');
+    function current() {
+      if (ctrl.type === 'checkbox') return ctrl.checked ? 'true' : 'false';
+      return ctrl.value;
+    }
+    function apply() { el.hidden = allowed.indexOf(current()) === -1; }
+    ctrl.addEventListener('change', apply);
+    apply();
+  });
+
+  // Long-running submits (AI review): disable the button and say what is happening.
+  root.querySelectorAll('form[data-busy]').forEach(function (f) {
+    f.addEventListener('submit', function () {
+      var b = f.querySelector('button[type=submit]');
+      if (b) { b.disabled = true; b.textContent = f.getAttribute('data-busy'); }
+    });
+  });
+  }
+  enhance(document);
 
   // Control matrix report: print button (the browser's Print dialog also saves as PDF).
   document.querySelectorAll('[data-print]').forEach(function (b) {
@@ -98,49 +140,11 @@
     linkForm.submit();
   }
 
-  // Confirm destructive actions.
-  document.querySelectorAll('form[data-confirm]').forEach(function (f) {
-    f.addEventListener('submit', function (ev) {
-      if (!window.confirm(f.getAttribute('data-confirm'))) ev.preventDefault();
-    });
-  });
-
-  // Filter selects and checkboxes submit their form when changed.
-  // Buttons only needed without JavaScript (an upload that sends itself once a file is chosen).
-  document.querySelectorAll('[data-nojs]').forEach(function (b) { b.hidden = true; });
-  document.querySelectorAll('[data-autosubmit]').forEach(function (s) {
-    s.addEventListener('change', function () { s.form.submit(); });
-  });
-
   // "Select all" box: <input data-check-all="GROUP"> ticks or clears every <input data-check-group="GROUP">.
   document.querySelectorAll('[data-check-all]').forEach(function (all) {
     var group = all.getAttribute('data-check-all');
     all.addEventListener('change', function () {
       document.querySelectorAll('[data-check-group="' + group + '"]').forEach(function (box) { box.checked = all.checked; });
-    });
-  });
-
-  // Show fields only when another field has a matching value: data-show-when="KEY=a|b".
-  document.querySelectorAll('[data-show-when]').forEach(function (el) {
-    var rule = el.getAttribute('data-show-when').split('=');
-    var form = el.closest('form');
-    var ctrl = form && form.querySelector('[name="' + rule[0] + '"]');
-    if (!ctrl) return;
-    var allowed = rule[1].split('|');
-    function current() {
-      if (ctrl.type === 'checkbox') return ctrl.checked ? 'true' : 'false';
-      return ctrl.value;
-    }
-    function apply() { el.hidden = allowed.indexOf(current()) === -1; }
-    ctrl.addEventListener('change', apply);
-    apply();
-  });
-
-  // Long-running submits (AI review): disable the button and say what is happening.
-  document.querySelectorAll('form[data-busy]').forEach(function (f) {
-    f.addEventListener('submit', function () {
-      var b = f.querySelector('button[type=submit]');
-      if (b) { b.disabled = true; b.textContent = f.getAttribute('data-busy'); }
     });
   });
 
@@ -239,8 +243,8 @@
     }
     setTimeout(tick, 2000);
   });
-  // Slim menu: the sidebar folds to icons. The choice is a per-browser convenience (localStorage), never needed:
-  // without it the full menu shows. Narrow windows start slim.
+  // Slim menu: the sidebar folds to icons. nav.js has already applied the remembered choice before the page was
+  // drawn; this only handles the button. A per-browser convenience (localStorage), never needed.
   var navToggle = document.querySelector('[data-nav-toggle]');
   if (navToggle) {
     var NAV_KEY = 'grcpal-nav-slim';
@@ -258,103 +262,257 @@
         if (slim && label) a.title = label.textContent; else a.removeAttribute('title');
       });
     }
-    var saved = null;
-    try { saved = window.localStorage.getItem(NAV_KEY); } catch (e) { saved = null; }
     navToggle.hidden = false;
-    setSlim(saved === null ? window.innerWidth < 1180 && window.innerWidth > 960 : saved === '1');
+    setSlim(document.body.classList.contains('nav-slim'));
     navToggle.addEventListener('click', function () {
       var slim = !document.body.classList.contains('nav-slim');
+      if (slim) groupOpen = navGroups.map(function (g) { return g.open; });
       setSlim(slim);
       try { window.localStorage.setItem(NAV_KEY, slim ? '1' : '0'); } catch (e) { /* storage blocked: not remembered */ }
     });
   }
 
-  // Tabs inside a fragment (control side panel): arrow keys move between tabs, as screen reader users expect.
-  function initTabs(root) {
-    root.querySelectorAll('[data-tabs]').forEach(function (list) {
-      var tabs = Array.prototype.slice.call(list.querySelectorAll('[role=tab]'));
-      function show(tab, focus) {
-        tabs.forEach(function (t) {
-          var on = t === tab;
-          t.setAttribute('aria-selected', on ? 'true' : 'false');
-          t.tabIndex = on ? 0 : -1;
-          var panel = root.querySelector('#' + t.getAttribute('aria-controls'));
-          if (panel) panel.hidden = !on;
-        });
-        if (focus) tab.focus();
-      }
-      tabs.forEach(function (t, i) {
-        t.addEventListener('click', function () { show(t, false); });
-        t.addEventListener('keydown', function (ev) {
-          var next = ev.key === 'ArrowRight' ? i + 1 : ev.key === 'ArrowLeft' ? i - 1 : ev.key === 'Home' ? 0 :
-            ev.key === 'End' ? tabs.length - 1 : null;
-          if (next === null) return;
-          ev.preventDefault();
-          show(tabs[(next + tabs.length) % tabs.length], true);
-        });
+  // Unsaved changes. A form inside [data-unsaved-watch] (the control page and the control side panel) whose fields
+  // differ from what the page was loaded with is "changed". Closing the panel, switching control or following a
+  // link then asks first in an in-page dialog that names the section and the fields; the browser's own question
+  // (beforeunload) covers reloading, typing an address and closing the tab. Submitting a form is not "unsaved".
+  var unsavedDialog = document.querySelector('[data-unsaved-dialog]');
+  var submitting = false, leaving = false, onDiscard = null, onKeep = null;
+  function isChanged(el) {
+    var t = (el.type || '').toLowerCase();
+    if (!el.name || el.disabled || t === 'hidden' || t === 'submit' || t === 'button' || t === 'reset') return false;
+    if (t === 'checkbox' || t === 'radio') return el.checked !== el.defaultChecked;
+    if (t === 'file') return !!(el.files && el.files.length);
+    if (el.tagName === 'SELECT') {
+      var opts = Array.prototype.slice.call(el.options);
+      if (el.multiple) return opts.some(function (o) { return o.selected !== o.defaultSelected; });
+      var dflt = opts.findIndex(function (o) { return o.defaultSelected; });
+      return el.selectedIndex !== (dflt < 0 ? 0 : dflt);
+    }
+    return typeof el.value === 'string' && el.value !== el.defaultValue;
+  }
+  function textOf(node) { return (node && node.textContent || '').replace(/\s+/g, ' ').trim(); }
+  function fieldLabel(el) {
+    if (el.id) {
+      var l = document.querySelector('label[for="' + (window.CSS && CSS.escape ? CSS.escape(el.id) : el.id) + '"]');
+      if (l) return textOf(l);
+    }
+    var wrap = el.closest('label');
+    if (wrap) {
+      var own = Array.prototype.filter.call(wrap.childNodes, function (n) {
+        return n.nodeType === 3 || (n.nodeType === 1 && !n.matches('input, select, textarea'));
+      }).map(textOf).join(' ').trim();
+      if (own) return own;
+    }
+    return el.getAttribute('aria-label') || el.name;
+  }
+  function sectionName(el) {
+    var box = el.closest('section, details.card, .card');
+    var head = box && box.querySelector('h2, summary');
+    return textOf(head) || 'This control';
+  }
+  function changes(scope) {
+    var out = [], seen = {};
+    scope.querySelectorAll('[data-unsaved-watch] form').forEach(function (f) {
+      if ((f.getAttribute('method') || '').toLowerCase() !== 'post') return;
+      Array.prototype.forEach.call(f.elements, function (el) {
+        if (!isChanged(el)) return;
+        var item = sectionName(el) + ': ' + fieldLabel(el);
+        if (!seen[item]) { seen[item] = true; out.push(item); }
       });
-      if (tabs.length) show(tabs[0], false);
+    });
+    return out;
+  }
+  function confirmDiscard(list, discard, keep) {
+    if (!list.length || !unsavedDialog || typeof unsavedDialog.showModal !== 'function') {
+      if (!list.length || window.confirm('Changes are not saved:\n' + list.join('\n') + '\n\nClose without saving?')) discard();
+      else if (keep) keep();
+      return;
+    }
+    var ul = unsavedDialog.querySelector('[data-unsaved-list]');
+    ul.innerHTML = '';
+    list.forEach(function (item) { var li = document.createElement('li'); li.textContent = item; ul.appendChild(li); });
+    onDiscard = discard; onKeep = keep || null;
+    unsavedDialog.showModal();
+    unsavedDialog.querySelector('[data-unsaved-keep]').focus();
+  }
+  if (unsavedDialog) {
+    // Decide at once on the click (the dialog's own "close" event comes later and could act on a newer question).
+    var finish = function (discard) {
+      var go = discard ? onDiscard : onKeep;
+      onDiscard = onKeep = null;
+      if (unsavedDialog.open) unsavedDialog.close();
+      if (go) go();
+    };
+    unsavedDialog.querySelector('[data-unsaved-keep]').addEventListener('click', function () { finish(false); });
+    unsavedDialog.querySelector('[data-unsaved-discard]').addEventListener('click', function () { finish(true); });
+    unsavedDialog.addEventListener('cancel', function (ev) { ev.preventDefault(); finish(false); });  // Escape = keep
+  }
+  document.addEventListener('submit', function (ev) { if (!ev.defaultPrevented) submitting = true; });
+  window.addEventListener('pageshow', function () { submitting = false; leaving = false; });  // back from the cache
+  window.addEventListener('beforeunload', function (ev) {
+    if (submitting || leaving || !changes(document).length) return;
+    ev.preventDefault();
+    ev.returnValue = '';
+  });
+
+  // Control side panel: a control in a list (a whole row, or its link) opens beside the list, over a dimmed
+  // backdrop, with every section of the full page (_control_body.html). Escape, the backdrop, Close and the
+  // browser's Back close it; the list keeps its filters and scroll. Ctrl/Cmd-click, middle-click and no JavaScript
+  // open the full page. The address bar keeps #control=ID so the panel can be shared or reloaded.
+  var drawer = document.querySelector('[data-drawer]');
+  var drawerBody = drawer && drawer.querySelector('[data-drawer-body]');
+  var backdrop = document.querySelector('[data-drawer-backdrop]');
+  var ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+  var SCROLL_KEY = 'grcpal-list-scroll';
+  var opener = null, currentId = null, pushed = false, closingByBack = false;
+  function listUrl() {  // this list page without a one-time message
+    var q = new URLSearchParams(window.location.search);
+    q.delete('msg'); q.delete('err');
+    var s = q.toString();
+    return window.location.pathname + (s ? '?' + s : '');
+  }
+  function hideDrawer() {
+    if (!drawer || drawer.hidden) return;
+    drawer.hidden = true;
+    if (backdrop) backdrop.hidden = true;
+    document.body.classList.remove('drawer-open');
+    drawerBody.innerHTML = '';
+    currentId = null;
+    document.querySelectorAll('[data-panel-row].selected').forEach(function (r) { r.classList.remove('selected'); });
+    if (opener && document.body.contains(opener)) opener.focus();
+  }
+  function requestClose() {  // Close button, backdrop, Escape
+    confirmDiscard(changes(drawerBody), function () {
+      if (pushed) { pushed = false; closingByBack = true; window.history.back(); }  // popstate hides it
+      else { window.history.replaceState(null, '', listUrl()); hideDrawer(); }
     });
   }
+  function wirePanel(id) {
+    enhance(drawerBody);
+    // A save made here comes back to this list with the same panel open (see panel_return in app.py).
+    drawerBody.querySelectorAll('form').forEach(function (f) {
+      if ((f.getAttribute('method') || '').toLowerCase() !== 'post') return;
+      var u = new URL(f.getAttribute('action') || window.location.href, window.location.href);
+      u.searchParams.set('panel', listUrl());
+      f.setAttribute('action', u.pathname + u.search);
+      f.addEventListener('submit', function (ev) {
+        if (ev.defaultPrevented) return;
+        try { window.sessionStorage.setItem(SCROLL_KEY, JSON.stringify({ u: listUrl(), y: window.scrollY })); } catch (e) { /* not kept */ }
+      });
+    });
+    // Section links scroll inside the panel instead of changing the address.
+    drawerBody.querySelectorAll('.section-nav a[href^="#"]').forEach(function (a) {
+      a.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        var target = drawerBody.querySelector('[id="' + a.getAttribute('href').slice(1) + '"]');
+        if (target) { target.scrollIntoView({ block: 'start' }); if (target.tagName === 'DETAILS') target.open = true; }
+      });
+    });
+    document.querySelectorAll('[data-panel-row]').forEach(function (r) {
+      r.classList.toggle('selected', r.getAttribute('data-panel-row') === id);
+    });
+  }
+  function loadPanel(id, link, how) {
+    fetch('/controls/' + encodeURIComponent(id) + '/panel', { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function (html) {
+        var wasOpen = !drawer.hidden;
+        if (link) opener = link;
+        drawerBody.innerHTML = html;  // our own server-rendered, escaped template
+        currentId = id;
+        wirePanel(id);
+        drawer.hidden = false;
+        if (backdrop) backdrop.hidden = false;
+        document.body.classList.add('drawer-open');
+        drawer.scrollTop = 0;
+        var url = listUrl() + '#control=' + id;
+        if (how === 'push' && !wasOpen) { window.history.pushState(null, '', url); pushed = true; }
+        else if (how !== 'none') window.history.replaceState(null, '', url);
+        var title = drawerBody.querySelector('#drawer-title');
+        if (title) title.focus();
+      })
+      .catch(function () { if (link) window.location.href = link.getAttribute('href'); });
+  }
+  function openPanel(id, link, how) {
+    if (!drawer || !ID_RE.test(id)) return;
+    if (!drawer.hidden && id === currentId) return;
+    if (drawer.hidden) { loadPanel(id, link, how); return; }
+    var was = currentId;
+    confirmDiscard(changes(drawerBody), function () { loadPanel(id, link, how); }, function () {
+      if (how === 'none') window.history.replaceState(null, '', listUrl() + '#control=' + was);  // undo a hash change
+    });
+  }
+  function syncFromUrl() {
+    var m = /^#control=([A-Za-z0-9._-]+)$/.exec(window.location.hash);
+    if (m) { if (document.querySelector('a[data-panel]')) openPanel(m[1], document.querySelector('a[data-panel="' + m[1] + '"]'), 'none'); return; }
+    if (!drawer || drawer.hidden) return;
+    if (closingByBack) { closingByBack = false; hideDrawer(); return; }
+    var list = changes(drawerBody);  // the browser's Back while the panel is open
+    if (!list.length) { pushed = false; hideDrawer(); return; }
+    window.history.pushState(null, '', listUrl() + '#control=' + currentId);
+    pushed = true;
+    confirmDiscard(list, function () { pushed = false; closingByBack = true; window.history.back(); });
+  }
 
-  // Control side panel: a control link in a list opens the control beside the list (Overview, Evidence, Tests,
-  // Documents, History, Comments) instead of a new page. Ctrl/Cmd-click, middle-click and no JavaScript open the
-  // full page. The address bar keeps #control=ID so the panel can be shared or reloaded.
-  var drawer = document.querySelector('[data-drawer]');
-  if (drawer) {
-    var drawerBody = drawer.querySelector('[data-drawer-body]');
-    var opener = null;
-    var ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
-    function closeDrawer(keepHash) {
-      if (drawer.hidden) return;
-      drawer.hidden = true;
-      document.body.classList.remove('drawer-open');
-      drawerBody.innerHTML = '';
-      document.querySelectorAll('[data-panel-row].selected').forEach(function (r) { r.classList.remove('selected'); });
-      if (!keepHash && /^#control=/.test(window.location.hash)) {
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
-      }
-      if (opener && document.body.contains(opener)) opener.focus();
-    }
-    function openPanel(id, link) {
-      if (!ID_RE.test(id)) return;
-      opener = link || null;
-      fetch('/controls/' + encodeURIComponent(id) + '/panel', { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
-        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
-        .then(function (html) {
-          drawerBody.innerHTML = html;  // our own server-rendered, escaped template
-          initTabs(drawerBody);
-          drawerBody.querySelectorAll('form[data-confirm]').forEach(function (f) {
-            f.addEventListener('submit', function (ev) { if (!window.confirm(f.getAttribute('data-confirm'))) ev.preventDefault(); });
-          });
-          drawer.hidden = false;
-          document.body.classList.add('drawer-open');
-          document.querySelectorAll('[data-panel-row]').forEach(function (r) {
-            r.classList.toggle('selected', r.getAttribute('data-panel-row') === id);
-          });
-          window.history.replaceState(null, '', window.location.pathname + window.location.search + '#control=' + id);
-          var title = drawerBody.querySelector('#drawer-title');
-          if (title) title.focus();
-        })
-        .catch(function () { if (link) window.location.href = link.getAttribute('href'); });
-    }
-    document.addEventListener('click', function (ev) {
-      if (ev.target.closest('[data-drawer-close]')) { closeDrawer(false); return; }
-      var a = ev.target.closest('a[data-panel]');
-      if (!a || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey || ev.button !== 0) return;
+  document.addEventListener('click', function (ev) {
+    if (ev.defaultPrevented) return;
+    if (drawer && ev.target.closest('[data-drawer-close]')) { requestClose(); return; }
+    if (backdrop && ev.target === backdrop) { requestClose(); return; }
+    var plain = !(ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) && ev.button === 0;
+    var a = ev.target.closest('a[href]');
+    if (a && a.hasAttribute('data-panel') && drawer) {
+      if (!plain) return;
       ev.preventDefault();
-      openPanel(a.getAttribute('data-panel'), a);
-    });
-    document.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Escape' && !drawer.hidden) closeDrawer(false);
-    });
-    function fromHash() {
-      var m = /^#control=([A-Za-z0-9._-]+)$/.exec(window.location.hash);
-      if (m && document.querySelector('a[data-panel]')) openPanel(m[1], document.querySelector('a[data-panel="' + m[1] + '"]'));
-      else if (!m) closeDrawer(true);
+      openPanel(a.getAttribute('data-panel'), a, 'push');
+      return;
     }
-    window.addEventListener('hashchange', fromHash);
-    fromHash();
+    // The whole row of a list opens the panel; real links stay underneath for keyboard and new-tab use.
+    var row = !a && drawer && ev.target.closest('tr[data-panel-row]');
+    if (row && !ev.target.closest('button, input, select, textarea, label, summary')) {
+      var link = row.querySelector('a[data-panel]');
+      if (!link || String(window.getSelection ? window.getSelection() : '').length) return;  // selecting text
+      if (ev.ctrlKey || ev.metaKey) { window.open(link.href, '_blank', 'noopener'); return; }
+      if (plain) openPanel(row.getAttribute('data-panel-row'), link, 'push');
+      return;
+    }
+    // Any other link that leaves this page while a form has changes: ask in the page first.
+    if (!a || !plain || a.target === '_blank' || a.hasAttribute('download')) return;
+    var href = a.getAttribute('href');
+    if (href.charAt(0) === '#') return;
+    var url;
+    try { url = new URL(a.href); } catch (e) { return; }
+    if (url.origin === window.location.origin && url.pathname === window.location.pathname &&
+        url.search === window.location.search && url.hash) return;
+    var list = changes(document);
+    if (!list.length) return;
+    ev.preventDefault();
+    confirmDiscard(list, function () { leaving = true; window.location.href = a.href; });
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (!drawer || drawer.hidden || (unsavedDialog && unsavedDialog.open)) return;
+    if (ev.key === 'Escape') { ev.preventDefault(); requestClose(); return; }
+    if (ev.key !== 'Tab') return;
+    // Keep keyboard focus inside the panel while it is open (it is shown as a dialog over the list).
+    var items = Array.prototype.filter.call(drawer.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex="0"]'),
+      function (el) { return el.getClientRects().length > 0; });
+    if (!items.length) return;
+    var first = items[0], last = items[items.length - 1], active = document.activeElement;
+    if (!drawer.contains(active) || (ev.shiftKey && active === first) || (!ev.shiftKey && active === last)) {
+      ev.preventDefault();
+      (ev.shiftKey ? last : first).focus();
+    }
+  });
+  if (drawer) {
+    window.addEventListener('popstate', syncFromUrl);
+    syncFromUrl();
+    // After saving from the panel the list reloads; put it back where it was scrolled.
+    try {
+      var keep = JSON.parse(window.sessionStorage.getItem(SCROLL_KEY) || 'null');
+      window.sessionStorage.removeItem(SCROLL_KEY);
+      if (keep && keep.u === listUrl() && keep.y > 0) window.scrollTo(0, keep.y);
+    } catch (e) { /* storage blocked: the list opens at the top */ }
   }
 
   // Access reviews: one click keeps every account that has no flag; flagged accounts are always decided one by one.

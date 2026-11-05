@@ -1,74 +1,11 @@
-{% from "_macros.html" import pill, file_link, thread, when %}{# Side panel fragment: loaded by app.js into the drawer in base.html. No page layout of its own. #}
-{% set n_up = uploads|length %}{% set n_docs = documents.policies|length + documents.docs|length + (ctl.links or [])|length %}
+{% from "_macros.html" import pill %}{# Side panel fragment: loaded by app.js into the drawer in base.html. No page layout of its own.
+   The sections come from _control_body.html, the same include as the full page, so each role sees the same thing in both. #}
 <div class="drawer-head" data-panel-id="{{ ctl.id }}">
   <div class="drawer-title"><div class="sub mono">{{ ctl.id }}</div><h2 id="drawer-title" tabindex="-1">{{ ctl.title }}</h2>
-  <div class="sub">{{ pill(status.status) }} Owner: {{ ctl.owner or 'named people' }} · {{ ctl.frequency }} · {{ ctl.type }}</div></div>
+  <div class="sub">{{ pill(status.status) }} Owner: {{ ctl.owner or 'named people' }} · {{ ctl.frequency }} · {{ ctl.type }} · cycle {{ cycle.name }}</div></div>
   <div class="drawer-actions"><a class="btn small" href="/controls/{{ ctl.id }}">Open full page</a>
   <button type="button" class="btn ghost small" data-drawer-close aria-label="Close the control panel">Close</button></div>
 </div>
-<div class="tabs" role="tablist" aria-label="{{ ctl.id }} details" data-tabs>
-  <button type="button" role="tab" id="cpt-overview" aria-controls="cp-overview" aria-selected="true">Overview</button>
-  <button type="button" role="tab" id="cpt-evidence" aria-controls="cp-evidence" aria-selected="false">Evidence{% if n_up %} <span class="tab-n">{{ n_up }}</span>{% endif %}</button>
-  {% if user.sees_everything %}<button type="button" role="tab" id="cpt-tests" aria-controls="cp-tests" aria-selected="false">Tests{% if checks or status.evidence %} <span class="tab-n">{{ checks|length + status.evidence|length }}</span>{% endif %}</button>{% endif %}
-  <button type="button" role="tab" id="cpt-docs" aria-controls="cp-docs" aria-selected="false">Documents{% if n_docs %} <span class="tab-n">{{ n_docs }}</span>{% endif %}</button>
-  {% if user.sees_everything %}<button type="button" role="tab" id="cpt-history" aria-controls="cp-history" aria-selected="false">History</button>{% endif %}
-  <button type="button" role="tab" id="cpt-comments" aria-controls="cp-comments" aria-selected="false">Comments{% if comments %} <span class="tab-n">{{ comments|length }}</span>{% endif %}</button>
+<div class="drawer-sections" data-unsaved-watch data-unsaved-title="{{ ctl.id }}">
+{% include "_control_body.html" %}
 </div>
-
-<section role="tabpanel" id="cp-overview" aria-labelledby="cpt-overview" class="tab-panel">
-  {% if status.override %}<div class="flash ok">Accepted by an admin until {{ status.override.expires }}: {{ status.override.justification }}</div>{% endif %}
-  <h3>What this control does</h3><p>{{ ctl.description }}</p>
-  <h3>How we meet it here</h3>{% if note and note.text %}<div class="note">{{ note.text }}</div>{% else %}<div class="sub">No implementation notes yet.{% if can_note %} <a href="/controls/{{ ctl.id }}#notes">Add notes</a>{% endif %}</div>{% endif %}
-  <h3 class="mt">Evidence we are looking for</h3><ul class="list">{% for w in wanted %}<li>{{ w }}</li>{% else %}<li class="sub">Nothing listed.</li>{% endfor %}</ul>
-  <h3>How it is evidenced</h3><p><b>{{ how.label }}</b>{% if how.sources %} · {{ how.sources|join(', ') }}{% endif %}{% if how.manual %} <span class="sub">· {{ how.manual|join(', ')|lower }}</span>{% endif %}</p>
-  {% for fw, reqs in mappings %}<h3>{{ 'SOC 2 criteria' if fw.id == 'soc2' else fw.name }}</h3><div class="tags">{% for rid, title in reqs %}<span>{% if user.sees_everything %}<a href="{{ '/criteria/' ~ rid if fw.id == 'soc2' else '/frameworks/' ~ fw.id }}">{{ rid }}</a>{% else %}{{ rid }}{% endif %} {{ title }}</span>{% endfor %}</div>{% endfor %}
-  {% if points %}<h3 class="mt">Evidence guidance</h3><ul class="list">{% for crit, pt in points[:6] %}<li><a href="/kb/{{ crit }}#{{ pt.id }}">{{ pt.id }}</a> {{ pt.point }}</li>{% endfor %}{% if points|length > 6 %}<li class="sub">and {{ points|length - 6 }} more on the full page</li>{% endif %}</ul>{% endif %}
-</section>
-
-<section role="tabpanel" id="cp-evidence" aria-labelledby="cpt-evidence" class="tab-panel" hidden>
-  <div class="row-between"><h3 class="m0">Submitted this cycle</h3>{% if can_upload %}<a class="btn small" href="/controls/{{ ctl.id }}#upload">Upload evidence</a>{% endif %}</div>
-  {% if uploads %}<table class="mt-s"><tbody>{% for u in uploads %}<tr><td>{{ file_link(u, user) }}<div class="sub">{{ u.comment }}</div></td><td class="nowrap">{{ pill(u.status) }}<div class="sub">{{ u.uploaded_by }} · {{ u.uploaded_at[:10] }}</div></td></tr>{% endfor %}</tbody></table>
-  {% else %}<div class="empty">Nothing uploaded this cycle.</div>{% endif %}
-  <h3 class="mt">Automated evidence</h3>
-  {% if status.evidence %}<table><tbody>{% for e in status.evidence %}<tr><td>{{ e.artifact }}<div class="sub mono">{{ e.via }}</div></td><td class="nowrap">{{ pill(e.status) }}<div class="sub">{{ e.last or '' }}{% if e.findings %} · {{ e.findings }} findings{% endif %}</div></td></tr>{% endfor %}</tbody></table>
-  {% else %}<div class="sub">No automated evidence for this control.</div>{% endif %}
-  <h3 class="mt">Requests</h3>
-  {% if assignments %}<table><tbody>{% for a in assignments %}<tr><td><a href="/assignments/{{ a.RowKey }}">{{ a.label.splitlines()[0] }}</a><div class="sub">{{ a.assignee }} · due {{ a.due }}</div></td><td>{{ pill('overdue', 'Overdue') if a.overdue else pill(a.status) }}</td></tr>{% endfor %}</tbody></table>
-  {% else %}<div class="sub">No requests this cycle.{% if user.is_admin %} <a href="/controls/{{ ctl.id }}#submissions">Ask someone for evidence</a>{% endif %}</div>{% endif %}
-</section>
-
-{% if user.sees_everything %}<section role="tabpanel" id="cp-tests" aria-labelledby="cpt-tests" class="tab-panel" hidden>
-  <h3>Automated checks</h3>
-  {% if checks %}<table><tbody>{% for k in checks %}{% set last = k.last_result or {} %}<tr><td><b class="mono">{{ k.id }}</b><div class="sub">{{ k.title or '' }} · {{ k.type }} · {{ k.schedule or 'daily' }}</div></td>
-  <td class="nowrap">{% if last.at %}{{ pill('ok' if last.ok else 'attention', 'Passed' if last.ok else 'Failed') }}<div class="sub">{{ last.at[:16]|replace('T', ' ') }}</div>{% else %}<span class="sub">not run yet</span>{% endif %}</td></tr>{% endfor %}</tbody></table>
-  {% else %}<div class="sub">No automated checks. {% if user.is_admin %}<a href="/controls/{{ ctl.id }}#checks">Add a check</a>{% endif %}</div>{% endif %}
-  <h3 class="mt">Collectors</h3>
-  {% if status.evidence %}<table><tbody>{% for e in status.evidence %}<tr><td class="mono">{{ e.via }}</td><td class="nowrap">{{ pill(e.status) }}<div class="sub">{{ e.last or 'no run yet' }}</div></td></tr>{% endfor %}</tbody></table>
-  {% else %}<div class="sub">No collector covers this control.</div>{% endif %}
-  {% if schedule %}<h3 class="mt">Calendar</h3><ul class="list">{% for s in schedule %}<li><a href="{{ s.calendar_url or s.runs_url }}">{{ s.title }}</a> <span class="sub">{{ s.schedule }}{% if s.past_due %} · <b class="bad-text">{{ s.past_due }} past due</b>{% endif %}</span></li>{% endfor %}</ul>{% endif %}
-  {% if ai_reviews %}{% set r = ai_reviews[0] %}<h3 class="mt">Latest AI review</h3><p><span class="pill v-{{ r.verdict }}">{{ r.verdict|replace('_', ' ')|capitalize }}</span> <span class="sub">{{ r.at[:10] }} · {{ r.disposition }}</span></p>{% endif %}
-</section>{% endif %}
-
-<section role="tabpanel" id="cp-docs" aria-labelledby="cpt-docs" class="tab-panel" hidden>
-  <h3>Policies</h3>
-  {% if documents.policies %}<ul class="list">{% for d in documents.policies %}<li><a href="{{ d.href }}">{{ d.title }}</a>{% if d.version %} <span class="sub">v{{ d.version }}</span>{% endif %}</li>{% endfor %}</ul>
-  {% else %}<div class="sub">No policy names this control.</div>{% endif %}
-  <h3 class="mt">Document library</h3>
-  {% if documents.docs %}<ul class="list">{% for d in documents.docs %}<li><a href="{{ d.href }}">{% if d.number %}{{ d.number }} {% endif %}{{ d.title }}</a> {% if d.approved %}{{ pill('approved', 'Approved') }}{% else %}{{ pill('not_started', 'No approved version') }}{% endif %}{% if d.pending and user.sees_everything %} <span class="sub">{{ d.pending }} waiting</span>{% endif %}</li>{% endfor %}</ul>
-  {% else %}<div class="sub">No document in the library names this control.</div>{% endif %}
-  {% if ctl.links %}<h3 class="mt">Reference documents</h3><ul class="list">{% for l in ctl.links %}<li><a href="{{ l.url }}" rel="noopener noreferrer" target="_blank">{{ l.name }}</a></li>{% endfor %}</ul>{% endif %}
-</section>
-
-{% if user.sees_everything %}<section role="tabpanel" id="cp-history" aria-labelledby="cpt-history" class="tab-panel" hidden>
-  <h3>Definition changes</h3>
-  {% if def_history %}<table><tbody>{% for h in def_history[:10] %}<tr><td class="nowrap">v{{ h.version }}</td><td class="nowrap">{{ when(h.at) }}</td><td>{{ h.by }}<div class="sub">{{ h.reason }}</div></td></tr>{% endfor %}</tbody></table>
-  {% else %}<div class="sub">Starter definition, never changed.</div>{% endif %}
-  <h3 class="mt">Activity</h3>
-  {% if history %}<table><tbody>{% for h in history[:20] %}<tr><td class="nowrap">{{ when(h.at) }}</td><td>{{ h.actor }}</td><td class="mono">{{ h.action }}</td></tr>{% endfor %}</tbody></table>
-  {% if history|length > 20 %}<p class="sub"><a href="/controls/{{ ctl.id }}">{{ history|length - 20 }} more on the full page</a></p>{% endif %}
-  {% else %}<div class="sub">No activity recorded yet.</div>{% endif %}
-</section>{% endif %}
-
-<section role="tabpanel" id="cp-comments" aria-labelledby="cpt-comments" class="tab-panel" hidden>
-  {{ thread(comments, can_comment, csrf, '/controls/' ~ ctl.id ~ '#comments', control_id=ctl.id, uploads=uploads) }}
-</section>
