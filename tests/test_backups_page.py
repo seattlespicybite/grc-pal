@@ -655,3 +655,19 @@ def test_failed_backup_shows_a_clear_failure_popup(site, monkeypatch):
                     follow_redirects=False)
     page = client.get(r.headers["location"]).text
     assert "Backup failed" in page and "not writable" in page and 'class="flash err"' in page
+
+
+@pytest.mark.parametrize("days,with_folder", [("35", False), ("90", True), ("", False)])
+def test_azure_retention_is_what_the_page_says(site, monkeypatch, days, with_folder):
+    """B-020: on Azure the storage keeps every backup a fixed number of days; the Keep numbers do not apply there."""
+    portal, client, tmp = site
+    monkeypatch.setenv("GRCPAL_BACKUP_RETENTION_DAYS", days)
+    folder = backup_store.FolderDestination("local", "This server", tmp / "backups", "/var/lib/grcpal/backups")
+    blob = backup_store.BlobDestination("azure", "Azure backup storage (write-once)", Container())
+    monkeypatch.setattr(type(portal), "_backup_dests", lambda self: [blob, folder] if with_folder else [blob])
+    sr = portal.backups_overview(ADMIN)["storage_retention"]
+    assert sr == {"days": int(days) if days else None, "any": True, "only": not with_folder}
+    page = as_(client, ADMIN).get("/backups").text
+    assert (f"<strong>{days} days</strong>" in page) if days else ("35 by default" in page)
+    assert ('id="kd"' in page) is with_folder  # Keep numbers only where they work
+    assert 'name="keep_daily"' in page  # still posted, so saving the schedule keeps them

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "10911923069905076267"
+      "templateHash": "5288766002502112821"
     }
   },
   "parameters": {
@@ -739,6 +739,10 @@
                 {
                   "name": "GRCPAL_BACKUP_CONTAINER",
                   "value": "backups"
+                },
+                {
+                  "name": "GRCPAL_BACKUP_RETENTION_DAYS",
+                  "value": "[string(parameters('backupRetentionDays'))]"
                 }
               ],
               "probes": [
@@ -902,6 +906,10 @@
                 {
                   "name": "GRCPAL_BACKUP_CONTAINER",
                   "value": "backups"
+                },
+                {
+                  "name": "GRCPAL_BACKUP_RETENTION_DAYS",
+                  "value": "[string(parameters('backupRetentionDays'))]"
                 }
               ]
             }

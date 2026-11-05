@@ -358,6 +358,7 @@ var appEnv = [
   { name: 'GRCPAL_SMTP_PASSWORD', secretRef: 'smtp-password' }
   { name: 'GRCPAL_BACKUP_KEY', secretRef: 'backup-key' }
   { name: 'GRCPAL_BACKUP_CONTAINER', value: 'backups' }
+  { name: 'GRCPAL_BACKUP_RETENTION_DAYS', value: string(backupRetentionDays) }
 ]
 
 resource app 'Microsoft.App/containerApps@2024-03-01' = {
