@@ -162,6 +162,13 @@ class Clients:
         self._record("microsoft-graph", request, len(items), pages, first)
         return items
 
+    def graph_get(self, path: str) -> dict:
+        """One Graph object (not a list), for example the Security Defaults policy."""
+        hdrs = {"Authorization": f"Bearer {self._azure_token('https://graph.microsoft.com/.default')}"}
+        resp = self._request("GET", GRAPH + path, headers=hdrs)
+        self._record("microsoft-graph", path, 1, 1, resp)
+        return resp.json()
+
     # ---------------- Azure Resource Graph ----------------
     def arg_query(self, query: str, subscriptions: list[str] | None = None) -> list[dict]:
         url = f"{ARM}/providers/Microsoft.ResourceGraph/resources?api-version=2022-10-01"

@@ -387,7 +387,7 @@ def cmd_serve(args) -> int:
         os.environ["GRCPAL_BASE"] = str(Path(args.base).resolve())
     print(f"GRC-pal portal on http://{args.host}:{args.port}  (auth: {os.environ['GRCPAL_AUTH_MODE']}, "
           f"data: {os.environ['GRCPAL_SQLITE']}{', demo data' if args.demo else ''})")
-    uvicorn.run("grcpal.portal.app:app", host=args.host, port=args.port, log_level="warning")
+    uvicorn.run("grcpal.portal.app:app", host=args.host, port=args.port, log_level="warning", server_header=False)
     return 0
 
 

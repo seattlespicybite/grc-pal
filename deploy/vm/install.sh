@@ -225,6 +225,7 @@ cat > /etc/caddy/Caddyfile <<EOF
 $HOSTNAME_ARG {
 	$TLS_LINE
 	encode zstd gzip
+	header -Server
 	request_body {
 		max_size 60MB
 	}
