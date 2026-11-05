@@ -4,11 +4,19 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+perf/audit-log-reads
 ### Changed
 - **Audit log page is faster on a large log** (B-043). The newest records are read month by month, newest first,
   until the page has enough rows, instead of reading the whole log on every view (about 30 paged calls per view
   at 30,000 records on Azure Tables). The daily export stores its chain verification, and the Audit log page shows
   the last result ("Last daily check ... chain verified"); *Verify integrity* still checks the whole chain on demand.
+=======
+### Fixed
+- **Audit log: no false "tampered" result under concurrent writes** (B-041). The head pointer is now moved with a
+  conditional write (SQLite compare, Azure Tables ETag `If-Match`) and only forward, so two replicas or a scheduled
+  job appending at the same moment can no longer leave it on an older record, which `verify` reported as
+  "head pointer does not match the last record".
+ main
 
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 
