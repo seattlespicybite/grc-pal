@@ -2,12 +2,23 @@
 from __future__ import annotations
 
 import pytest
+from fastapi.testclient import TestClient
 
+from grcpal.portal.app import create_app
 from grcpal.portal.service import Conflict
-from test_portal import ADMIN, ADMIN2, as_, csrf, env  # noqa: F401 - env is a fixture
+from test_portal import ADMIN, ADMIN2, as_, csrf, make_portal
 
 
-def test_a_save_from_an_old_page_is_refused_and_nothing_is_written(env):  # noqa: F811
+@pytest.fixture()
+def env(tmp_path, monkeypatch):
+    monkeypatch.setenv("GRCPAL_AUTH_MODE", "dev")
+    monkeypatch.setenv("GRCPAL_ENV", "dev")
+    monkeypatch.delenv("GRCPAL_PUBLIC_URL", raising=False)
+    portal = make_portal(tmp_path)
+    return portal, TestClient(create_app(portal), base_url="https://grc.example.com")
+
+
+def test_a_save_from_an_old_page_is_refused_and_nothing_is_written(env):
     portal, _ = env
     portal.save_control_note(ADMIN, "IAM-02", "First text.", base_version=0)
     # ADMIN and ADMIN2 both open version 1; ADMIN2 saves first
@@ -21,7 +32,7 @@ def test_a_save_from_an_old_page_is_refused_and_nothing_is_written(env):  # noqa
     assert portal.save_control_note(ADMIN, "IAM-02", "Merged text.", base_version=2)["version"] == 3
 
 
-def test_two_saves_that_race_for_the_same_version_do_not_crash(env, monkeypatch):  # noqa: F811
+def test_two_saves_that_race_for_the_same_version_do_not_crash(env, monkeypatch):
     portal, _ = env
     portal.save_control_note(ADMIN, "IAM-02", "v1")
     real = portal.control_note
@@ -32,7 +43,7 @@ def test_two_saves_that_race_for_the_same_version_do_not_crash(env, monkeypatch)
     assert exc.value.current["text"] == "v1"
 
 
-def test_conflict_page_keeps_what_you_typed(env):  # noqa: F811
+def test_conflict_page_keeps_what_you_typed(env):
     portal, client = env
     portal.save_control_note(ADMIN, "IAM-02", "Old text.")
     as_(client, ADMIN2)
@@ -48,7 +59,7 @@ def test_conflict_page_keeps_what_you_typed(env):  # noqa: F811
     assert r.status_code == 303 and portal.control_note("IAM-02")["text"] == "Merged."
 
 
-def test_control_page_form_carries_the_version(env):  # noqa: F811
+def test_control_page_form_carries_the_version(env):
     portal, client = env
     portal.save_control_note(ADMIN, "IAM-02", "Text.")
     assert 'name="base_version" value="1"' in as_(client, ADMIN).get("/controls/IAM-02").text
