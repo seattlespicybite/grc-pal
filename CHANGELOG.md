@@ -4,6 +4,12 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Changed
+- **Audit log page is faster on a large log** (B-043). The newest records are read month by month, newest first,
+  until the page has enough rows, instead of reading the whole log on every view (about 30 paged calls per view
+  at 30,000 records on Azure Tables). The daily export stores its chain verification, and the Audit log page shows
+  the last result ("Last daily check ... chain verified"); *Verify integrity* still checks the whole chain on demand.
+
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 
 ### Added
