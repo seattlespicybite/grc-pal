@@ -19,6 +19,7 @@ html, body { margin: 0; }
 body { font-family: var(--font); font-size: 15px; line-height: 1.5; color: var(--text); background: var(--bg); }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
+p a:not(.btn), li p a:not(.btn), .flash a:not(.btn) { text-decoration: underline; }  /* links in sentences (WCAG 1.4.1) */
 h1 { font-size: 24px; margin: 0 0 4px; font-weight: 600; }
 h2 { font-size: 17px; margin: 0 0 12px; font-weight: 600; }
 h3 { font-size: 15px; margin: 0 0 8px; font-weight: 600; }
@@ -206,6 +207,7 @@ input[type=file] { max-width: 100%; }
 table.logs td { font-size: 13px; }
 .pill.job-done { color: var(--ok); } .pill.job-running, .pill.job-queued { color: var(--info); }
 .pill.job-failed, .pill.job-done_with_errors { color: var(--bad); }
+.pill.job-interrupted { color: var(--warn); }
 .pill.v-effective, .v-effective { color: var(--ok); } .pill.v-partially_effective, .v-partially_effective { color: var(--warn); }
 .pill.v-not_effective, .pill.v-insufficient_evidence, .pill.v-error, .v-not_effective, .v-insufficient_evidence { color: var(--bad); }
 .pill.sev-high { color: var(--bad); } .pill.sev-medium { color: var(--warn); } .pill.sev-low { color: var(--idle); }
@@ -402,10 +404,12 @@ td:hover > .cal-add, .cal-add:focus { opacity: 1; border-color: var(--idle); tex
 
 
 /* --- Modern SaaS Design System & UX Polish --- */
+/* Light-mode colours meet WCAG 2.2 AA (4.5:1) as text on the page, on cards and on their own 10% status-chip tint;
+   tests/test_contrast.py checks every pair, so change a colour only together with that test (B-060). */
 :root {
   --bg: #f8fafc; --surface: #ffffff; --surface-2: #f1f5f9; --border: #e2e8f0;
-  --text: #0f172a; --muted: #64748b; --brand: #091e26; --accent: #0d9488; --accent-ink: #ffffff;
-  --ok: #059669; --warn: #d97706; --bad: #dc2626; --info: #2563eb; --idle: #64748b;
+  --text: #0f172a; --muted: #475569; --brand: #091e26; --accent: #0f766e; --accent-ink: #ffffff;
+  --ok: #047857; --warn: #92400e; --bad: #b91c1c; --info: #1d4ed8; --idle: #475569;
   --radius: 12px;
   --shadow: 0 1px 3px rgba(15, 23, 42, .05), 0 1px 2px rgba(15, 23, 42, .03);
   --shadow-md: 0 4px 12px rgba(15, 23, 42, .07);
