@@ -4,6 +4,12 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Fixed
+- **Audit log: no false "tampered" result under concurrent writes** (B-041). The head pointer is now moved with a
+  conditional write (SQLite compare, Azure Tables ETag `If-Match`) and only forward, so two replicas or a scheduled
+  job appending at the same moment can no longer leave it on an older record, which `verify` reported as
+  "head pointer does not match the last record".
+
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 
 ### Added
