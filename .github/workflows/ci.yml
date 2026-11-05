@@ -19,6 +19,9 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: pip
+      - name: The image's exact package versions (Python 3.12 = the image's Python)
+        if: matrix.python == '3.12'
+        run: pip install --require-hashes --only-binary :all: -r requirements/image.txt
       - run: pip install -e ".[dev]" pyflakes
       - name: Browser for the real-browser smoke test
         if: matrix.python == '3.12'

@@ -16,9 +16,16 @@ updates:
     directory: /
     schedule: {interval: weekly}
     cooldown: {default-days: 7}
-  - package-ecosystem: docker
-    directory: /
+  - package-ecosystem: pip
+    directory: /requirements        # hash-locked packages the image installs (Dockerfile); regenerate with uv after pyproject changes
     schedule: {interval: weekly}
+    cooldown: {default-days: 7}
+    groups:
+      image: {patterns: ["*"]}
+  - package-ecosystem: docker
+    directory: /                    # the base image is pinned by digest; this proposes new digests
+    schedule: {interval: weekly}
+    cooldown: {default-days: 7}
   - package-ecosystem: docker-compose
     directory: /
     schedule: {interval: monthly}
