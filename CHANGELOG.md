@@ -4,6 +4,14 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Added
+- **Azure alert when the daily evidence collection does not run** (B-025). GRC-pal already emails admins about
+  failed collectors and checks (Calendar > Email alerts), and the calendar's automated rows show the same runs, so
+  calendar failures are covered. What was not covered: the collection never starting at all (job deleted, broken
+  image, schedule off), because those emails are sent by the run itself. `grcpal collect --all` now logs one
+  `collect.run_all` line per run, and with `--alert-email` Azure emails when none is logged in two days
+  (`collectAlertWindow`). Re-run `deploy.sh` to add the alert.
+
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 
 ### Added

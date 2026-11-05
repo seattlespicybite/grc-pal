@@ -129,6 +129,11 @@ def cmd_collect(args) -> int:
     if args.all and (os.getenv("GRCPAL_TABLES_URL") or os.getenv("GRCPAL_SQLITE")):
         failed += _access_pull(args)  # before the email, so a failed pull is in tonight's failure alert
         _automation_mail(args)
+    if args.all:
+        # One line per scheduled run. Azure alerts when none is logged for a while (main.bicep collectAlert): the
+        # app's own failure emails are sent by this very run, so they cannot report that the run never happened.
+        print(json.dumps({"event": "collect.run_all", "ok": failed == 0, "failed": failed, "version": __version__}),
+              flush=True)
     return 1 if failed else 0
 
 
