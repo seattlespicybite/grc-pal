@@ -161,3 +161,35 @@ def test_deploy_with_dns_records_binds_and_keeps_the_binding(tmp_path):
 def test_deploy_rejects_a_bad_domain(tmp_path):
     code, out, calls, _ = _deploy(tmp_path, "--custom-domain", "grc example.com")
     assert code == 1 and "must be a host name" in out and not calls
+
+
+def test_image_is_built_only_from_pinned_inputs():
+    """What CI tested and scanned is what the release ships: base image by digest, every package hash-locked."""
+    import tomllib
+
+    dockerfile = (ROOT / "Dockerfile").read_text()
+    froms = re.findall(r"^FROM (\S+)", dockerfile, re.M)
+    assert froms and all(re.fullmatch(r"python:3\.12-slim@sha256:[0-9a-f]{64}", f) for f in froms), froms
+    assert "--require-hashes --only-binary :all: -r requirements/image.txt" in dockerfile
+    assert "--no-deps --no-build-isolation --no-index ." in dockerfile, "GRC-pal itself must not pull anything"
+    lock = (ROOT / "requirements/image.txt").read_text()
+    pinned = {m.lower().replace("_", "-") for m in re.findall(r"^([A-Za-z0-9_.-]+)==", lock, re.M)}
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
+    wanted = list(project["dependencies"])
+    for extra in ("portal", "aws", "gcp"):
+        wanted += project["optional-dependencies"][extra]
+    names = {re.split(r"[\[<>=!~ ;]", w, maxsplit=1)[0].lower().replace("_", "-") for w in wanted}
+    missing = names - pinned
+    assert not missing, f"requirements/image.txt is stale, regenerate it (see the Dockerfile): {missing}"
+    for block in re.split(r"\n(?=[A-Za-z0-9_.-]+==)", lock.split("\n", 2)[2]):
+        if "==" in block:
+            assert "--hash=sha256:" in block, block.splitlines()[0]
+
+
+def test_release_scans_the_pushed_digest_before_tagging_it():
+    wf = (ROOT / ".github/workflows/release.yml").read_text()
+    build, scan, tag = wf.index("push-by-digest=true"), wf.index("--exit-code 1"), wf.index("imagetools create")
+    assert build < scan < tag, "push untagged, scan that digest, then tag"
+    assert '"$IMAGE@$DIGEST"' in wf[scan - 400:scan + 200]
+    assert "tags: ${{ steps.meta.outputs.tags }}" not in wf, "no tags at build time"
+    assert "for platform in linux/amd64 linux/arm64" in wf

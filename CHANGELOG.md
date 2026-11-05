@@ -58,6 +58,11 @@ All notable changes are listed here. The project follows [semantic versioning](h
   click. Applies at the next `deploy.sh` run.
 
 ### Security
+- **Reproducible release image.** Base image pinned by digest; every Python package installed from
+  `requirements/image.txt` with SHA-256 hashes (`--require-hashes --only-binary :all:`), GRC-pal itself installed
+  without any download; CI's Python 3.12 tests and pip-audit use the same locked set; Dependabot keeps the lock and
+  the digest current (7-day cooldown). The release workflow pushes by digest, scans that exact digest with Trivy on
+  both platforms, and only then tags it.
 - Pinned CI scanner tools: `filelock` 4.1.0 → 4.2.9 (17 advisories, the open Dependabot alerts on main). App
   dependencies had no known vulnerabilities (pip-audit).
 - No `Server` header from Caddy on VMs or from `grcpal serve` (the container already sent none).
