@@ -4,6 +4,13 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+fix/orphaned-jobs
+### Fixed
+- **Jobs no longer stay "running" forever after a restart** (B-042). A replica stopped mid-job (scale to zero,
+  restart, update) left the job row "running", which also blocked new runs of the same kind (for example
+  *Collect now*). Running jobs now send a heartbeat every minute; a queued or running job without a heartbeat for
+  10 minutes is marked **interrupted** with a message to start it again, and a warning goes to the event log.
+=======
 perf/audit-log-reads
 ### Changed
 - **Audit log page is faster on a large log** (B-043). The newest records are read month by month, newest first,
@@ -17,6 +24,7 @@ perf/audit-log-reads
   job appending at the same moment can no longer leave it on an older record, which `verify` reported as
   "head pointer does not match the last record".
  main
+main
 
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 
