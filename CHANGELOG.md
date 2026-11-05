@@ -4,7 +4,21 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
+
 ### Added
+- **Risk register in the portal** (Compliance > Risk register, CC3.1 to CC3.4, CC9.1). Likelihood × impact before
+  and with controls, treatment, linked controls, owner, next review; fraud as its own category; heat maps; CSV
+  export. Accepted risks need a reason, the accepting admin and an expiry. Every change needs a reason and keeps a
+  version. Starter risks from `registers/risks.yaml` import add-only. *Approve the assessment* stores the whole
+  register write-once as RSK-01 evidence (`risk_assessment`) with its SHA-256. Admins change it, auditors read it,
+  control owners do not see it. New tables `risks`, `riskversions`, `riskapprovals` (backed up; no migration).
+- **Policies page rebuilt on the document library.** Approved versions publish themselves, grouped by tier, with
+  *Registers and reports* for reference. Per-document acknowledgement (everyone, admins only, nobody); each
+  acknowledgement keeps version and SHA-256 and restarts with a new version. **Ask for acknowledgement** emails those
+  missing and turns on weekly reminders (nothing is sent until an admin asks). *Policies to read* on My work.
+  Acknowledgement report (CSV) for auditors; the cycle export includes library acknowledgements. Markdown policies
+  from the program repository keep working in their own section. Routes `/policies/doc/{id}`.
 - **Sign in with Microsoft on a VM** (local sign-in mode). Configuration > Sign in with Microsoft takes a separate
   Entra app registration (no API permissions) with a certificate from `grcpal ms-cert`; the sign-in page then shows
   a Sign in with Microsoft button. The person always clicks it and picks the account at Microsoft
@@ -58,6 +72,11 @@ All notable changes are listed here. The project follows [semantic versioning](h
   click. Applies at the next `deploy.sh` run.
 
 ### Security
+- **Reproducible release image.** Base image pinned by digest; every Python package installed from
+  `requirements/image.txt` with SHA-256 hashes (`--require-hashes --only-binary :all:`), GRC-pal itself installed
+  without any download; CI's Python 3.12 tests and pip-audit use the same locked set; Dependabot keeps the lock and
+  the digest current (7-day cooldown). The release workflow pushes by digest, scans that exact digest with Trivy on
+  both platforms, and only then tags it.
 - Pinned CI scanner tools: `filelock` 4.1.0 → 4.2.9 (17 advisories, the open Dependabot alerts on main). App
   dependencies had no known vulnerabilities (pip-audit).
 - No `Server` header from Caddy on VMs or from `grcpal serve` (the container already sent none).

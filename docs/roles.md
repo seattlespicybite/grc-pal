@@ -52,6 +52,8 @@ the person who defines controls from the people who operate them, which auditors
 | Vendors: assurance level and baseline controls on a review; Entra ID sign-in check when offboarding | ✓ | own vendors |  |
 | Vendors: record a business owner's risk acceptance | ✓ |  |  |
 | Vendors: sign off a review, approve or reject a new vendor, close offboarding | ✓, never a review they submitted while another admin is active |  |  |
+| Risk register: see risks, history, heat map, CSV | ✓ |  | ✓ |
+| Risk register: add, change (reason required), record a review, import the starter risks, approve the assessment | ✓ |  |  |
 | Security questionnaire: view and download | ✓ | ✓ | ✓ (every version) |
 | Security questionnaire: edit and save a new version | ✓ |  |  |
 | Audit log and integrity check | ✓ |  | ✓ |

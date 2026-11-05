@@ -1,0 +1,34 @@
+{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}{{ doc.title }}{% endblock %}
+{% block content %}
+{% set st = doc.status %}{% set mine = st.rows.get(user.email) %}
+<div class="page-head"><div><div class="sub"><a href="/policies">Policies</a> /</div><h1>{% if doc.number %}{{ doc.number }} · {% endif %}{{ doc.title }}</h1>
+<div class="sub">Version {{ doc.version }}{% if doc.approved_at %} · approved {{ doc.approved_at[:10] }}{% endif %} · owner {{ doc.owner or '-' }} · approver {{ doc.approver or '-' }} · next review {{ doc.next_review or '-' }}</div></div>
+<div class="head-actions">{% if user.sees_everything %}<a class="btn ghost small" href="/library/{{ doc.id }}">Open in the library</a>{% endif %}</div></div>
+<div class="grid g-main">
+<section class="card"><h2>Read it</h2>
+{% if doc.summary %}<p>{{ doc.summary }}</p>{% endif %}
+<ul class="list">{% for v in doc.variants %}<li><a href="/library/{{ doc.id }}/files/{{ v.RowKey }}">{{ v.filename }}</a> <span class="sub">version {{ v.label }}{% if v.variant %} · {{ v.variant }}{% endif %}</span></li>{% endfor %}</ul>
+<p class="sub mono mt">sha256 {{ doc.sha256[:24] }}…</p>
+{% if register %}<p class="sub">A register or report: published for reference, not acknowledged.</p>{% endif %}</section>
+<aside>
+<section class="card"><h2>Acknowledgement</h2>
+{% if doc.ack == 'none' %}<p class="sub">No acknowledgement needed.</p>
+{% elif user.is_auditor %}<p class="sub">Auditors see who acknowledged below and in the report.</p>
+{% elif mine %}<p>{{ pill('ok', 'Acknowledged') }} {{ mine.at[:10] }}, version {{ mine.version }}</p>
+{% elif user.email in st.audience %}<form method="post" action="/policies/doc/{{ doc.id }}/ack"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="vid" value="{{ doc.vid }}">
+<label class="check"><input type="checkbox" name="read" value="1" required> I have read version {{ doc.version }} and will follow it</label>
+<div class="actions"><button class="btn" type="submit">Acknowledge</button></div></form>
+{% else %}<p class="sub">You are not asked to acknowledge this document.</p>{% endif %}</section>
+{% if user.sees_everything and doc.ack != 'none' %}<section class="card"><h2>{{ st.acked|length }} of {{ st.audience|length }} acknowledged</h2>
+{% if doc.ack_requested_at %}<p class="sub">Asked on {{ doc.ack_requested_at[:10] }}; reminders go out weekly until everyone has acknowledged.</p>{% endif %}
+{% if st.missing %}<h3>Not yet</h3><ul class="list">{% for e in st.missing %}<li>{{ e }}</li>{% endfor %}</ul>
+{% if user.is_admin %}<form method="post" action="/policies/doc/{{ doc.id }}/request" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small" type="submit">{{ 'Ask again' if doc.ack_requested_at else 'Ask for acknowledgement' }} ({{ st.missing|length }})</button></form>{% endif %}{% endif %}
+{% if st.acked %}<details class="mt"><summary>Acknowledged</summary><ul class="list">{% for e in st.acked %}<li>{{ e }} <span class="sub">{{ st.rows[e].at[:10] }}</span></li>{% endfor %}</ul></details>{% endif %}
+</section>{% endif %}
+{% if user.is_admin and not register %}<section class="card"><h2>Who must acknowledge</h2>
+<form method="post" action="/policies/doc/{{ doc.id }}/audience"><input type="hidden" name="csrf" value="{{ csrf }}">
+<select name="ack" data-autosubmit aria-label="Who must acknowledge">{% for k, label in ack_choices.items() %}<option value="{{ k }}" {{ 'selected' if k == doc.ack }}>{{ label }}</option>{% endfor %}</select>
+<noscript><button class="btn small ghost" type="submit">Save</button></noscript></form>
+<p class="hint">Each acknowledgement records the version and its SHA-256. When a new version is approved, people acknowledge again.</p></section>{% endif %}
+</aside></div>
+{% endblock %}

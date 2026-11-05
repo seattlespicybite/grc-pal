@@ -27,7 +27,7 @@ TABLES = ("users", "cycles", "assignments", "uploads", "comments", "overrides", 
           "aireviews", "aiaudits", "controledits", "controlhistory", "controlnotes", "calendardecisions",
           "calendaractivities", "calendarversions", "vendors", "vendorversions", "vendorreviews", "vendorfiles",
           "questionnaires", "vendorimports", "docs", "docversions", "arcampaigns", "arentries", "arapps", "arschedules",
-          "matriximports", "sessions", "account_links", "signinlimits", "signinflows", "meta")
+          "matriximports", "risks", "riskversions", "riskapprovals", "sessions", "account_links", "signinlimits", "signinflows", "meta")
 # Sign-in sessions, one-time setup/reset links, sign-in failure counters and Microsoft sign-ins in progress are
 # never backed up: restoring them
 # would revive old sign-ins, used or expired links and old locks. After a restore everyone signs in again.

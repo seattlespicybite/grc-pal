@@ -243,7 +243,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                    review_count=len(portal.reviewable(user)), ar_open=portal.access_review_badge(user),
                    calendar_due=portal.calendar_past_due_count() if user.is_admin else 0,
                    my_open=sum(1 for a in portal.assignments(user=user, mine=True) if a["status"] in ("open", "returned"))
-                   + (len(portal.pending_approvals(user)["mine"]) if user.can_write else 0),
+                   + (len(portal.pending_approvals(user)["mine"]) if user.can_write else 0)
+                   + (len(portal.documents_to_acknowledge(user)) if user.can_write else 0),
                    flash=request.query_params.get("msg"), error=request.query_params.get("err"))
         return templates.TemplateResponse(request, name, ctx)
 
@@ -332,7 +333,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         attention = [c for c in data["controls"] if c["status"] in ("attention", "findings")][:8]
         work = portal.assignments()
         progress = {s: sum(1 for a in work if a["status"] == s) for s in ("open", "submitted", "returned", "approved")}
-        policies = [(pol, portal.policy_status(pol)) for pol in portal.catalog.policies if pol.get("acknowledge", True)]
+        policies = [d for d in portal.published_documents(user) if d["ack"] != "none"]
         return render(request, user, "dashboard.html", data=data, by_cat=by_cat, attention=attention, progress=progress,
                       overdue=[a for a in work if a["overdue"]][:8], policies=policies)
 
@@ -575,6 +576,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         owned = sorted(portal.owned_controls(user.email))
         approvals = portal.pending_approvals(user)
         return render(request, user, "work.html", rows=rows, show=show, managed=managed, approvals=approvals,
+                      to_read=portal.documents_to_acknowledge(user),
                       owned=[portal.catalog.control(c) for c in owned])
 
     @app.get("/assignments/{assignment_id}", response_class=HTMLResponse)
@@ -965,9 +967,64 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     # ------------------------------------------------------------------ policies
     @app.get("/policies", response_class=HTMLResponse)
     def policies(request: Request, user: User = Depends(current_user)):
-        portal = p()
-        rows = [(pol, portal.policy_status(pol)) for pol in portal.catalog.policies]
-        return render(request, user, "policies.html", rows=rows)
+        """Approved, in-force documents by tier (policies.py); Markdown policies from the repository in their own
+        section."""
+        return render(request, user, "policies.html", sections=p().policy_sections(user))
+
+    @app.get("/policies/acknowledgements.csv")
+    def policies_ack_report(user: User = Depends(current_user)):
+        try:
+            data = p().acknowledgement_report(user)
+        except Forbidden as exc:
+            raise _HTTPError(403, str(exc)) from exc
+        return _attachment(f"grcpal-policy-acknowledgements-{p().today}.csv", data)
+
+    @app.get("/policies/doc/{did}", response_class=HTMLResponse)
+    def policy_doc(request: Request, did: str, user: User = Depends(current_user)):
+        from grcpal.portal.policies import ACK_CHOICES, REGISTER_KINDS
+
+        try:
+            doc = p().published_document(user, did)
+        except Invalid as exc:
+            raise _HTTPError(404, str(exc)) from exc
+        return render(request, user, "policy_doc.html", doc=doc, ack_choices=ACK_CHOICES,
+                      register=doc["kind"] in REGISTER_KINDS, nav_active="policies")
+
+    @app.post("/policies/doc/{did}/ack")
+    def policy_doc_ack(request: Request, did: str, vid: str = Form(""), read: str = Form(""), csrf: str = Form(""),
+                       user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        try:
+            p().acknowledge_document(user, did, vid, read == "1")
+        except Forbidden as exc:
+            raise _HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(f"/policies/doc/{did}", err=str(exc))
+        return back(f"/policies/doc/{did}", msg="Thank you. Your acknowledgement is recorded.")
+
+    @app.post("/policies/doc/{did}/request")
+    def policy_doc_request(request: Request, did: str, csrf: str = Form(""), user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        try:
+            r = p().request_acknowledgement(user, did)
+        except Forbidden as exc:
+            raise _HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(f"/policies/doc/{did}", err=str(exc))
+        return back(f"/policies/doc/{did}", msg=f"Asked {len(r['sent'])} people. Weekly reminders follow until all "
+                                                "have acknowledged")
+
+    @app.post("/policies/doc/{did}/audience")
+    def policy_doc_audience(request: Request, did: str, ack: str = Form(""), csrf: str = Form(""),
+                            user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        try:
+            p().set_document_ack(user, did, ack)
+        except Forbidden as exc:
+            raise _HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(f"/policies/doc/{did}", err=str(exc))
+        return back(f"/policies/doc/{did}", msg="Saved")
 
     @app.get("/policies/{policy_id}", response_class=HTMLResponse)
     def policy_detail(request: Request, policy_id: str, user: User = Depends(current_user)):
@@ -999,7 +1056,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     from types import SimpleNamespace
 
     from grcpal.portal import (routes_access, routes_accounts, routes_automation, routes_backups, routes_calendar,
-                               routes_doclib, routes_extra, routes_matrix, routes_vendors)
+                               routes_doclib, routes_extra, routes_matrix, routes_risks, routes_vendors)
 
     if mode == "local":
         routes_accounts.register(app, SimpleNamespace(p=p, templates=templates, HTTPError=_HTTPError, ip_of=ip_of,
@@ -1028,6 +1085,9 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     routes_matrix.register(app, SimpleNamespace(
         p=p, current_user=current_user, check_csrf=check_csrf, render=render, back=back,
         invalidate=invalidate, HTTPError=_HTTPError, attachment=_attachment))
+    routes_risks.register(app, SimpleNamespace(
+        p=p, current_user=current_user, check_csrf=check_csrf, render=render, back=back,
+        HTTPError=_HTTPError, attachment=_attachment))
     routes_automation.register(app, SimpleNamespace(
         p=p, current_user=current_user, need=need, check_csrf=check_csrf, render=render, back=back,
         invalidate=invalidate, HTTPError=_HTTPError))

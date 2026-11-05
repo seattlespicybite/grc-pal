@@ -1,8 +1,18 @@
-{% extends "base.html" %}{% block title %}Policies{% endblock %}
+{% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}Policies{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Policies</h1><div class="sub">Approved policies from the program repository. Read each one and acknowledge it; acknowledgments are recorded per version.</div></div></div>
-<div class="card table-wrap">{% if rows %}<table><thead><tr><th>Policy</th><th>Version</th><th>Owner</th><th>Next review</th><th>{{ 'Acknowledged' if user.sees_everything else 'You' }}</th></tr></thead><tbody>
-{% for pol, st in rows %}<tr><td><a href="/policies/{{ pol.id }}"><b>{{ pol.title }}</b></a></td><td>{{ pol.version }}</td><td>{{ pol.owner }}</td><td>{{ pol.next_review }}</td>
-<td>{% if user.sees_everything %}{{ st.acked|length }} / {{ st.acked|length + st.missing|length }}{% elif not pol.acknowledge %}<span class="sub">not required</span>{% elif user.email in st.acked %}<span class="pill ok">Acknowledged</span>{% else %}<span class="pill pending">To read</span>{% endif %}</td></tr>{% endfor %}
-</tbody></table>{% else %}<div class="empty">No policies yet. Add Markdown files to policies/ in your GRC-pal instance repository.</div>{% endif %}</div>
+{% set todo = namespace(n=0) %}{% for s in sections %}{% for d in s.docs if d.mine == 'todo' %}{% set todo.n = todo.n + 1 %}{% endfor %}{% endfor %}
+<div class="page-head"><div><h1>Policies</h1>
+<div class="sub">The approved, in-force documents of {{ org }}. A document appears here as soon as a version is approved in the document library.{% if not user.sees_everything %} Read the ones marked <b>To read</b> and confirm.{% endif %}</div></div>
+<div class="head-actions">{% if user.sees_everything %}<a class="btn ghost small" href="/policies/acknowledgements.csv">Acknowledgement report (CSV)</a>{% endif %}
+{% if user.sees_everything %}<a class="btn ghost small" href="/library">Document library</a>{% endif %}</div></div>
+{% if todo.n %}<div class="flash ok" role="status">{{ todo.n }} document{{ 's' if todo.n != 1 }} to read and acknowledge.</div>{% endif %}
+{% for s in sections %}<section class="card"><div class="row-between"><h2 class="m0">{{ s.title }}</h2><span class="sub">{{ s.note }}</span></div>
+<div class="table-wrap mt-s"><table><thead><tr><th>Document</th><th>Version</th><th>Owner</th><th>Next review</th><th>{{ 'Acknowledged' if user.sees_everything else 'You' }}</th></tr></thead><tbody>
+{% for d in s.docs %}{% set st = d.status %}<tr><td><a href="{{ d.href }}"><b>{% if d.number %}<span class="mono">{{ d.number }}</span> {% endif %}{{ d.title }}</b></a>{% if d.summary %}<div class="sub">{{ d.summary }}</div>{% endif %}</td>
+<td class="nowrap">{{ d.version }}{% if d.approved_at %}<div class="sub">{{ d.approved_at[:10] }}</div>{% endif %}</td><td>{{ d.owner or '-' }}</td>
+<td class="nowrap">{{ d.next_review or '-' }}{% if d.review_state == 'overdue' %} {{ pill('overdue', 'Overdue') }}{% elif d.review_state == 'soon' %} {{ pill('pending', 'Soon') }}{% endif %}</td>
+<td class="nowrap">{% if d.ack == 'none' %}<span class="sub">Not needed</span>{% elif user.sees_everything %}{{ st.acked|length }} / {{ st.audience|length }}{% if d.ack == 'admins' %} <span class="sub">admins</span>{% endif %}
+{% elif d.mine == 'done' %}{{ pill('ok', 'Acknowledged') }}{% elif d.mine == 'todo' %}{{ pill('pending', 'To read') }}{% else %}<span class="sub">Not needed</span>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% else %}<div class="card"><div class="empty">Nothing is published yet. Approve a version in the <a href="/library">document library</a> and it appears here.</div></div>{% endfor %}
 {% endblock %}

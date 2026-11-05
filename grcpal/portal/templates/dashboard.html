@@ -44,8 +44,8 @@
 <div class="mini-stat"><div class="n-s">{{ progress[s] }}</div><div class="sub">{{ label }}</div></div>{% endfor %}</div>
 {% if user.is_admin and review_count %}<p class="mt"><a class="btn small" href="/reviews">Review {{ review_count }} submission{{ 's' if review_count != 1 }}</a></p>{% endif %}</section>
 <section class="card"><h2>Policy acknowledgments</h2>
-{% if policies %}<table><tbody>{% for pol, st in policies %}{% set total = st.acked|length + st.missing|length %}
-<tr><td><a href="/policies/{{ pol.id }}">{{ pol.title }}</a> <span class="sub">v{{ pol.version }}</span></td><td class="nowrap">{{ st.acked|length }} / {{ total }}</td></tr>{% endfor %}</tbody></table>
+{% if policies %}<table><tbody>{% for pol in policies %}{% set st = pol.status %}{% set total = st.acked|length + st.missing|length %}
+<tr><td><a href="{{ pol.href }}">{% if pol.number %}{{ pol.number }} {% endif %}{{ pol.title }}</a> <span class="sub">v{{ pol.version }}</span></td><td class="nowrap">{{ st.acked|length }} / {{ total }}</td></tr>{% endfor %}</tbody></table>
 {% else %}<div class="empty">No policies published yet.</div>{% endif %}</section></div>
 <section class="card"><h2>Overdue requests</h2>
 {% if overdue %}<div class="table-wrap"><table><thead><tr><th>Work</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>

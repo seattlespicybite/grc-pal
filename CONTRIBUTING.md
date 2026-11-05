@@ -30,7 +30,8 @@ grcpal serve --demo          # http://localhost:8000
 - **New collectors:** add `grcpal/collectors/<name>.py` with `PLATFORM`, `DESCRIPTION` and
   `run(ctx, run)`, register it in `collectors/__init__.py`, and add a test with canned API data.
   Collectors must be read-only against the source system.
-- Keep dependencies few. Every new dependency needs a reason in the pull request.
+- Keep dependencies few. Every new dependency needs a reason in the pull request. After changing dependencies in
+  `pyproject.toml`, regenerate the image lock (command at the top of the `Dockerfile`); a test fails while it is stale.
 
 ## Style
 

@@ -107,6 +107,17 @@ def policy_reminder(p, policy: dict, actor) -> dict:
             "button": ("Read and acknowledge", p.link(f"/policies/{policy['id']}"))}
 
 
+def document_ack(p, doc: dict, first: bool) -> dict:
+    """Ask someone to read and acknowledge a published document. Number, title, version and a link only."""
+    name = f"{doc['number']} {doc['title']}".strip()
+    return {"subject": f"{'Please read' if first else 'Reminder: please read'} and acknowledge: {name} v{doc['version']}",
+            "title": f"Read and acknowledge {name}",
+            "intro": ("A new version was approved. Please read it and confirm you have read it. It takes a few minutes."
+                      if first else "You have not acknowledged this document yet. Please read it and confirm."),
+            "fields": [("Document", name), ("Version", doc["version"]), ("Owner", doc["owner"] or "-")],
+            "button": ("Read and acknowledge", p.link(doc["href"]))}
+
+
 def doc_approval(p, kind: str, number: str, title: str, did: str, v: dict, note: str, actor) -> dict:
     """Approval workflow emails: request, reminder, approved, denied, closed (withdrawn, reassigned or approved
     directly). Only the document's number, title and version and a link; never the file or its text."""

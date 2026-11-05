@@ -15,6 +15,8 @@ How to read it
 """
 from __future__ import annotations
 
+from authz_world import RISK_FORM
+
 A = frozenset({"admin"})
 AU = frozenset({"admin", "auditor"})                                  # staff who see everything
 STAFF = frozenset({"admin", "owner", "contributor"})                  # may use the portal, cannot read all
@@ -88,6 +90,12 @@ PARAMS: dict[str, dict[str, str]] = {
     "/calendar/auto/{source}": {"source": "auto_source"},
     "/automation/{name}/verify": {"name": "collector"},
     "/library/{did}": {"did": "doc"},
+    "/policies/doc/{did}": {"did": "doc_pub"},
+    "/policies/doc/{did}/ack": {"did": "doc_pub"},
+    "/policies/doc/{did}/request": {"did": "doc_pub"},
+    "/policies/doc/{did}/audience": {"did": "doc_pub"},
+    "/risks/{rid}": {"rid": "risk"},
+    "/risks/{rid}/review": {"rid": "risk"},
     "/library/{did}/edit": {"did": "doc"},
     "/library/{did}/official": {"did": "doc"},
     "/library/{did}/template": {"did": "doc"},
@@ -251,6 +259,14 @@ FORMS: dict[tuple[str, str], object] = {
     ("POST", "/library/trash"): lambda w: {"ids": w.doc_to_trash, "reason": "No longer needed"},
     ("POST", "/library/trash/restore"): lambda w: {"doc": w.doc_trashed},
     ("POST", "/library/{did}/edit"): {"title": "A better title for the test", "summary": "Summary"},
+    ("POST", "/policies/doc/{did}/ack"): lambda w: {"vid": w.portal.published_document(w.who["admin"], w.doc_pub)["vid"], "read": "1"},
+    ("POST", "/policies/doc/{did}/request"): {},
+    ("POST", "/policies/doc/{did}/audience"): {"ack": "admins"},
+    ("POST", "/risks/new"): RISK_FORM,
+    ("POST", "/risks/{rid}"): {**RISK_FORM, "impact": "5", "reason": "re-rated after an incident"},
+    ("POST", "/risks/{rid}/review"): {"note": "controls still effective"},
+    ("POST", "/risks/approve"): {"note": "annual assessment for the test"},
+    ("POST", "/risks/import"): {},
     ("POST", "/library/{did}/official"): {"variant": "", "change": "minor", "comment": "Another draft",
                                           "label": "", "__files__": pdf("policy.pdf")},
     ("POST", "/library/{did}/template"): {"comment": "New template", "__files__": pdf("template.pdf")},
@@ -336,6 +352,8 @@ _GROUPS: list[tuple[frozenset, str]] = [
            POST /access-reviews/{cid}/close | POST /access-reviews/{cid}/confirm | POST /access-reviews/{cid}/reopen
            POST /access-reviews/{cid}/invite | POST /access-reviews/{cid}/tickets | POST /access-reviews/{cid}/check
            POST /access-reviews/{cid}/confirm-checked | POST /access-reviews/schedule
+           POST /policies/doc/{did}/request | POST /policies/doc/{did}/audience
+           POST /risks/new | POST /risks/{rid} | POST /risks/{rid}/review | POST /risks/approve | POST /risks/import
            POST /ai/audits | POST /assignments | POST /assignments/{assignment_id}/cancel
            POST /assignments/{assignment_id}/edit | POST /assignments/{assignment_id}/remind
            POST /backups/download | POST /backups/kit | POST /backups/now | POST /backups/restore
@@ -370,10 +388,12 @@ _GROUPS: list[tuple[frozenset, str]] = [
             GET /evidence-signing-key.pem | GET /evidence/{source}/{run} | GET /evidence/{source}/{run}/{filename}
             GET /frameworks | GET /frameworks/{fid} | GET /jobs | GET /jobs/{job_id} | GET /library/register.xlsx
             GET /library/trash | GET /library/{did}/files/{vid} | GET /logs | GET /logs.csv | GET /matrix
-            GET /matrix/data.xlsx | GET /matrix/report | GET /matrix/report.docx | GET /overrides | GET /users.csv"""),
+            GET /matrix/data.xlsx | GET /matrix/report | GET /matrix/report.docx | GET /overrides | GET /users.csv
+            GET /policies/acknowledgements.csv | GET /risks | GET /risks.csv | GET /risks/{rid}"""),
     # --- everyone who is signed in and active (what they see is filtered to what is theirs)
     (EVERYONE, """GET / | GET /access-reviews | GET /access-reviews/template.csv | GET /controls | GET /kb
                   GET /kb/{crit_id} | GET /library | GET /policies | GET /policies/{policy_id} | GET /vendors
+                  GET /policies/doc/{did}
                   GET /vendors/questionnaire | GET /vendors/questionnaire.xlsx | GET /view | GET /work"""),
     # --- one object: its owner or assignee, an admin, an auditor. Anyone else gets 404 (rule 7)
     (OWNER_OR_READER, """GET /access-reviews/{cid} | GET /assignments/{assignment_id} | GET /controls/{control_id} | GET /controls/{control_id}/panel
@@ -392,7 +412,7 @@ _GROUPS: list[tuple[frozenset, str]] = [
     # their own sign-in, never the organization's data (see SELF_SERVICE)
     (EVERYONE, """GET /account/mfa | POST /account/mfa/start | POST /account/mfa/confirm | POST /account/mfa/off"""),
     # --- any active person who writes (not auditors)
-    (STAFF, """GET /vendors/new | POST /policies/{policy_id}/ack | POST /vendors/new"""),
+    (STAFF, """GET /vendors/new | POST /policies/{policy_id}/ack | POST /vendors/new | POST /policies/doc/{did}/ack"""),
 ]
 EXPECT: dict[tuple[str, str], frozenset] = {}
 for _roles, _text in _GROUPS:
