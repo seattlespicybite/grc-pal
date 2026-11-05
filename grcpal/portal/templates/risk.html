@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% from "_risk_form.html" import risk_fields %}{% block title %}{{ r.id }} {{ r.title }}{% endblock %}
+{% block content %}
+<div class="mb"><a href="/risks">‹ Risk register</a></div>
+<div class="page-head"><div><h1>{{ r.id }} {{ r.title }}</h1>
+<div class="sub">{{ categories.get(r.category, r.category) }} · Owner {{ r.owner }} · {{ statuses.get(r.status, r.status) }}{% if r.last_reviewed %} · Last reviewed {{ r.last_reviewed }}{% endif %}</div></div></div>
+
+<div class="grid v-stats mb">
+<div class="stat"><div class="n"><span class="pill risk-{{ r.band }}">{{ r.score }}</span></div><div class="l">Before controls ({{ r.likelihood }} × {{ r.impact }})</div></div>
+<div class="stat"><div class="n"><span class="pill risk-{{ r.residual_band }}">{{ r.residual_score }}</span></div><div class="l">With controls ({{ r.residual_likelihood }} × {{ r.residual_impact }})</div></div>
+<div class="stat"><div class="n">{{ treatments.get(r.treatment, r.treatment) }}</div><div class="l">Treatment</div></div>
+<div class="stat"><div class="n mono{{ ' bad-text' if r.review_due }}">{{ r.next_review }}</div><div class="l">Next review</div></div>
+</div>
+
+<div class="card mb">{% if r.description %}<p>{{ r.description }}</p>{% endif %}
+<div class="tags">{% for c in r.controls or [] %}<a href="/controls/{{ c }}"><span>{{ c }}</span></a>{% else %}<span class="sub">No controls linked</span>{% endfor %}</div>
+{% if r.treatment == 'accept' and r.acceptance_note %}<div class="mt"><b>Accepted by {{ r.accepted_by }}</b> until <span class="mono{{ ' bad-text' if r.acceptance_expired }}">{{ r.acceptance_expires }}</span>: {{ r.acceptance_note }}</div>{% endif %}
+</div>
+
+{% if user.is_admin %}
+<div class="card mb"><h2>Record a review</h2><div class="sub">The risk still stands as written. Sets the next review 12 months out.</div>
+<form method="post" action="/risks/{{ r.id }}/review" class="form-row mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="grow"><label for="review-note">What you checked</label><input id="review-note" name="note" required minlength="5" maxlength="300"></div>
+<div><button class="btn" type="submit">Record review</button></div></form></div>
+
+<details class="card mb"><summary><b>Change this risk</b></summary>
+<form method="post" action="/risks/{{ r.id }}" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+{{ risk_fields(r, categories, treatments, statuses, levels, impacts) }}
+<div class="field"><label for="reason">Why it changed (kept in the history)</label><input id="reason" name="reason" required minlength="5" maxlength="500"></div>
+<button class="btn" type="submit">Save</button></form></details>
+{% endif %}
+
+<div class="card"><h2>History</h2><div class="table-wrap"><table>
+<thead><tr><th>When</th><th>By</th><th>What</th><th>Before</th><th>With controls</th><th>Treatment</th></tr></thead>
+<tbody>{% for v in r.versions %}<tr><td class="nowrap">{{ v.at[:16].replace('T', ' ') }}</td><td>{{ v.by }}</td><td>{{ v.reason }}</td>
+<td>{{ v.snapshot.likelihood * v.snapshot.impact }}</td><td>{{ v.snapshot.residual_likelihood * v.snapshot.residual_impact }}</td><td>{{ v.snapshot.treatment }}</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}

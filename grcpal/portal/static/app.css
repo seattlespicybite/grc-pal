@@ -640,3 +640,14 @@ a.row-title { color: var(--text); } a.row-title:hover { color: var(--accent); }
   padding: 8px 0; margin: -4px 0 12px; border-bottom: 1px solid var(--border); }
 .section-nav a { padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--muted); }
 .section-nav a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
+
+/* Risk register */
+.pill.risk-critical, .pill.risk-high { color: var(--bad); } .pill.risk-medium { color: var(--warn); } .pill.risk-low { color: var(--ok); }
+.risk-heats { display: flex; flex-wrap: wrap; gap: 24px; }
+.heat { border-collapse: separate; border-spacing: 3px; }
+.heat td { width: 64px; height: 40px; border-radius: 6px; font-size: 12px; vertical-align: middle; text-align: center; padding: 2px; }
+.heat th { text-align: center; padding: 2px 6px; }
+.heat-low { background: color-mix(in srgb, var(--ok) 18%, transparent); }
+.heat-medium { background: color-mix(in srgb, var(--warn) 22%, transparent); }
+.heat-high { background: color-mix(in srgb, var(--bad) 22%, transparent); }
+.heat-critical { background: color-mix(in srgb, var(--bad) 40%, transparent); }

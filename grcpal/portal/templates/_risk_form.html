@@ -1,0 +1,24 @@
+{% macro risk_fields(r, categories, treatments, statuses, levels, impacts) -%}
+<div class="form-row">
+<div class="grow"><label for="title">What could happen</label><input id="title" name="title" required minlength="5" maxlength="200" value="{{ r.title or '' }}" placeholder="For example: Customer data exposed through a misconfigured storage account"></div>
+<div><label for="category">Category</label><select id="category" name="category">{% for k, label in categories.items() %}<option value="{{ k }}"{% if r.category == k %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div><label for="owner">Owner</label><input id="owner" name="owner" required maxlength="120" value="{{ r.owner or '' }}" placeholder="name@example.com or a role"></div>
+</div>
+<div class="field"><label for="description">Description (cause, what is affected)</label><textarea id="description" name="description" rows="2" maxlength="2000">{{ r.description or '' }}</textarea></div>
+<div class="form-row">
+<div><label for="likelihood">Likelihood before controls</label><select id="likelihood" name="likelihood">{% for n, label in levels.items() %}<option value="{{ n }}"{% if r.likelihood == n %} selected{% endif %}>{{ n }} {{ label }}</option>{% endfor %}</select></div>
+<div><label for="impact">Impact before controls</label><select id="impact" name="impact">{% for n, label in impacts.items() %}<option value="{{ n }}"{% if r.impact == n %} selected{% endif %}>{{ n }} {{ label }}</option>{% endfor %}</select></div>
+<div><label for="residual_likelihood">Likelihood with controls</label><select id="residual_likelihood" name="residual_likelihood">{% for n, label in levels.items() %}<option value="{{ n }}"{% if r.residual_likelihood == n %} selected{% endif %}>{{ n }} {{ label }}</option>{% endfor %}</select></div>
+<div><label for="residual_impact">Impact with controls</label><select id="residual_impact" name="residual_impact">{% for n, label in impacts.items() %}<option value="{{ n }}"{% if r.residual_impact == n %} selected{% endif %}>{{ n }} {{ label }}</option>{% endfor %}</select></div>
+</div>
+<div class="form-row">
+<div><label for="treatment">Treatment</label><select id="treatment" name="treatment">{% for k, label in treatments.items() %}<option value="{{ k }}"{% if r.treatment == k %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div class="grow"><label for="controls">Controls that treat it</label><input id="controls" name="controls" maxlength="400" value="{{ (r.controls or [])|join(', ') }}" placeholder="IAM-02, LOG-02"></div>
+<div><label for="status">Status</label><select id="status" name="status">{% for k, label in statuses.items() %}<option value="{{ k }}"{% if (r.status or 'open') == k %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div><label for="next_review">Next review</label><input id="next_review" name="next_review" type="date" value="{{ r.next_review or '' }}"></div>
+</div>
+<fieldset class="v-fieldset"><legend>Only for accepted risks</legend><div class="form-row">
+<div class="grow"><label for="acceptance_note">Why the risk is accepted</label><input id="acceptance_note" name="acceptance_note" maxlength="1000" value="{{ r.acceptance_note or '' }}"></div>
+<div><label for="acceptance_expires">Decide again by</label><input id="acceptance_expires" name="acceptance_expires" type="date" value="{{ r.acceptance_expires or '' }}"></div>
+</div><div class="hint">You are recorded as the person who accepted it. Residual risk cannot be higher than the risk before controls.</div></fieldset>
+{%- endmacro %}

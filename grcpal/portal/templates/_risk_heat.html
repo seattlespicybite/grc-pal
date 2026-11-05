@@ -1,0 +1,7 @@
+{% macro heat(grid, title) -%}
+<div class="risk-heat"><div class="sub"><b>{{ title }}</b></div>
+<table class="heat"><tbody>{% for row in grid %}<tr><th class="sub">{{ 6 - loop.index }}</th>{% set im = 6 - loop.index %}{% for cell in row %}{% set s = im * loop.index %}
+<td class="heat-{{ 'critical' if s >= 20 else 'high' if s >= 10 else 'medium' if s >= 5 else 'low' }}">{% for rid in cell %}<a href="/risks/{{ rid }}">{{ rid }}</a> {% endfor %}</td>{% endfor %}</tr>{% endfor %}
+<tr><th></th>{% for n in range(1, 6) %}<th class="sub">{{ n }}</th>{% endfor %}</tr></tbody></table>
+<div class="hint">Up: impact. Across: likelihood. Open risks only.</div></div>
+{%- endmacro %}

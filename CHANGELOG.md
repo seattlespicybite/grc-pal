@@ -5,6 +5,12 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Added
+- **Risk register in the portal** (Compliance > Risk register, CC3.1 to CC3.4, CC9.1). Likelihood × impact before
+  and with controls, treatment, linked controls, owner, next review; fraud as its own category; heat maps; CSV
+  export. Accepted risks need a reason, the accepting admin and an expiry. Every change needs a reason and keeps a
+  version. Starter risks from `registers/risks.yaml` import add-only. *Approve the assessment* stores the whole
+  register write-once as RSK-01 evidence (`risk_assessment`) with its SHA-256. Admins change it, auditors read it,
+  control owners do not see it. New tables `risks`, `riskversions`, `riskapprovals` (backed up; no migration).
 - **Policies page rebuilt on the document library.** Approved versions publish themselves, grouped by tier, with
   *Registers and reports* for reference. Per-document acknowledgement (everyone, admins only, nobody); each
   acknowledgement keeps version and SHA-256 and restarts with a new version. **Ask for acknowledgement** emails those
