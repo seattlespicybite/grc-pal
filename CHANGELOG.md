@@ -4,6 +4,8 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
+
 ### Added
 - **Risk register in the portal** (Compliance > Risk register, CC3.1 to CC3.4, CC9.1). Likelihood × impact before
   and with controls, treatment, linked controls, owner, next review; fraud as its own category; heat maps; CSV
