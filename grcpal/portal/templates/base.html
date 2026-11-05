@@ -37,7 +37,7 @@
         {% else %}{{ navlink('/frameworks', 'criteria', 'Frameworks', path.startswith('/frameworks') or path.startswith('/criteria') or nav_active == 'framework') }}{% endif %}{% endif %}
         {{ navlink('/controls', 'controls', 'My controls' if user.is_contributor else 'Controls', (path.startswith('/controls') or path.startswith('/matrix')) and not in_framework) }}
         {% if user.is_admin %}{{ navlink('/automation', 'automation', 'Automation', path.startswith('/automation')) }}{% endif %}
-        {% if user.is_admin %}{{ navlink('/calendar', 'calendar', 'Calendar', path.startswith('/calendar'), calendar_due, 'Past due, not recorded') }}{% endif %}
+        {% if user.is_admin %}{{ navlink('/calendar', 'calendar', 'Calendar', path.startswith('/calendar'), calendar_due, 'Past due in the last 30 days, not recorded') }}{% endif %}
         {{ navlink('/vendors', 'vendors', 'Vendors', path.startswith('/vendors')) }}
         {% if user.sees_everything %}{{ navlink('/risks', 'risks', 'Risk register', path.startswith('/risks')) }}{% endif %}
         {% if user.sees_everything or ar_open %}{{ navlink('/access-reviews', 'access', 'Access reviews', path.startswith('/access-reviews'), ar_open, 'Open reviews waiting for you') }}{% endif %}

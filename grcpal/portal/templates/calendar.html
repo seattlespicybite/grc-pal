@@ -16,6 +16,7 @@
 <a class="btn ghost small" href="/calendar?year={{ year }}&amp;auto={{ '0' if show_auto else '1' }}">{{ 'Hide' if show_auto else 'Show' }} automated</a>
 <a class="btn ghost small" href="/calendar.csv?year={{ year }}">Export CSV</a>
 <a class="btn ghost small" href="/calendar/notifications">Email alerts</a> <a class="btn small" href="/calendar/a/new">+ New activity</a></div></div>
+{% if backlog and backlog.older %}<div class="hint-box mb" role="note"><strong>{{ backlog.older }} earlier month{{ 's' if backlog.older != 1 }} still {{ 'have' if backlog.older != 1 else 'has' }} no record</strong> (due before {{ backlog.since }}). They stay marked Past due here and in the export, because an auditor will ask about them: record each as Performed (with the date it was done) or Missed (with the reason). The menu badge counts only the last {{ backlog.days }} days, so new slips stand out.</div>{% endif %}
 
 <section class="card table-wrap">
 <div class="row-between mb">
