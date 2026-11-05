@@ -346,11 +346,12 @@ class TenantStore:
         _forget(table)
         self._base.delete(table, self._p + pk, rk)
 
-    def get_versioned(self, table, pk, rk):
+    def get_versioned(self, table, pk, rk):  # never cached: the version must be the stored one
         row, version = self._base.get_versioned(table, self._p + pk, rk)
         return self._out(row), version
 
     def replace_if(self, table, entity, version):
+        _forget(table)
         return self._base.replace_if(table, self._in(entity), version)
 
     def list(self, table, pk=None):

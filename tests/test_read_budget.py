@@ -74,3 +74,11 @@ def test_cache_never_answers_for_another_tenant():
     with request_cache():
         assert len(a.list("checks", "k")) == 1
         assert b.list("checks", "k") == [] and b.get("checks", "k", "1") is None
+
+
+def test_conditional_write_drops_cached_reads():
+    store = TenantStore(SqliteStore(), "acme")
+    with request_cache():
+        assert store.get("audit", "head", "head") is None
+        assert store.replace_if("audit", {"PartitionKey": "head", "RowKey": "head", "seq": 1}, None)
+        assert store.get("audit", "head", "head")["seq"] == 1
