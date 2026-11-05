@@ -205,6 +205,7 @@ input[type=file] { max-width: 100%; }
 table.logs td { font-size: 13px; }
 .pill.job-done { color: var(--ok); } .pill.job-running, .pill.job-queued { color: var(--info); }
 .pill.job-failed, .pill.job-done_with_errors { color: var(--bad); }
+.pill.job-interrupted { color: var(--warn); }
 .pill.v-effective, .v-effective { color: var(--ok); } .pill.v-partially_effective, .v-partially_effective { color: var(--warn); }
 .pill.v-not_effective, .pill.v-insufficient_evidence, .pill.v-error, .v-not_effective, .v-insufficient_evidence { color: var(--bad); }
 .pill.sev-high { color: var(--bad); } .pill.sev-medium { color: var(--warn); } .pill.sev-low { color: var(--idle); }

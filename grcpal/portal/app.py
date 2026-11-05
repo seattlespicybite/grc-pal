@@ -794,7 +794,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         portal = p()
         result = portal.log.verify() if verify else None
         return render(request, user, "audit.html", rows=portal.log.recent(500, actor, action, target), actor=actor,
-                      action=action, target=target, verify=result)
+                      action=action, target=target, verify=result,
+                      last_verify=None if result else portal.log.last_verification())
 
     # ------------------------------------------------------------------ users
     @app.get("/users", response_class=HTMLResponse)

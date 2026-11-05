@@ -133,6 +133,26 @@ class SqliteStore:
                                     (table, len(prefix), prefix)).fetchall()
         return [_decode(json.loads(r[0])) for r in rows]
 
+    def get_versioned(self, table: str, pk: str, rk: str) -> tuple[dict | None, str | None]:
+        """The row and an opaque version for `replace_if` (here: the stored text itself)."""
+        with self._lock:
+            row = self._db.execute("SELECT data FROM entities WHERE tbl=? AND pk=? AND rk=?", (table, pk, rk)).fetchone()
+        return (_decode(json.loads(row[0])), row[0]) if row else (None, None)
+
+    def replace_if(self, table: str, entity: dict, version: str | None) -> bool:
+        """Write only if the row is unchanged since `get_versioned` (version None: only if it does not exist).
+        Returns False when another writer got there first."""
+        data = json.dumps(_encode(entity))
+        with self._lock:
+            if version is None:
+                cur = self._db.execute("INSERT OR IGNORE INTO entities VALUES (?, ?, ?, ?)",
+                                       (table, entity["PartitionKey"], entity["RowKey"], data))
+            else:
+                cur = self._db.execute("UPDATE entities SET data=? WHERE tbl=? AND pk=? AND rk=? AND data=?",
+                                       (data, table, entity["PartitionKey"], entity["RowKey"], version))
+            self._db.commit()
+        return cur.rowcount == 1
+
     def snapshot(self, path: str) -> "SqliteStore":
         """Point-in-time copy using SQLite's online backup, so a backup never mixes old and new rows."""
         dest = sqlite3.connect(path)
@@ -193,6 +213,36 @@ class TableStore:
             return _decode(dict(self._clients[table].get_entity(pk, rk)))
         except ResourceNotFoundError:
             return None
+
+    def get_versioned(self, table: str, pk: str, rk: str) -> tuple[dict | None, str | None]:
+        from azure.core.exceptions import ResourceNotFoundError
+
+        try:
+            entity = self._clients[table].get_entity(pk, rk)
+        except ResourceNotFoundError:
+            return None, None
+        return _decode(dict(entity)), entity.metadata["etag"]
+
+    def replace_if(self, table: str, entity: dict, version: str | None) -> bool:
+        """Conditional write with the row's ETag (If-Match); version None creates only if absent."""
+        from azure.core import MatchConditions
+        from azure.core.exceptions import HttpResponseError, ResourceExistsError
+        from azure.data.tables import UpdateMode
+
+        client = self._clients[table]
+        try:
+            if version is None:
+                client.create_entity(_encode(entity))
+            else:
+                client.update_entity(_encode(entity), mode=UpdateMode.REPLACE, etag=version,
+                                     match_condition=MatchConditions.IfNotModified)
+        except ResourceExistsError:
+            return False
+        except HttpResponseError as exc:
+            if exc.status_code in (409, 412):
+                return False
+            raise
+        return True
 
     def delete(self, table: str, pk: str, rk: str) -> None:
         from azure.core.exceptions import ResourceNotFoundError
@@ -295,6 +345,13 @@ class TenantStore:
     def delete(self, table, pk, rk):
         _forget(table)
         self._base.delete(table, self._p + pk, rk)
+
+    def get_versioned(self, table, pk, rk):
+        row, version = self._base.get_versioned(table, self._p + pk, rk)
+        return self._out(row), version
+
+    def replace_if(self, table, entity, version):
+        return self._base.replace_if(table, self._in(entity), version)
 
     def list(self, table, pk=None):
         def read():
