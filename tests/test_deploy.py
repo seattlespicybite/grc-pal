@@ -208,3 +208,19 @@ def test_release_scans_the_pushed_digest_before_tagging_it():
     assert '"$IMAGE@$DIGEST"' in wf[scan - 400:scan + 200]
     assert "tags: ${{ steps.meta.outputs.tags }}" not in wf, "no tags at build time"
     assert "for platform in linux/amd64 linux/arm64" in wf
+
+
+def test_dockerfile_holds_no_secrets_in_env_or_arg():
+    """The BuildKit SecretsUsedInArgOrEnv check is skipped (false positive on GRCPAL_AUTH_MODE); this replaces it."""
+    text = (ROOT / "Dockerfile").read_text()
+    assert text.startswith("# check=skip=SecretsUsedInArgOrEnv\n")  # a parser directive must be the first line
+    names = re.findall(r"(?:^|\s)([A-Z][A-Z0-9_]*)=", "\n".join(
+        line for line in text.replace("\\\n", " ").splitlines() if line.startswith(("ENV ", "ARG "))))
+    assert names and "GRCPAL_AUTH_MODE" in names
+    assert not [n for n in names if re.search(r"SECRET|PASSWORD|TOKEN|_KEY$|CREDENTIAL", n)], names
+
+
+def test_workflows_pin_the_runner_and_avoid_node20_actions():
+    for wf in (ROOT / ".github/workflows").glob("*.yml"):
+        assert "ubuntu-latest" not in wf.read_text(), f"{wf.name}: pin the runner image (ubuntu-24.04)"
+    assert "docker/metadata-action@c299e40" not in (ROOT / ".github/workflows/release.yml").read_text()  # v5: Node 20

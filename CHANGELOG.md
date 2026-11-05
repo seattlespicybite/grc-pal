@@ -4,6 +4,13 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Changed
+- **Release and CI workflows without warnings** (B-033). `docker/metadata-action` v5.10.0 (Node 20, deprecated on
+  GitHub runners) moved to v6.2.0, pinned by commit. Every workflow runs on `ubuntu-24.04` instead of
+  `ubuntu-latest`, which GitHub is moving to Ubuntu 26, so a runner change is a reviewed edit and not a surprise.
+  The Dockerfile skips BuildKit's `SecretsUsedInArgOrEnv` check (it flagged `GRCPAL_AUTH_MODE`, a mode, not a
+  secret); a test now fails if any `ENV` or `ARG` name looks like a secret.
+
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 
 ### Added

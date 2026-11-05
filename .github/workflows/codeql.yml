@@ -8,7 +8,7 @@ on:
 permissions: {}   # nothing by default; each job asks for what it needs
 jobs:
   analyze:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       security-events: write   # upload results to the Security tab
