@@ -127,6 +127,14 @@ def _deploy(tmp_path, *args, dns_ready=False):
     return r.returncode, r.stdout + r.stderr, calls, state.get("deploys", [])
 
 
+def _finished(code, out):
+    """deploy.sh got to the end. The small fake az here does not model the instance check that runs last
+    (deploy/azure/check.py, tested with its own fakes in test_azure_check.py), so that check may report problems."""
+    assert "==> Done" in out and "Portal:" in out, out
+    assert code == 0 or out.rstrip().endswith("then run ./deploy/azure/check.sh --name acme"), out
+    return True
+
+
 def _redirects(calls):
     upd = [c for c in calls if c[:3] == ["ad", "app", "update"]][-1]
     i = upd.index("--web-redirect-uris")
@@ -135,7 +143,7 @@ def _redirects(calls):
 
 def test_deploy_without_dns_records_prints_them_and_keeps_the_default_address(tmp_path):
     code, out, calls, deploys = _deploy(tmp_path, "--custom-domain", "GRC.example.com")
-    assert code == 0, out
+    assert _finished(code, out)
     assert "CNAME  grc.example.com  ->  grcpal-acme.happy-sea.eastus2.azurecontainerapps.io" in out
     assert "TXT    asuid.grc.example.com  ->  VERIFY123" in out
     assert len(deploys) == 1 and "customDomain" not in deploys[0], "the template never gets a name Azure cannot verify"
@@ -144,7 +152,7 @@ def test_deploy_without_dns_records_prints_them_and_keeps_the_default_address(tm
 
 def test_deploy_with_dns_records_binds_and_keeps_the_binding(tmp_path):
     code, out, calls, deploys = _deploy(tmp_path, "--custom-domain", "grc.example.com", dns_ready=True)
-    assert code == 0, out
+    assert _finished(code, out)
     bind = next(c for c in calls if c[:3] == ["containerapp", "hostname", "bind"])
     assert bind[bind.index("--hostname") + 1] == "grc.example.com" and "CNAME" in bind
     assert len(deploys) == 2 and deploys[1]["customDomain"] == "grc.example.com"
@@ -154,7 +162,7 @@ def test_deploy_with_dns_records_binds_and_keeps_the_binding(tmp_path):
     assert "Portal:        https://grc.example.com" in out
     # a later re-run finds the certificate and deploys once, with the binding
     code, out, calls, deploys = _deploy(tmp_path, "--custom-domain", "grc.example.com", dns_ready=True)
-    assert code == 0 and len(deploys) == 3 and deploys[2]["customDomainCertificateId"].endswith("mc-1")
+    assert _finished(code, out) and len(deploys) == 3 and deploys[2]["customDomainCertificateId"].endswith("mc-1")
     assert not [c for c in calls if c[:3] == ["containerapp", "hostname", "bind"]][1:], "bound once only"
 
 

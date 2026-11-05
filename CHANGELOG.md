@@ -63,6 +63,11 @@ All notable changes are listed here. The project follows [semantic versioning](h
 - **Conditional Access collector recognises Security Defaults** (tenants without Entra ID P1): with Security Defaults
   on and no Conditional Access policy, MFA and legacy authentication count as covered; the device finding remains and
   explains that a device requirement needs P1. The setting is stored as evidence (`security_defaults.json`).
+- `deploy/azure/check.sh`: post-deploy check for an Azure instance (healthy revision, sign-in enforced,
+  redirect address and secret in place, assignment required, and from the internet: `/healthz` answers while a
+  forged identity header, `/dev/login` and `/login` are refused). `--fix` registers a missing redirect address.
+  `deploy.sh` runs it at the end.
+- `deploy/azure/kit.sh`: write the recovery kit of an existing instance.
 
 ### Changed
 - docs/deploy-azure.md Step 3b covers tenants without Entra ID P1 (per-user assignment, Security Defaults, devices as
@@ -70,6 +75,11 @@ All notable changes are listed here. The project follows [semantic versioning](h
 - **Azure:** Easy Auth asks Microsoft to show the account picker at every sign-in (`prompt=select_account` in
   `main.bicep`), so an open Microsoft session in the browser no longer signs a person in to GRC-pal without a
   click. Applies at the next `deploy.sh` run.
+- `deploy.sh` is safe to repeat after an interrupted run: it registers the sign-in redirect and writes the
+  recovery kit right after the deployment, and a re-run keeps a kit that already holds the same keys instead
+  of stopping.
+- The sign-in edge check accepts `401` as well as a redirect to Microsoft sign-in (Azure answers `401` to
+  clients that do not look like a browser); `200` still fails.
 
 ### Security
 - **Reproducible release image.** Base image pinned by digest; every Python package installed from

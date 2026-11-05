@@ -51,7 +51,6 @@ while [ $# -gt 0 ]; do
 done
 [[ "$NAME" =~ ^[a-z0-9][a-z0-9-]{1,19}$ ]] || { echo "--name must be 2-20 lowercase letters, digits or hyphens"; exit 1; }
 [ -n "$ADMINS" ] || { echo "--admins is required (your work email)"; exit 1; }
-[ -z "$KIT_OUT" ] || [ ! -e "$KIT_OUT" ] || { echo "--kit-out $KIT_OUT already exists; choose a new file name"; exit 1; }
 [ -z "$CUSTOM_DOMAIN" ] || [[ "$CUSTOM_DOMAIN" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]] || {
   echo "--custom-domain must be a host name such as grc.example.com"; exit 1; }
 command -v az >/dev/null || { echo "Install the Azure CLI first: https://aka.ms/azcli"; exit 1; }
@@ -63,6 +62,8 @@ if [ -n "$RESTORE_FROM" ]; then
 fi
 RG="rg-grcpal-$NAME"
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
+echo 'Safe to repeat: if this window closes or times out before "Done", run the same command again.'
+echo 'A re-run keeps the keys, data and settings and finishes the remaining steps.'
 
 step "Checking Azure sign-in"
 az account show --query "{subscription:name, tenant:tenantId}" -o table
@@ -112,6 +113,15 @@ fi
 if [ -z "$BACKUP_KEY" ]; then
   BACKUP_KEY=$(openssl rand -base64 32)
   echo "generated a new backup key (it is in the recovery kit: use --kit-out FILE)"
+fi
+# A re-run may name the kit an earlier, interrupted run already wrote: keep it if it holds these keys.
+KIT_KEPT=""
+if [ -n "$KIT_OUT" ] && [ -e "$KIT_OUT" ]; then
+  if GRCPAL_BACKUP_KEY="$BACKUP_KEY" GRCPAL_ENCRYPTION_KEY="$ENCRYPTION_KEY" python3 -I "$HERE/write_kit.py" --matches "$KIT_OUT" 2>/dev/null; then
+    KIT_KEPT="1"; echo "$KIT_OUT already holds this instance's keys; keeping it"
+  else
+    echo "--kit-out $KIT_OUT already exists and holds other keys; choose a new file name"; exit 1
+  fi
 fi
 # Image: never change versions here by accident; update.sh does that with its checks.
 if [ -z "$IMAGE" ]; then
@@ -172,11 +182,18 @@ if [ -n "$CUSTOM_DOMAIN" ] && [ -z "$CERT_ID" ]; then
 fi
 URL=$(get portalUrl)
 
+# The two steps a working instance cannot do without come first, right after the long deployment.
 step "Registering the sign-in redirect"
 # Both addresses: the default one keeps working next to the custom domain.
 REDIRECTS=("$(get defaultUrl)/.auth/login/aad/callback")
 [ "$URL" != "$(get defaultUrl)" ] && REDIRECTS+=("$URL/.auth/login/aad/callback")
 az ad app update --id "$APP_ID" --web-redirect-uris "${REDIRECTS[@]}" -o none
+
+if [ -n "$KIT_OUT" ] && [ -z "$KIT_KEPT" ]; then
+  step "Recovery kit"
+  GRCPAL_BACKUP_KEY="$BACKUP_KEY" GRCPAL_ENCRYPTION_KEY="$ENCRYPTION_KEY" python3 -I "$HERE/write_kit.py" "$KIT_OUT" "$URL"
+  echo "wrote $KIT_OUT: move it into your password manager now, keep it away from the backups, then delete this copy"
+fi
 
 if [ -n "$GITHUB_REPO" ]; then
   step "GitHub repository variables for collectors ($GITHUB_REPO)"
@@ -233,11 +250,9 @@ if [ -n "$RESTORE_FROM" ]; then
   az role assignment delete --assignee "$ME" --role "Storage Blob Data Contributor" --scope "$SCOPE" -o none 2>/dev/null || true
 fi
 
-if [ -n "$KIT_OUT" ]; then
-  step "Recovery kit"
-  GRCPAL_BACKUP_KEY="$BACKUP_KEY" GRCPAL_ENCRYPTION_KEY="$ENCRYPTION_KEY" python3 -I "$HERE/write_kit.py" "$KIT_OUT" "$URL"
-  echo "wrote $KIT_OUT: move it into your password manager now, keep it away from the backups, then delete this copy"
-fi
+step "Checking the instance"
+CHECK_OK="1"
+python3 -I "$HERE/check.py" --name "$NAME" || CHECK_OK=""
 
 step "Done"
 cat <<EOF
@@ -254,5 +269,7 @@ Next steps:
   3. The sign-in client secret expires in one year. Re-run this script to rotate it.
   4. Restrict sign-in to your staff: docs/deploy-azure.md, Step 3b (Security Defaults without Entra ID P1, or
      Conditional Access with P1).
-  5. No recovery kit saved yet? Re-run with the same options plus --kit-out recovery-kit.json.
+  5. No recovery kit saved yet? ./deploy/azure/kit.sh --name $NAME --out recovery-kit.json
+  6. Check the instance any time (after updates too): ./deploy/azure/check.sh --name $NAME
 EOF
+[ -n "$CHECK_OK" ] || { echo "The check found problems (above): fix them, then run ./deploy/azure/check.sh --name $NAME"; exit 1; }

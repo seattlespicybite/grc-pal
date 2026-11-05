@@ -51,16 +51,44 @@ From a clone of the GRC-pal repository:
   --location eastus2
 ```
 
-Add `--what-if` first if you want to preview the changes. The script:
+Add `--what-if` first if you want to preview the changes. Add `--kit-out recovery-kit.json` to save the
+recovery kit (the keys that open your backups). The script:
 
 1. creates the resource group `rg-grcpal-acme`;
 2. creates the Entra app registration **GRC-pal (acme)** and a sign-in secret (valid one year);
 3. deploys `deploy/azure/main.bicep`: storage, identities, logs, the portal, the jobs and (with
    `--alert-email`) the alerts;
-4. sets the sign-in redirect URL;
-5. sets the GitHub repository variables your workflows need (or prints them).
+4. sets the sign-in redirect URL and writes the recovery kit, right after the deployment;
+5. sets the GitHub repository variables your workflows need (or prints them);
+6. runs the post-deploy check (below) and prints the portal URL.
 
-It prints the portal URL at the end.
+**Safe to repeat.** If the window closes or times out before "Done" (Azure Cloud Shell disconnects when your
+computer sleeps), run the same command again. A re-run keeps the keys, data and settings, keeps a recovery kit
+an earlier run already wrote, and finishes the missing steps. It does rotate the sign-in secret.
+
+Use the **Bash** shell in Cloud Shell, not PowerShell: the multi-line commands in this guide use `\`.
+
+**Check the instance** after a deploy, an update or any change, from any computer with the Azure CLI:
+
+```bash
+./deploy/azure/check.sh --name acme          # report only
+./deploy/azure/check.sh --name acme --fix    # also registers a missing sign-in redirect address
+```
+
+It reports PASS, WARN or FAIL, with the fix for each: the revision serving traffic is healthy, Microsoft
+sign-in is enforced, the sign-in redirect address and secret are in place, whether only assigned people can
+sign in, and from the internet that `/healthz` answers while a forged identity header, `/dev/login` and
+`/login` are refused. It reads configuration only and exits with 1 on any FAIL. Keep its output with your
+change record as evidence (CC8.1).
+
+**No recovery kit?** If the deploy was interrupted before the kit step, or ran without `--kit-out`:
+
+```bash
+./deploy/azure/kit.sh --name acme --out recovery-kit.json
+```
+
+Download it (Cloud Shell: **Manage files → Download**), keep it in a password manager away from the backups,
+then delete the copy.
 
 **Your own address (optional).** Add `--custom-domain grc.example.com`. The first run prints two DNS records
 to create at your DNS provider (a CNAME to the default address and a TXT record `asuid.grc.example.com`).
@@ -90,8 +118,9 @@ you passed to `--admins`. You are an admin.
 - Each person is linked to their Entra account at first sign-in. If an email address later signs in from a
   different Entra account, GRC-pal refuses it until an admin clicks **Unlink Entra account** on Users and roles.
 
-**Check the sign-in edge after every deploy** (from any computer, replace the URL). Each line must print a
-redirect to `login.microsoftonline.com` (302), never `200`:
+**Check the sign-in edge after every deploy**: `check.sh` does this (V-1, V-3, V-4). By hand, from any computer
+(replace the URL), each line must print a redirect to `login.microsoftonline.com` (302) or `401`, never `200`.
+Azure answers `401` instead of a redirect to clients that do not look like a browser:
 
 ```bash
 URL=https://grcpal-acme.example.azurecontainerapps.io
@@ -402,6 +431,9 @@ Azure keeps until retention ends. Delete the app registration separately (`az ad
 | AADSTS50105 after sign-in | The person is not assigned to the enterprise app: add them to the `GRC-pal users` group |
 | "You can't get there from here" / device not compliant | Use Edge with the work profile (or Chrome with the settings in Step 3b), not a private window; check the device in Intune |
 | Backup alert email | Administration → Backups; Log Analytics: `ContainerAppConsoleLogs_CL \| where Log_s has "backup.run_due"` |
+| AADSTS500113 "No reply address is registered" | The deploy was interrupted before it registered the redirect: `./deploy/azure/check.sh --name <name> --fix` |
+| AADSTS900561 "The endpoint only accepts POST requests" | A stale sign-in page was reloaded: open a new private window and go to the portal URL itself |
+| Portal never loads, revision stuck in "Activating" | `./deploy/azure/check.sh --name <name>`, then `az containerapp logs show -g rg-grcpal-<name> -n grcpal-<name> --tail 50` |
 | Sign-in loops or AADSTS50011 | The redirect URL is missing: re-run deploy.sh, or `az ad app update --id <appId> --web-redirect-uris <redirectUri>` |
 | Portal shows the starter catalog | Run *Publish program configuration*, then restart the revision |
 | Error page with a reference | Search the reference in Log Analytics: `ContainerAppConsoleLogs_CL | where Log_s has "<reference>"` |
