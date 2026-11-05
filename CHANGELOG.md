@@ -5,6 +5,12 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Added
+- **Policies page rebuilt on the document library.** Approved versions publish themselves, grouped by tier, with
+  *Registers and reports* for reference. Per-document acknowledgement (everyone, admins only, nobody); each
+  acknowledgement keeps version and SHA-256 and restarts with a new version. **Ask for acknowledgement** emails those
+  missing and turns on weekly reminders (nothing is sent until an admin asks). *Policies to read* on My work.
+  Acknowledgement report (CSV) for auditors; the cycle export includes library acknowledgements. Markdown policies
+  from the program repository keep working in their own section. Routes `/policies/doc/{id}`.
 - **Sign in with Microsoft on a VM** (local sign-in mode). Configuration > Sign in with Microsoft takes a separate
   Entra app registration (no API permissions) with a certificate from `grcpal ms-cert`; the sign-in page then shows
   a Sign in with Microsoft button. The person always clicks it and picks the account at Microsoft

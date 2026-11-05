@@ -191,6 +191,11 @@ def build(tmp: Path, base: SqliteStore, tenant: str) -> SimpleNamespace:
     versions = sorted(portal.store.list("docversions", w.doc), key=lambda v: v["RowKey"])
     w.ver_draft, w.ver_review = versions[0]["RowKey"], versions[1]["RowKey"]
     portal.request_approval(admin, w.doc, w.ver_review, "please review")
+    # a published policy (approved version): on the Policies page, acknowledged by staff
+    w.doc_pub = portal.add_doc(admin, folder, f"P-{tenant}", f"Published policy {tenant}", kind="policy")["id"]
+    portal.upload_official(admin, w.doc_pub, "published.pdf", PDF + b"pub", "", "major", "first", "")
+    pub = portal.store.list("docversions", w.doc_pub)[0]
+    portal._approve(admin, w.doc_pub, pub, "direct", "approved for the test")
     w.doc_trashed = portal.add_doc(admin, folder, f"Z-{tenant}", f"Trashed doc {tenant}")["id"]
     portal.trash_docs(admin, [w.doc_trashed], "not needed")
     w.doc_to_trash = portal.add_doc(admin, folder, f"Y-{tenant}", f"Doc to trash {tenant}")["id"]
