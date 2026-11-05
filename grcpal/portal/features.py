@@ -216,8 +216,10 @@ class FeaturesMixin:
         """Admins, and control owners for the controls they own. Auditors never."""
         return user.is_admin or (user.is_contributor and control_id in self.owned_controls(user.email))
 
-    def save_control_note(self, actor, control_id: str, text: str) -> dict:
-        """Save how the organization meets a control. Every save is a new version; earlier ones are kept."""
+    def save_control_note(self, actor, control_id: str, text: str, base_version: int | None = None) -> dict:
+        """Save how the organization meets a control. Every save is a new version; earlier ones are kept.
+        base_version is the version the editor started from (0 = none yet). If someone saved since, nothing is
+        written and Conflict carries their version, so two people editing at once never silently lose a save."""
         if not self.catalog.control(control_id):
             raise self._invalid("Unknown control")
         if not self.can_edit_control_note(actor, control_id):
@@ -226,14 +228,31 @@ class FeaturesMixin:
         if len(text) > self.NOTE_MAX:
             raise self._invalid(f"Notes can be at most {self.NOTE_MAX} characters")
         current = self.control_note(control_id)
-        version = (current["version"] if current else 0) + 1
+        have = current["version"] if current else 0
+        if base_version is not None and base_version != have:
+            raise self._note_conflict(current)
+        version = have + 1
         row = {"PartitionKey": "n", "RowKey": f"{control_id}~{version:05d}", "control": control_id,
                "version": version, "text": text, "by": actor.email, "at": _now()}
-        self.store.insert("controlnotes", row)
+        try:
+            self.store.insert("controlnotes", row)  # the version is the key: two saves cannot both take it
+        except Exception:  # noqa: BLE001 - key taken by a save that landed a moment earlier
+            taken = self.store.get("controlnotes", "n", row["RowKey"])
+            if not taken:
+                raise
+            raise self._note_conflict(taken) from None
         self.audit(actor, "control.note", control_id, {"controls": [control_id], "version": version,
                                                        "length": len(text),
                                                        "sha256": hashlib.sha256(text.encode()).hexdigest()})
         return row
+
+    @staticmethod
+    def _note_conflict(current: dict | None):
+        from grcpal.portal.service import Conflict
+
+        who = f"{current.get('by', 'someone')} at {str(current.get('at', ''))[:16].replace('T', ' ')} UTC" if current else "someone"
+        return Conflict(f"Not saved: {who} saved a newer version (version {current.get('version', '?') if current else '?'}) "
+                        "while you were editing. Compare the two below and save again.", current)
 
     def control_note_history(self, control_id: str) -> list[dict]:
         rows = [r for r in self.store.list("controlnotes", "n") if r["control"] == control_id]
