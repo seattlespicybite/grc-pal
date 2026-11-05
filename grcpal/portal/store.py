@@ -12,6 +12,9 @@ one storage account) per customer; the prefix is defense in depth on top of that
 """
 from __future__ import annotations
 
+import contextlib
+import contextvars
+import copy
 import json
 import os
 import re
@@ -130,6 +133,26 @@ class SqliteStore:
                                     (table, len(prefix), prefix)).fetchall()
         return [_decode(json.loads(r[0])) for r in rows]
 
+    def get_versioned(self, table: str, pk: str, rk: str) -> tuple[dict | None, str | None]:
+        """The row and an opaque version for `replace_if` (here: the stored text itself)."""
+        with self._lock:
+            row = self._db.execute("SELECT data FROM entities WHERE tbl=? AND pk=? AND rk=?", (table, pk, rk)).fetchone()
+        return (_decode(json.loads(row[0])), row[0]) if row else (None, None)
+
+    def replace_if(self, table: str, entity: dict, version: str | None) -> bool:
+        """Write only if the row is unchanged since `get_versioned` (version None: only if it does not exist).
+        Returns False when another writer got there first."""
+        data = json.dumps(_encode(entity))
+        with self._lock:
+            if version is None:
+                cur = self._db.execute("INSERT OR IGNORE INTO entities VALUES (?, ?, ?, ?)",
+                                       (table, entity["PartitionKey"], entity["RowKey"], data))
+            else:
+                cur = self._db.execute("UPDATE entities SET data=? WHERE tbl=? AND pk=? AND rk=? AND data=?",
+                                       (data, table, entity["PartitionKey"], entity["RowKey"], version))
+            self._db.commit()
+        return cur.rowcount == 1
+
     def snapshot(self, path: str) -> "SqliteStore":
         """Point-in-time copy using SQLite's online backup, so a backup never mixes old and new rows."""
         dest = sqlite3.connect(path)
@@ -191,6 +214,36 @@ class TableStore:
         except ResourceNotFoundError:
             return None
 
+    def get_versioned(self, table: str, pk: str, rk: str) -> tuple[dict | None, str | None]:
+        from azure.core.exceptions import ResourceNotFoundError
+
+        try:
+            entity = self._clients[table].get_entity(pk, rk)
+        except ResourceNotFoundError:
+            return None, None
+        return _decode(dict(entity)), entity.metadata["etag"]
+
+    def replace_if(self, table: str, entity: dict, version: str | None) -> bool:
+        """Conditional write with the row's ETag (If-Match); version None creates only if absent."""
+        from azure.core import MatchConditions
+        from azure.core.exceptions import HttpResponseError, ResourceExistsError
+        from azure.data.tables import UpdateMode
+
+        client = self._clients[table]
+        try:
+            if version is None:
+                client.create_entity(_encode(entity))
+            else:
+                client.update_entity(_encode(entity), mode=UpdateMode.REPLACE, etag=version,
+                                     match_condition=MatchConditions.IfNotModified)
+        except ResourceExistsError:
+            return False
+        except HttpResponseError as exc:
+            if exc.status_code in (409, 412):
+                return False
+            raise
+        return True
+
     def delete(self, table: str, pk: str, rk: str) -> None:
         from azure.core.exceptions import ResourceNotFoundError
 
@@ -212,6 +265,39 @@ class TableStore:
     def is_empty(self) -> bool:
         return not any(next(iter(c.list_entities(results_per_page=1)), None)
                        for name, c in self._clients.items() if name != "meta")
+
+
+# Per-request read cache (B-040). A page used to read the same tables many times (the dashboard listed "checks"
+# once per control: 80 reads; on Azure Tables each read is an HTTPS call). Inside `request_cache()` TenantStore
+# remembers what it read; any write to a table drops that table's cached reads, and callers get copies so they
+# cannot change the cached rows. Keys carry the tenant prefix, so one tenant's rows never answer another's read.
+# Background jobs run in their own threads without this context, so they always read fresh.
+_read_cache: contextvars.ContextVar[dict | None] = contextvars.ContextVar("grcpal_read_cache", default=None)
+
+
+@contextlib.contextmanager
+def request_cache():
+    token = _read_cache.set({})
+    try:
+        yield
+    finally:
+        _read_cache.reset(token)
+
+
+def _cached(key: tuple, read):
+    cache = _read_cache.get()
+    if cache is None:
+        return read()
+    if key not in cache:
+        cache[key] = read()
+    return copy.deepcopy(cache[key])
+
+
+def _forget(table: str) -> None:
+    cache = _read_cache.get()
+    if cache:
+        for key in [k for k in cache if k[0] == table]:
+            del cache[key]
 
 
 class TenantStore:
@@ -240,25 +326,38 @@ class TenantStore:
         return {**entity, "PartitionKey": pk[len(self._p):]}
 
     def insert(self, table, entity):
+        _forget(table)
         self._base.insert(table, self._in(entity))
         return entity
 
     def upsert(self, table, entity):
+        _forget(table)
         self._base.upsert(table, self._in(entity))
         return entity
 
     def update(self, table, pk, rk, fields):
+        _forget(table)
         return self._out(self._base.update(table, self._p + pk, rk, fields))
 
     def get(self, table, pk, rk):
-        return self._out(self._base.get(table, self._p + pk, rk))
+        return _cached((table, "get", self._p + pk, rk), lambda: self._out(self._base.get(table, self._p + pk, rk)))
 
     def delete(self, table, pk, rk):
+        _forget(table)
         self._base.delete(table, self._p + pk, rk)
 
+    def get_versioned(self, table, pk, rk):
+        row, version = self._base.get_versioned(table, self._p + pk, rk)
+        return self._out(row), version
+
+    def replace_if(self, table, entity, version):
+        return self._base.replace_if(table, self._in(entity), version)
+
     def list(self, table, pk=None):
-        rows = self._base.list(table, self._p + pk) if pk is not None else self._base.list_prefix(table, self._p)
-        return [self._out(r) for r in rows]
+        def read():
+            rows = self._base.list(table, self._p + pk) if pk is not None else self._base.list_prefix(table, self._p)
+            return [self._out(r) for r in rows]
+        return _cached((table, "list", self._p, pk), read)
 
 
 def from_env() -> TenantStore:

@@ -7,10 +7,14 @@ result as evidence. The daily export to write-once storage anchors the chain ext
 an attacker with database access cannot rewrite history already exported.
 
 Concurrency: a record is inserted with a unique sequence key, so two writers cannot both
-claim the same position; the loser retries with the next number.
+claim the same position; the loser retries with the next number. The head pointer only ever moves forward:
+it is replaced with a conditional write (SQLite compare, Azure ETag If-Match) and only when the stored head is
+behind, so two replicas or a scheduled job appending at once cannot leave it pointing at an older record (which
+`verify()` would report as tampering).
 """
 from __future__ import annotations
 
+import datetime as dt
 import hashlib
 import json
 import threading
@@ -19,6 +23,7 @@ from grcpal.evidence import utcnow
 from grcpal.portal.observability import request_id
 
 GENESIS = "0" * 64
+_FIRST_MONTH = dt.date(2020, 1, 1)  # no GRC-pal audit record is older; stops the walk if record 1 is missing
 _lock = threading.Lock()
 
 
@@ -58,10 +63,20 @@ class AuditLog:
                         raise
                     seq, prev = seq + 1, taken["hash"]
                     continue
-                self.store.upsert(self.TABLE, {"PartitionKey": "head", "RowKey": "head", "seq": seq,
-                                               "hash": record["hash"], "pk": record["PartitionKey"]})
+                self._advance_head(seq, record["hash"], record["PartitionKey"])
                 return record
             raise RuntimeError("audit log contention: could not append after 50 attempts")
+
+    def _advance_head(self, seq: int, digest: str, pk: str) -> None:
+        """Move the head to `seq` unless another writer already moved it there or further."""
+        new = {"PartitionKey": "head", "RowKey": "head", "seq": seq, "hash": digest, "pk": pk}
+        for _ in range(50):
+            head, version = self.store.get_versioned(self.TABLE, "head", "head")
+            if head is not None and int(head.get("seq", 0)) >= seq:
+                return
+            if self.store.replace_if(self.TABLE, new, version):
+                return
+        raise RuntimeError("audit log contention: could not move the head pointer after 50 attempts")
 
     def _find(self, seq: int) -> dict | None:
         rk = f"{seq:012d}"
@@ -77,8 +92,36 @@ class AuditLog:
         rows = [r for r in self.store.list(self.TABLE) if r.get("PartitionKey") != "head" and "seq" in r]
         return sorted(rows, key=lambda r: int(r["seq"]))
 
+    def _month_rows(self, pk: str) -> list[dict]:
+        return [r for r in self.store.list(self.TABLE, pk) if "seq" in r]
+
     def recent(self, limit: int = 500, actor: str = "", action: str = "", target: str = "") -> list[dict]:
-        rows = self.records()
+        """Newest first. Reads month partitions newest-first and stops once it has `limit` matching rows or has
+        reached record 1, so a busy log is not read in full for every page view (B-043)."""
+        head = self._head()
+        last = int(head.get("seq", 0))
+        try:
+            month = dt.date.fromisoformat(f"{head.get('pk') or ''}-01")
+        except ValueError:  # no head yet, or written by an old version: read everything
+            return self._filter(list(reversed(self.records())), actor, action, target)[:limit]
+        newest = utcnow().date().replace(day=1)
+        month = max(month, newest)  # a record may be newer than a lagging head
+        found: list[dict] = []
+        lowest = None
+        while month >= _FIRST_MONTH:
+            rows = self._month_rows(f"{month:%Y-%m}")
+            if rows:
+                rows.sort(key=lambda r: int(r["seq"]), reverse=True)
+                found += self._filter(rows, actor, action, target)
+                lowest = min(int(rows[-1]["seq"]), lowest or last + 1)
+            if len(found) >= limit or (lowest == 1) or last == 0:
+                break
+            month = (month - dt.timedelta(days=1)).replace(day=1)
+        found.sort(key=lambda r: int(r["seq"]), reverse=True)
+        return found[:limit]
+
+    @staticmethod
+    def _filter(rows: list[dict], actor: str, action: str, target: str) -> list[dict]:
         if actor:
             rows = [r for r in rows if actor.lower() in r["actor"].lower()]
         if action:
@@ -86,10 +129,20 @@ class AuditLog:
         if target:
             rows = [r for r in rows if target.lower() in r["target"].lower()
                     or target.upper() in _as_list((r.get("detail") or {}).get("controls"))]
-        return list(reversed(rows))[:limit]
+        return rows
 
-    def verify(self) -> dict:
-        """Recompute the chain. Returns {"ok", "records", "head", "problems": [...]}."""
+    def last_verification(self) -> dict | None:
+        """The stored result of the last recorded verify (daily export or an admin's "Verify integrity")."""
+        row = self.store.get(self.TABLE, "head", "verify")
+        if not row:
+            return None
+        return {"ok": bool(row.get("ok")), "records": int(row.get("records", 0)), "head": row.get("head", ""),
+                "problems": [p for p in (row.get("problems_text") or "").split("\n") if p],
+                "verified_at": row.get("verified_at", "")}
+
+    def verify(self, record: bool = False) -> dict:
+        """Recompute the chain. Returns {"ok", "records", "head", "problems": [...]}. With record=True the result
+        is also stored, so pages can show the last verification without reading the whole log again."""
         rows = self.records()
         head = self._head()
         problems, prev, expected = [], GENESIS, 1
@@ -106,5 +159,11 @@ class AuditLog:
             problems.append("head pointer does not match the last record (records removed from the end?)")
         if not rows and int(head["seq"]) != 0:
             problems.append("head pointer present but no records")
-        return {"ok": not problems, "records": len(rows), "head": head.get("hash", GENESIS), "problems": problems,
-                "verified_at": utcnow().isoformat()}
+        result = {"ok": not problems, "records": len(rows), "head": head.get("hash", GENESIS), "problems": problems,
+                  "verified_at": utcnow().isoformat()}
+        if record:
+            self.store.upsert(self.TABLE, {"PartitionKey": "head", "RowKey": "verify", "ok": result["ok"],
+                                           "records": result["records"], "head": result["head"],
+                                           "problems_text": "\n".join(problems)[:30000],
+                                           "verified_at": result["verified_at"]})
+        return result
