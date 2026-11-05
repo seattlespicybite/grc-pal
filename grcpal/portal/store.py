@@ -12,6 +12,9 @@ one storage account) per customer; the prefix is defense in depth on top of that
 """
 from __future__ import annotations
 
+import contextlib
+import contextvars
+import copy
 import json
 import os
 import re
@@ -264,6 +267,39 @@ class TableStore:
                        for name, c in self._clients.items() if name != "meta")
 
 
+# Per-request read cache (B-040). A page used to read the same tables many times (the dashboard listed "checks"
+# once per control: 80 reads; on Azure Tables each read is an HTTPS call). Inside `request_cache()` TenantStore
+# remembers what it read; any write to a table drops that table's cached reads, and callers get copies so they
+# cannot change the cached rows. Keys carry the tenant prefix, so one tenant's rows never answer another's read.
+# Background jobs run in their own threads without this context, so they always read fresh.
+_read_cache: contextvars.ContextVar[dict | None] = contextvars.ContextVar("grcpal_read_cache", default=None)
+
+
+@contextlib.contextmanager
+def request_cache():
+    token = _read_cache.set({})
+    try:
+        yield
+    finally:
+        _read_cache.reset(token)
+
+
+def _cached(key: tuple, read):
+    cache = _read_cache.get()
+    if cache is None:
+        return read()
+    if key not in cache:
+        cache[key] = read()
+    return copy.deepcopy(cache[key])
+
+
+def _forget(table: str) -> None:
+    cache = _read_cache.get()
+    if cache:
+        for key in [k for k in cache if k[0] == table]:
+            del cache[key]
+
+
 class TenantStore:
     """The only store application code uses. Every key is confined to one tenant."""
 
@@ -290,20 +326,24 @@ class TenantStore:
         return {**entity, "PartitionKey": pk[len(self._p):]}
 
     def insert(self, table, entity):
+        _forget(table)
         self._base.insert(table, self._in(entity))
         return entity
 
     def upsert(self, table, entity):
+        _forget(table)
         self._base.upsert(table, self._in(entity))
         return entity
 
     def update(self, table, pk, rk, fields):
+        _forget(table)
         return self._out(self._base.update(table, self._p + pk, rk, fields))
 
     def get(self, table, pk, rk):
-        return self._out(self._base.get(table, self._p + pk, rk))
+        return _cached((table, "get", self._p + pk, rk), lambda: self._out(self._base.get(table, self._p + pk, rk)))
 
     def delete(self, table, pk, rk):
+        _forget(table)
         self._base.delete(table, self._p + pk, rk)
 
     def get_versioned(self, table, pk, rk):
@@ -314,8 +354,10 @@ class TenantStore:
         return self._base.replace_if(table, self._in(entity), version)
 
     def list(self, table, pk=None):
-        rows = self._base.list(table, self._p + pk) if pk is not None else self._base.list_prefix(table, self._p)
-        return [self._out(r) for r in rows]
+        def read():
+            rows = self._base.list(table, self._p + pk) if pk is not None else self._base.list_prefix(table, self._p)
+            return [self._out(r) for r in rows]
+        return _cached((table, "list", self._p, pk), read)
 
 
 def from_env() -> TenantStore:

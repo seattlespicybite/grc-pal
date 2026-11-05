@@ -117,7 +117,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         actor_token = current_actor.set("-")
         started = time.perf_counter()
         try:
-            response = await call_next(request)
+            with store_mod.request_cache():  # one read per table and key per request (B-040)
+                response = await call_next(request)
         except Exception:  # noqa: BLE001 - render a safe error page with the reference
             try:
                 app.state.portal.events.error("system", f"Unexpected error on {request.method} {_log_path(request.url.path)}",

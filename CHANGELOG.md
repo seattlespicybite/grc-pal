@@ -4,6 +4,13 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+perf/dashboard-reads
+### Changed
+- **Pages read much less from storage** (B-040). Each request now remembers what it read: the dashboard went from
+  133 table reads on a cold load (80 of them the checks table, once per control) to about 25, which matters on
+  Azure Tables where each read is an HTTPS call. Any write drops that table's remembered reads, rows are handed out
+  as copies, and background jobs always read fresh. A read-budget test keeps the main pages in check.
+=======
 fix/orphaned-jobs
 ### Fixed
 - **Jobs no longer stay "running" forever after a restart** (B-042). A replica stopped mid-job (scale to zero,
@@ -24,6 +31,7 @@ perf/audit-log-reads
   job appending at the same moment can no longer leave it on an older record, which `verify` reported as
   "head pointer does not match the last record".
  main
+main
 main
 
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
