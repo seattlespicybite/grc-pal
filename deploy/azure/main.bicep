@@ -97,6 +97,12 @@ param backupAlertWindow string = 'P2D'
 @description('Optional allow-list of source IP ranges (CIDR). Empty = reachable from anywhere, still behind sign-in.')
 param allowedIpRanges array = []
 
+@description('Optional own address for the portal, e.g. grc.example.com. DNS first: CNAME to the default address and TXT asuid.<name> = customDomainVerificationId (deploy.sh --custom-domain prints both). Empty = the default *.azurecontainerapps.io address.')
+param customDomain string = ''
+
+@description('Resource ID of the Azure-managed certificate for customDomain (deploy.sh finds or creates it). Empty with a customDomain = the name is added without TLS so the certificate can be issued.')
+param customDomainCertificateId string = ''
+
 var suffix = uniqueString(resourceGroup().id, instanceName)
 var storageName = take('stgrc${replace(instanceName, '-', '')}${suffix}', 24)
 var appName = take('grcpal-${instanceName}', 32)
@@ -318,7 +324,9 @@ resource env 'Microsoft.App/managedEnvironments@2024-03-01' = {
 }
 
 var usePrivateRegistry = !empty(registryServer) && !empty(registryUsername)
-var publicUrl = 'https://${appName}.${env.properties.defaultDomain}'
+var defaultUrl = 'https://${appName}.${env.properties.defaultDomain}'
+// Links in emails, the sign-in redirect and the CSRF origin check use the address people actually open.
+var publicUrl = empty(customDomain) || empty(customDomainCertificateId) ? defaultUrl : 'https://${customDomain}'
 var baseSecrets = [
   { name: 'microsoft-provider-authentication-secret', value: entraClientSecret }
   { name: 'grcpal-secret', value: grcpalSecret }
@@ -376,6 +384,16 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'allow-${i}'
           action: 'Allow'
           ipAddressRange: cidr
+        }]
+        // Kept in the template so a re-deploy never drops the binding. Without a certificate yet, the name is
+        // bound with TLS disabled so Azure can issue its free managed certificate (deploy.sh then re-deploys).
+        customDomains: empty(customDomain) ? [] : [empty(customDomainCertificateId) ? {
+          name: customDomain
+          bindingType: 'Disabled'
+        } : {
+          name: customDomain
+          bindingType: 'SniEnabled'
+          certificateId: customDomainCertificateId
         }]
       }
       secrets: usePrivateRegistry ? concat(baseSecrets, [{ name: 'registry-password', value: registryPassword }]) : baseSecrets
@@ -561,6 +579,35 @@ resource backupAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-preview'
   }
 }
 
+// Every use of the break-glass account (grcpal logs a security event "Break-glass sign-in" with break_glass=true).
+// Emails within about five minutes, so a sign-in nobody planned is noticed even if the app's own email fails.
+resource breakGlassAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-preview' = if (!empty(alertEmail)) {
+  name: 'grcpal-${instanceName}-break-glass'
+  location: location
+  properties: {
+    displayName: 'GRC-pal ${instanceName}: break-glass sign-in'
+    description: 'The break-glass account signed in. If this is not a planned drill or a known emergency, treat it as an incident: run breakglass.sh disarm and check the audit log.'
+    severity: 1
+    enabled: true
+    scopes: [logs.id]
+    evaluationFrequency: 'PT5M'
+    windowSize: 'PT5M'
+    criteria: {
+      allOf: [
+        {
+          query: 'ContainerAppConsoleLogs_CL | where Log_s has "Break-glass sign-in" and Log_s contains \'"break_glass": true\''
+          timeAggregation: 'Count'
+          operator: 'GreaterThan'
+          threshold: 0
+          failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
+        }
+      ]
+    }
+    autoMitigate: false
+    actions: { actionGroups: [alertGroup.id] }
+  }
+}
+
 // Changes an attacker (or a mistake) would make to weaken protections. Deployments and updates also trigger
 // it, which doubles as a change record.
 var watchedOperations = [
@@ -591,6 +638,8 @@ resource changeAlert 'Microsoft.Insights/activityLogAlerts@2020-10-01' = if (!em
 }
 
 output portalUrl string = publicUrl
+output defaultUrl string = defaultUrl
+output customDomainVerificationId string = env.properties.customDomainConfiguration.customDomainVerificationId
 output redirectUri string = '${publicUrl}/.auth/login/aad/callback'
 output storageAccount string = storage.name
 output evidenceAccountUrl string = storage.properties.primaryEndpoints.blob

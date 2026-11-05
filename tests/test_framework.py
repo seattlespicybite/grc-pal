@@ -241,6 +241,34 @@ def test_conditional_access_device_compliance(policy, ok, tmp_path):
     assert any(f["key"] == "no-device-compliance" for f in findings) is not ok
 
 
+@pytest.mark.parametrize("policies,defaults,expect", [
+    ([], {"isEnabled": True}, {"no-device-compliance"}),                       # no P1: Security Defaults cover MFA
+    ([], {"isEnabled": False}, {"no-mfa-all-users", "legacy-auth-open", "no-device-compliance"}),
+    ([], None, {"no-mfa-all-users", "legacy-auth-open", "no-device-compliance"}),  # setting unreadable: no credit
+    ([_ca_policy(["mfa"], "AND")], {"isEnabled": True}, {"legacy-auth-open", "no-device-compliance"}),  # CA wins
+])
+def test_conditional_access_recognises_security_defaults(policies, defaults, expect, tmp_path):
+    from types import SimpleNamespace
+
+    def graph_get(path):
+        assert path == "/policies/identitySecurityDefaultsEnforcementPolicy"
+        if defaults is None:
+            raise RuntimeError("403 Policy.Read.All missing")
+        return defaults
+
+    ca = collectors.get("conditional_access")
+    fake = SimpleNamespace(clients=SimpleNamespace(graph_list=lambda path: policies, graph_get=graph_get))
+    store = EvidenceStore(tmp_path / "ev")
+    run = store.new_run("conditional_access", [], {})
+    findings = ca.run(fake, run)
+    assert {f["key"] for f in findings} == expect
+    device = next(f for f in findings if f["key"] == "no-device-compliance")
+    assert ("Entra ID P1" in device["detail"].get("why", "")) is (not policies and bool(defaults and defaults["isEnabled"]))
+    run.finish(findings)
+    saved = json.loads((tmp_path / "ev" / run.prefix / "security_defaults.json").read_text())
+    assert saved["readable"] is (defaults is not None)
+
+
 def test_tasks_due_dry_run(ctx):
     created = tasks.open_due(ctx, dry_run=True)
     assert any("access review" in t.lower() for t in created)  # October is a review month

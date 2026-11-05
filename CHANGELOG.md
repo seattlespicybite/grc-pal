@@ -41,10 +41,26 @@ All notable changes are listed here. The project follows [semantic versioning](h
   icons** (remembered per browser). The control page has section links and a **Documents** section listing the
   policies and document-library documents that name the control.
 
+- **Azure: custom domain.** `deploy.sh --custom-domain grc.example.com` prints the two DNS records, then binds the
+  name with a free Azure-managed certificate; the template keeps the binding on later deploys (`customDomain`,
+  `customDomainCertificateId`), links and sign-in move to the custom address, and the default address keeps working.
+- **Azure: break-glass alert.** With `--alert-email`, every break-glass sign-in emails the alert address within about
+  five minutes (log alert on the app's "Break-glass sign-in" security event), independent of the app's own email.
+- **Conditional Access collector recognises Security Defaults** (tenants without Entra ID P1): with Security Defaults
+  on and no Conditional Access policy, MFA and legacy authentication count as covered; the device finding remains and
+  explains that a device requirement needs P1. The setting is stored as evidence (`security_defaults.json`).
+
 ### Changed
+- docs/deploy-azure.md Step 3b covers tenants without Entra ID P1 (per-user assignment, Security Defaults, devices as
+  a detective control, 7-day sign-in logs).
 - **Azure:** Easy Auth asks Microsoft to show the account picker at every sign-in (`prompt=select_account` in
   `main.bicep`), so an open Microsoft session in the browser no longer signs a person in to GRC-pal without a
   click. Applies at the next `deploy.sh` run.
+
+### Security
+- Pinned CI scanner tools: `filelock` 4.1.0 → 4.2.9 (17 advisories, the open Dependabot alerts on main). App
+  dependencies had no known vulnerabilities (pip-audit).
+- No `Server` header from Caddy on VMs or from `grcpal serve` (the container already sent none).
 
 ## [0.6.1] - 2026-11-03 - Fix startup crash on Azure
 ### Fixed

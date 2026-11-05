@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""Stand-in for the Azure CLI in tests of deploy/azure/deploy.sh: just enough answers for one new instance."""
+import json, os, sys
+a = sys.argv[1:]
+with open(os.environ["FAKE_LOG"], "a") as log:
+    log.write(json.dumps(a) + "\n")
+def opt(name, default=""):
+    return a[a.index(name) + 1] if name in a else default
+q = opt("--query")
+state_path = os.environ["FAKE_STATE"]
+st = json.load(open(state_path)) if os.path.exists(state_path) else {}
+def save():
+    json.dump(st, open(state_path, "w"))
+if a[:2] == ["account", "show"]:
+    print("t-0000" if q == "tenantId" else ("sub-1" if q == "id" else "sub | t-0000"))
+elif a[:2] == ["ad", "app"] and a[2] in ("list", "create"):
+    print("app-1111" if a[2] == "create" else "")
+elif a[:2] == ["ad", "sp"] and a[2] == "show":
+    print("sp-1")
+elif a[:4] == ["ad", "app", "credential", "reset"]:
+    print("client-secret-not-real")
+elif a[:2] == ["containerapp", "show"] or a[:3] == ["containerapp", "secret", "show"]:
+    sys.exit(3)                                     # a new instance: nothing exists yet
+elif a[:4] == ["containerapp", "env", "certificate", "list"]:
+    print(st.get("cert", ""))
+elif a[:3] == ["containerapp", "hostname", "bind"]:
+    if os.environ.get("FAKE_DNS_READY") != "1":
+        print("ERROR: TXT record asuid not found", file=sys.stderr); sys.exit(1)
+    st["cert"] = "/subscriptions/s/resourceGroups/rg/providers/Microsoft.App/managedEnvironments/cae/managedCertificates/mc-1"
+    save()
+elif a[:3] == ["deployment", "group", "create"]:
+    params = {kv.split("=", 1)[0]: kv.split("=", 1)[1] for kv in a[a.index("-p") + 1:] if "=" in kv and not kv.startswith("-")}
+    st.setdefault("deploys", []).append(params); save()
+    default = "https://grcpal-acme.happy-sea.eastus2.azurecontainerapps.io"
+    custom = params.get("customDomain")
+    url = f"https://{custom}" if custom and params.get("customDomainCertificateId") else default
+    outs = {"portalUrl": url, "defaultUrl": default, "customDomainVerificationId": "VERIFY123",
+            "redirectUri": url + "/.auth/login/aad/callback", "storageAccount": "stgrc",
+            "evidenceAccountUrl": "", "tablesUrl": "", "portalIdentityClientId": "c", "portalIdentityPrincipalId": "p"}
+    print(json.dumps({k: {"value": v} for k, v in outs.items()}))
