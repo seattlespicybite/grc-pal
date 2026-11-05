@@ -49,6 +49,12 @@ No data model change: upgrade in place from 0.7.0, roll back to 0.7.0 without a 
   now shows that number (new setting `GRCPAL_BACKUP_RETENTION_DAYS`, filled from `main.bicep`) and hides the Keep
   numbers when Azure storage is the only location; with folder locations as well, it says the numbers apply to the
   folders only. Re-run `deploy.sh` (or an update) to set the new value; until then the page names the default.
+### Changed
+- **Release and CI workflows without warnings** (B-033). `docker/metadata-action` v5.10.0 (Node 20, deprecated on
+  GitHub runners) moved to v6.2.0, pinned by commit. Every workflow runs on `ubuntu-24.04` instead of
+  `ubuntu-latest`, which GitHub is moving to Ubuntu 26, so a runner change is a reviewed edit and not a surprise.
+  The Dockerfile skips BuildKit's `SecretsUsedInArgOrEnv` check (it flagged `GRCPAL_AUTH_MODE`, a mode, not a
+  secret); a test now fails if any `ENV` or `ARG` name looks like a secret.
 
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 

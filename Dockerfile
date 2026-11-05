@@ -1,3 +1,6 @@
+# check=skip=SecretsUsedInArgOrEnv
+# (BuildKit flags GRCPAL_AUTH_MODE because the name contains "AUTH"; it is a mode, not a secret. tests/test_deploy.py
+#  checks instead that no ENV or ARG name looks like a secret.)
 # GRC-pal image: portal and command line in one small, non-root image.
 #   docker build -t grc-pal .
 #   docker run --rm -p 8000:8000 -e GRCPAL_AUTH_MODE=dev -e GRCPAL_ENV=development -e GRCPAL_DEMO=1 grc-pal

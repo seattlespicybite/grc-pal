@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         python: ["3.11", "3.12", "3.13"]
@@ -35,7 +35,7 @@ jobs:
   upgrade:
     # Data made by the previous release must survive an upgrade to this commit: every row, every evidence
     # file and every audit chain unchanged, the new portal starts, and the old backup restores.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -66,7 +66,7 @@ jobs:
           python -I deploy/ci/upgrade_check.py check /tmp/upgrade
 
   infrastructure:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -84,7 +84,7 @@ jobs:
       - run: bash -n deploy/azure/deploy.sh && bash -n deploy/azure/update.sh && bash -n deploy/vm/install.sh
 
   image:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
