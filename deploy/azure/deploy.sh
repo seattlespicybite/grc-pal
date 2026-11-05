@@ -17,7 +17,10 @@
 #   --github-repo O/R      your program repository; creates a keyless identity for its collectors
 #   --mail-from ADDRESS    shared mailbox that sends notifications through Microsoft Graph
 #   --require-assignment   only users assigned to the enterprise app may sign in (defense in depth)
-#   --alert-email ADDRESS  email for alerts: missed backups and security-relevant changes (recommended)
+#   --alert-email ADDRESS  email for alerts: missed backups, break-glass sign-ins and security-relevant changes
+#                          (recommended)
+#   --custom-domain HOST   your own address, e.g. grc.example.com, with a free Azure-managed certificate. The first
+#                          run prints the two DNS records to create (CNAME and TXT asuid.HOST); re-run once they exist.
 #   --what-if              preview the Azure changes without deploying
 #
 # Needs: Azure CLI (az login), Owner or User Access Administrator on the subscription (role
@@ -26,7 +29,7 @@
 set -euo pipefail
 
 NAME="" ; ADMINS="" ; LOCATION="eastus2" ; IMAGE="" ; RESTORE_FROM="" ; KIT="" ; KIT_OUT=""
-GITHUB_REPO="" ; MAIL_FROM="" ; ALERT_EMAIL="" ; REQUIRE_ASSIGNMENT="false" ; WHAT_IF=""
+GITHUB_REPO="" ; MAIL_FROM="" ; ALERT_EMAIL="" ; REQUIRE_ASSIGNMENT="false" ; WHAT_IF="" ; CUSTOM_DOMAIN=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --name) NAME="$2"; shift 2 ;;
@@ -39,14 +42,17 @@ while [ $# -gt 0 ]; do
     --github-repo) GITHUB_REPO="$2"; shift 2 ;;
     --mail-from) MAIL_FROM="$2"; shift 2 ;;
     --alert-email) ALERT_EMAIL="$2"; shift 2 ;;
+    --custom-domain) CUSTOM_DOMAIN="$(echo "$2" | tr 'A-Z' 'a-z')"; shift 2 ;;
     --require-assignment) REQUIRE_ASSIGNMENT="true"; shift ;;
     --what-if) WHAT_IF="1"; shift ;;
-    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,28p' "$0"; exit 0 ;;
     *) echo "Unknown option $1 (see --help)"; exit 1 ;;
   esac
 done
 [[ "$NAME" =~ ^[a-z0-9][a-z0-9-]{1,19}$ ]] || { echo "--name must be 2-20 lowercase letters, digits or hyphens"; exit 1; }
 [ -n "$ADMINS" ] || { echo "--admins is required (your work email)"; exit 1; }
+[ -z "$CUSTOM_DOMAIN" ] || [[ "$CUSTOM_DOMAIN" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]] || {
+  echo "--custom-domain must be a host name such as grc.example.com"; exit 1; }
 command -v az >/dev/null || { echo "Install the Azure CLI first: https://aka.ms/azcli"; exit 1; }
 HERE="$(cd "$(dirname "$0")" && pwd)"
 if [ -n "$RESTORE_FROM" ]; then
@@ -133,6 +139,15 @@ PARAMS=(instanceName="$NAME" image="$IMAGE" entraClientId="$APP_ID" entraClientS
         githubRepo="$GITHUB_REPO")
 [ -n "$MAIL_FROM" ] && PARAMS+=(mailBackend=graph mailFrom="$MAIL_FROM")
 [ -n "$ALERT_EMAIL" ] && PARAMS+=(alertEmail="$ALERT_EMAIL")
+ENV_NAME="cae-$APP"
+CERT_ID=""
+if [ -n "$CUSTOM_DOMAIN" ]; then
+  # The template keeps the binding once a certificate exists; before that the name is added by "hostname bind"
+  # below (Azure checks the DNS records first, so a template deploy without them would fail).
+  CERT_ID=$(az containerapp env certificate list -g "$RG" -n "$ENV_NAME" --managed-certificates-only \
+            --query "[?properties.subjectName=='$CUSTOM_DOMAIN'].id | [0]" -o tsv 2>/dev/null || true)
+  [ -n "$CERT_ID" ] && PARAMS+=(customDomain="$CUSTOM_DOMAIN" customDomainCertificateId="$CERT_ID")
+fi
 
 if [ -n "$WHAT_IF" ]; then
   step "Preview (what-if)"
@@ -140,15 +155,39 @@ if [ -n "$WHAT_IF" ]; then
   exit 0
 fi
 
+deploy() {
+  OUT=$(az deployment group create -g "$RG" -n "grcpal-$(date +%Y%m%d%H%M%S)" -f "$HERE/main.bicep" \
+        -p "${PARAMS[@]}" --query properties.outputs -o json)
+}
 step "Deploying storage, identities, logs and the portal (3-6 minutes)"
-OUT=$(az deployment group create -g "$RG" -n "grcpal-$(date +%Y%m%d%H%M%S)" -f "$HERE/main.bicep" \
-      -p "${PARAMS[@]}" --query properties.outputs -o json)
+deploy
 get() { echo "$OUT" | python3 -c "import json,sys; print(json.load(sys.stdin)['$1']['value'])"; }
-URL=$(get portalUrl) ; REDIRECT=$(get redirectUri)
+
+if [ -n "$CUSTOM_DOMAIN" ] && [ -z "$CERT_ID" ]; then
+  step "Custom domain $CUSTOM_DOMAIN"
+  DEFAULT_HOST=$(get defaultUrl | sed 's#^https://##')
+  if az containerapp hostname bind -g "$RG" -n "$APP" --hostname "$CUSTOM_DOMAIN" --environment "$ENV_NAME" \
+       --validation-method CNAME -o none 2>/dev/null; then
+    CERT_ID=$(az containerapp env certificate list -g "$RG" -n "$ENV_NAME" --managed-certificates-only \
+              --query "[?properties.subjectName=='$CUSTOM_DOMAIN'].id | [0]" -o tsv)
+    PARAMS+=(customDomain="$CUSTOM_DOMAIN" customDomainCertificateId="$CERT_ID")
+    echo "certificate issued; keeping the binding in the template"
+    deploy
+  else
+    echo "Create these two DNS records at your DNS provider, wait a few minutes, then re-run this script with the same options:"
+    echo "  CNAME  $CUSTOM_DOMAIN  ->  $DEFAULT_HOST"
+    echo "  TXT    asuid.$CUSTOM_DOMAIN  ->  $(get customDomainVerificationId)"
+    echo "Until then the portal stays on $(get defaultUrl)."
+  fi
+fi
+URL=$(get portalUrl)
 
 # The two steps a working instance cannot do without come first, right after the long deployment.
 step "Registering the sign-in redirect"
-az ad app update --id "$APP_ID" --web-redirect-uris "$REDIRECT" -o none
+# Both addresses: the default one keeps working next to the custom domain.
+REDIRECTS=("$(get defaultUrl)/.auth/login/aad/callback")
+[ "$URL" != "$(get defaultUrl)" ] && REDIRECTS+=("$URL/.auth/login/aad/callback")
+az ad app update --id "$APP_ID" --web-redirect-uris "${REDIRECTS[@]}" -o none
 
 if [ -n "$KIT_OUT" ] && [ -z "$KIT_KEPT" ]; then
   step "Recovery kit"
@@ -228,7 +267,8 @@ Next steps:
          az storage container immutability-policy lock -g $RG --account-name $(get storageAccount) -c \$c --if-match "\$ETAG"
        done
   3. The sign-in client secret expires in one year. Re-run this script to rotate it.
-  4. Restrict sign-in to your staff on compliant devices: docs/deploy-azure.md, Step 3b (Conditional Access).
+  4. Restrict sign-in to your staff: docs/deploy-azure.md, Step 3b (Security Defaults without Entra ID P1, or
+     Conditional Access with P1).
   5. No recovery kit saved yet? ./deploy/azure/kit.sh --name $NAME --out recovery-kit.json
   6. Check the instance any time (after updates too): ./deploy/azure/check.sh --name $NAME
 EOF

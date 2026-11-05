@@ -3,21 +3,22 @@
 All notable changes are listed here. The project follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
-### Added
-- `deploy/azure/check.sh`: post-deploy check for an Azure instance (healthy revision, sign-in enforced,
-  redirect address and secret in place, assignment required, and from the internet: `/healthz` answers while a
-  forged identity header, `/dev/login` and `/login` are refused). `--fix` registers a missing redirect address.
-  `deploy.sh` runs it at the end.
-- `deploy/azure/kit.sh`: write the recovery kit of an existing instance.
 
-### Changed
-- `deploy.sh` is safe to repeat after an interrupted run: it registers the sign-in redirect and writes the
-  recovery kit right after the deployment, and a re-run keeps a kit that already holds the same keys instead
-  of stopping.
-- The sign-in edge check accepts `401` as well as a redirect to Microsoft sign-in (Azure answers `401` to
-  clients that do not look like a browser); `200` still fails.
+## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 
 ### Added
+- **Risk register in the portal** (Compliance > Risk register, CC3.1 to CC3.4, CC9.1). Likelihood × impact before
+  and with controls, treatment, linked controls, owner, next review; fraud as its own category; heat maps; CSV
+  export. Accepted risks need a reason, the accepting admin and an expiry. Every change needs a reason and keeps a
+  version. Starter risks from `registers/risks.yaml` import add-only. *Approve the assessment* stores the whole
+  register write-once as RSK-01 evidence (`risk_assessment`) with its SHA-256. Admins change it, auditors read it,
+  control owners do not see it. New tables `risks`, `riskversions`, `riskapprovals` (backed up; no migration).
+- **Policies page rebuilt on the document library.** Approved versions publish themselves, grouped by tier, with
+  *Registers and reports* for reference. Per-document acknowledgement (everyone, admins only, nobody); each
+  acknowledgement keeps version and SHA-256 and restarts with a new version. **Ask for acknowledgement** emails those
+  missing and turns on weekly reminders (nothing is sent until an admin asks). *Policies to read* on My work.
+  Acknowledgement report (CSV) for auditors; the cycle export includes library acknowledgements. Markdown policies
+  from the program repository keep working in their own section. Routes `/policies/doc/{id}`.
 - **Sign in with Microsoft on a VM** (local sign-in mode). Configuration > Sign in with Microsoft takes a separate
   Entra app registration (no API permissions) with a certificate from `grcpal ms-cert`; the sign-in page then shows
   a Sign in with Microsoft button. The person always clicks it and picks the account at Microsoft
@@ -34,11 +35,63 @@ All notable changes are listed here. The project follows [semantic versioning](h
 - Connection test for the sign-in app: settings, certificate validity, Microsoft's signing keys for the tenant, and
   a client-credentials request that proves the certificate is uploaded to the app registration.
 - The Users CSV export has `signin_method` and `entra_linked` columns.
+- **Access reviews: emails to reviewers.** Invitations when a review starts (option) or with *Email reviewers who have
+  not signed off*, optionally giving managers without a portal account a Control owner account first. Reminders from the
+  nightly job from 7 days before the due date, every 3 days, until each reviewer signs off; overdue emails and one
+  overdue notice to admins. Emails carry counts and application names, never the accounts.
+- **Access reviews: remediation tickets** in Jira (Cloud or Data Center) or GitHub Issues, one per application, opened
+  when the last reviewer signs off or with a button (Configuration > Remediation tickets, with a connection test).
+  GRC-pal never disables accounts. Ticket keys are kept on each account and in the audit log.
+- **Access reviews: check removals against the account pulls.** A nightly pull taken after the decision shows whether an
+  account is gone, disabled or has a new role; *Confirm all shown as done* confirms them with a note naming the stored
+  pull.
+- **Access reviews: schedule.** Every 3, 6 or 12 months from the applications read every night, started by the nightly
+  job once per period, with invitations and an email to admins (table `arschedules`).
+
+- **Layout like a modern GRC tool.** Controls open in a **side panel** next to the Controls list and the criterion
+  pages (tabs: Overview, Evidence, Tests, Documents, History, Comments; Esc closes; `#control=ID` links), with the
+  full page one click away. Same visibility as the full page (route `/controls/{id}/panel`, in the authorization
+  table). The **SOC 2 view is two panes**: the criteria list with status dots stays on the left. The menu **folds to
+  icons** (remembered per browser). The control page has section links and a **Documents** section listing the
+  policies and document-library documents that name the control.
+
+- **Azure: custom domain.** `deploy.sh --custom-domain grc.example.com` prints the two DNS records, then binds the
+  name with a free Azure-managed certificate; the template keeps the binding on later deploys (`customDomain`,
+  `customDomainCertificateId`), links and sign-in move to the custom address, and the default address keeps working.
+- **Azure: break-glass alert.** With `--alert-email`, every break-glass sign-in emails the alert address within about
+  five minutes (log alert on the app's "Break-glass sign-in" security event), independent of the app's own email.
+- **Conditional Access collector recognises Security Defaults** (tenants without Entra ID P1): with Security Defaults
+  on and no Conditional Access policy, MFA and legacy authentication count as covered; the device finding remains and
+  explains that a device requirement needs P1. The setting is stored as evidence (`security_defaults.json`).
+- `deploy/azure/check.sh`: post-deploy check for an Azure instance (healthy revision, sign-in enforced,
+  redirect address and secret in place, assignment required, and from the internet: `/healthz` answers while a
+  forged identity header, `/dev/login` and `/login` are refused). `--fix` registers a missing redirect address.
+  `deploy.sh` runs it at the end.
+- `deploy/azure/kit.sh`: write the recovery kit of an existing instance.
 
 ### Changed
+- docs/deploy-azure.md Step 3b covers tenants without Entra ID P1 (per-user assignment, Security Defaults, devices as
+  a detective control, 7-day sign-in logs).
 - **Azure:** Easy Auth asks Microsoft to show the account picker at every sign-in (`prompt=select_account` in
   `main.bicep`), so an open Microsoft session in the browser no longer signs a person in to GRC-pal without a
   click. Applies at the next `deploy.sh` run.
+- `deploy.sh` is safe to repeat after an interrupted run: it registers the sign-in redirect and writes the
+  recovery kit right after the deployment, and a re-run keeps a kit that already holds the same keys instead
+  of stopping.
+- The sign-in edge check accepts `401` as well as a redirect to Microsoft sign-in (Azure answers `401` to
+  clients that do not look like a browser); `200` still fails.
+
+### Security
+- **Reproducible release image.** Base image pinned by digest; every Python package installed from
+  `requirements/image.txt` with SHA-256 hashes (`--require-hashes --only-binary :all:`), GRC-pal itself installed
+  without any download; CI's Python 3.12 tests and pip-audit use the same locked set; Dependabot keeps the lock and
+  the digest current (7-day cooldown). The release workflow pushes by digest, scans that exact digest with Trivy on
+  both platforms, and only then tags it.
+- Pinned CI scanner tools: `filelock` 4.1.0 → 4.2.9 (17 advisories, the open Dependabot alerts on main). App
+  dependencies had no known vulnerabilities (pip-audit).
+- The runtime image has no package manager (`apt` removed after the build): nothing is installed at runtime, and
+  it cleared two HIGH findings in the base image's `apt` (Trivy).
+- No `Server` header from Caddy on VMs or from `grcpal serve` (the container already sent none).
 
 ## [0.6.1] - 2026-11-03 - Fix startup crash on Azure
 ### Fixed

@@ -2,7 +2,7 @@
 
 The **Document library** (menu: Evidence & docs > Document library) holds your whole security document set in one place: the
 policy hierarchy, the built-in Word templates, and your own official versions with every old version kept.
-It sits next to **Policies**, which still handles reading and accepting policies.
+It is the draft workspace: what people read and accept is on the **Policies** page (below).
 
 ## What is in it
 Folders follow a five-tier model. Each tier changes at a different speed, so a new patch deadline changes one
@@ -91,6 +91,27 @@ trust that no approved version was quietly removed. The Trash never empties itse
 | Admin | Everything | Upload, approve, archive, correct version numbers before approval, upload, rename and remove templates, edit details and numbers, add, delete and restore documents |
 | Auditor | Everything, read-only, including the Trash | Download every version and template; check hashes against the audit log |
 | Control owner | Only documents with an approved official version, approved versions only | Download the published copy |
+
+## Policies page: publishing and acknowledgements
+
+- **Publishing is automatic.** As soon as an official version is approved (workflow or direct approval), the document
+  is on **Policies**, in its tier. The page shows only approved, in-force versions; drafts stay in the library.
+  System descriptions, registers and reports (the SOC 2 additions) are listed under **Registers and reports**, for
+  reference only.
+- **Who must acknowledge** is set per document by an admin on its Policies page: everyone with a GRC-pal account
+  (default for policies), admins only, or nobody (default for standards, procedures and registers).
+- **Acknowledging:** the person opens the approved file, ticks *I have read version X* and presses Acknowledge. The
+  record keeps the person, the version and the file's SHA-256. When a new version is approved, everyone acknowledges
+  again; earlier acknowledgements stay as history. Documents still to read are on **My work**.
+- **Nobody is emailed by surprise.** An admin presses **Ask for acknowledgement** to email everyone still missing;
+  after that the nightly job sends a weekly reminder until all have acknowledged.
+- **For the auditor:** *Acknowledgement report (CSV)* lists every document, every person asked, acknowledged or
+  missing, with version, SHA-256 and time; the cycle export includes all acknowledgements; each one is in the audit
+  log (`policy.ack`, control GOV-04).
+- People need a GRC-pal account to acknowledge. With Sign in with Microsoft, add staff as Control owners (they see
+  only what is theirs). In-app acknowledgement is SOC 2 evidence, not a legal e-signature: keep HR documents that
+  need one in your e-signature tool.
+- Markdown policies in `catalog/policies` of your program repository still work, in their own section.
 
 ## How an auditor tests it
 - Every upload, approval, status change, template replacement or removal, rename, delete, restore and (for non-admins) download is in the

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "10129026421410471540"
+      "templateHash": "10911923069905076267"
     }
   },
   "parameters": {
@@ -189,6 +189,20 @@
       "defaultValue": [],
       "metadata": {
         "description": "Optional allow-list of source IP ranges (CIDR). Empty = reachable from anywhere, still behind sign-in."
+      }
+    },
+    "customDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional own address for the portal, e.g. grc.example.com. DNS first: CNAME to the default address and TXT asuid.<name> = customDomainVerificationId (deploy.sh --custom-domain prints both). Empty = the default *.azurecontainerapps.io address."
+      }
+    },
+    "customDomainCertificateId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Resource ID of the Azure-managed certificate for customDomain (deploy.sh finds or creates it). Empty with a customDomain = the name is added without TLS so the certificate can be issued."
       }
     }
   },
@@ -630,7 +644,8 @@
               }
             ],
             "transport": "auto",
-            "allowInsecure": false
+            "allowInsecure": false,
+            "customDomains": "[if(empty(parameters('customDomain')), createArray(), createArray(if(empty(parameters('customDomainCertificateId')), createObject('name', parameters('customDomain'), 'bindingType', 'Disabled'), createObject('name', parameters('customDomain'), 'bindingType', 'SniEnabled', 'certificateId', parameters('customDomainCertificateId')))))]"
           },
           "secrets": "[if(variables('usePrivateRegistry'), concat(variables('baseSecrets'), createArray(createObject('name', 'registry-password', 'value', parameters('registryPassword')))), variables('baseSecrets'))]",
           "registries": "[if(variables('usePrivateRegistry'), createArray(createObject('server', parameters('registryServer'), 'username', parameters('registryUsername'), 'passwordSecretRef', 'registry-password')), createArray())]"
@@ -675,7 +690,7 @@
                 },
                 {
                   "name": "GRCPAL_PUBLIC_URL",
-                  "value": "[format('https://{0}.{1}', variables('appName'), reference(resourceId('Microsoft.App/managedEnvironments', format('cae-{0}', variables('appName'))), '2024-03-01').defaultDomain)]"
+                  "value": "[if(or(empty(parameters('customDomain')), empty(parameters('customDomainCertificateId'))), format('https://{0}.{1}', variables('appName'), reference(resourceId('Microsoft.App/managedEnvironments', format('cae-{0}', variables('appName'))), '2024-03-01').defaultDomain), format('https://{0}', parameters('customDomain')))]"
                 },
                 {
                   "name": "GRCPAL_TABLES_URL",
@@ -838,7 +853,7 @@
                 },
                 {
                   "name": "GRCPAL_PUBLIC_URL",
-                  "value": "[format('https://{0}.{1}', variables('appName'), reference(resourceId('Microsoft.App/managedEnvironments', format('cae-{0}', variables('appName'))), '2024-03-01').defaultDomain)]"
+                  "value": "[if(or(empty(parameters('customDomain')), empty(parameters('customDomainCertificateId'))), format('https://{0}.{1}', variables('appName'), reference(resourceId('Microsoft.App/managedEnvironments', format('cae-{0}', variables('appName'))), '2024-03-01').defaultDomain), format('https://{0}', parameters('customDomain')))]"
                 },
                 {
                   "name": "GRCPAL_TABLES_URL",
@@ -1088,6 +1103,48 @@
     },
     {
       "condition": "[not(empty(parameters('alertEmail')))]",
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2023-03-15-preview",
+      "name": "[format('grcpal-{0}-break-glass', parameters('instanceName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "displayName": "[format('GRC-pal {0}: break-glass sign-in', parameters('instanceName'))]",
+        "description": "The break-glass account signed in. If this is not a planned drill or a known emergency, treat it as an incident: run breakglass.sh disarm and check the audit log.",
+        "severity": 1,
+        "enabled": true,
+        "scopes": [
+          "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-{0}', variables('appName')))]"
+        ],
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT5M",
+        "criteria": {
+          "allOf": [
+            {
+              "query": "ContainerAppConsoleLogs_CL | where Log_s has \"Break-glass sign-in\" and Log_s contains '\"break_glass\": true'",
+              "timeAggregation": "Count",
+              "operator": "GreaterThan",
+              "threshold": 0,
+              "failingPeriods": {
+                "numberOfEvaluationPeriods": 1,
+                "minFailingPeriodsToAlert": 1
+              }
+            }
+          ]
+        },
+        "autoMitigate": false,
+        "actions": {
+          "actionGroups": [
+            "[resourceId('Microsoft.Insights/actionGroups', take(format('ag-{0}', variables('appName')), 64))]"
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/actionGroups', take(format('ag-{0}', variables('appName')), 64))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-{0}', variables('appName')))]"
+      ]
+    },
+    {
+      "condition": "[not(empty(parameters('alertEmail')))]",
       "type": "Microsoft.Insights/activityLogAlerts",
       "apiVersion": "2020-10-01",
       "name": "[format('grcpal-{0}-security-change', parameters('instanceName'))]",
@@ -1134,11 +1191,19 @@
   "outputs": {
     "portalUrl": {
       "type": "string",
+      "value": "[if(or(empty(parameters('customDomain')), empty(parameters('customDomainCertificateId'))), format('https://{0}.{1}', variables('appName'), reference(resourceId('Microsoft.App/managedEnvironments', format('cae-{0}', variables('appName'))), '2024-03-01').defaultDomain), format('https://{0}', parameters('customDomain')))]"
+    },
+    "defaultUrl": {
+      "type": "string",
       "value": "[format('https://{0}.{1}', variables('appName'), reference(resourceId('Microsoft.App/managedEnvironments', format('cae-{0}', variables('appName'))), '2024-03-01').defaultDomain)]"
+    },
+    "customDomainVerificationId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/managedEnvironments', format('cae-{0}', variables('appName'))), '2024-03-01').customDomainConfiguration.customDomainVerificationId]"
     },
     "redirectUri": {
       "type": "string",
-      "value": "[format('{0}/.auth/login/aad/callback', format('https://{0}.{1}', variables('appName'), reference(resourceId('Microsoft.App/managedEnvironments', format('cae-{0}', variables('appName'))), '2024-03-01').defaultDomain))]"
+      "value": "[format('{0}/.auth/login/aad/callback', if(or(empty(parameters('customDomain')), empty(parameters('customDomainCertificateId'))), format('https://{0}.{1}', variables('appName'), reference(resourceId('Microsoft.App/managedEnvironments', format('cae-{0}', variables('appName'))), '2024-03-01').defaultDomain), format('https://{0}', parameters('customDomain'))))]"
     },
     "storageAccount": {
       "type": "string",

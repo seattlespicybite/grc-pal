@@ -41,10 +41,11 @@ jobs:
         run: |
           "$RUNNER_TEMP/tools/bin/bandit" -r grcpal --severity-level medium \
             -b .github/security/bandit-baseline.json
-      - name: Install GRC-pal with everything the image ships
+      - name: Install exactly what the image ships (requirements/image.txt, hash-checked)
         run: |
           python -m venv --upgrade-deps "$RUNNER_TEMP/app"   # current pip, not the older one bundled with the runner Python
-          "$RUNNER_TEMP/app/bin/pip" install -e ".[all]"
+          "$RUNNER_TEMP/app/bin/pip" install --require-hashes --only-binary :all: -r requirements/image.txt
+          "$RUNNER_TEMP/app/bin/pip" install --no-deps -e .
       - name: pip-audit (installed packages against the PyPI and OSV advisories)
         env:
           PIPAPI_PYTHON_LOCATION: ${{ runner.temp }}/app/bin/python   # audit the app environment, not the tools

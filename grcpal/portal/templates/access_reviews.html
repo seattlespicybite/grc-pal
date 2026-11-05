@@ -25,6 +25,7 @@
 </fieldset>
 <label>Other accounts (optional CSV, up to {{ max_accounts }} accounts in total)<input type="file" name="accounts" accept=".csv,text/csv"></label>
 <label>People file (optional CSV: email, manager_email; it wins over Entra ID)<input type="file" name="people" accept=".csv,text/csv"></label>
+<label class="check"><input type="checkbox" name="invite" checked> Email the reviewers when the review is ready</label>
 <div><button class="btn" type="submit">Start review</button> <a class="btn ghost" href="/access-reviews/template.csv">Download CSV template</a></div>
 </form>
 <div class="hint mt">Applications are read in the background; if one cannot be read completely, nothing is created and the reason shows above.
@@ -32,6 +33,26 @@ For anything without a connection, export the user list (a database, any admin c
 <span class="mono">{{ columns|join(', ') }}</span>. Only <span class="mono">app</span> and <span class="mono">account_id</span> are required; the other columns improve the review.
 The managers come from <span class="mono">manager_email</span> or from the people file. If any row is wrong, nothing is imported and the message says which rows to fix.
 The files are stored write-once with a SHA-256 as proof of what was reviewed.</div></div>
+
+<div class="card mb" id="schedule"><h2>Schedule</h2>
+<p class="sub">Start the same review automatically every quarter, half year or year, from the applications GRC-pal reads every night. Auditors look for reviews that happen on time, every time.
+{% if schedule.active %}<b>On.</b> Next review starts on <span class="mono">{{ schedule.next_start or '—' }}</span>.{% if schedule.last_campaign %} Last one: <a href="/access-reviews/{{ schedule.last_campaign }}">{{ schedule.last_period }}</a>.{% endif %}{% else %}<b>Off.</b>{% endif %}
+{% if schedule.last_error %}<span class="pill attention">Last start failed</span> {{ schedule.last_error }}{% endif %}</p>
+<details {{ 'open' if not schedule.active and apps }}><summary>{{ 'Change the schedule' if schedule.active else 'Set up a schedule' }}</summary>
+<form method="post" action="/access-reviews/schedule" class="grid mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label class="check"><input type="checkbox" name="active" {{ 'checked' if schedule.active or not schedule.RowKey }}> Start reviews automatically</label>
+<div class="form-row"><div><label for="sn">Name</label><input id="sn" type="text" name="name" maxlength="80" value="{{ schedule.name or 'User access review' }}" required><div class="hint">The period is added, for example “User access review 2027-01”.</div></div>
+<div><label for="se">How often</label><select id="se" name="every">{% for n, label in frequencies.items() %}<option value="{{ n }}" {{ 'selected' if (schedule.every or 3) == n }}>{{ label }}</option>{% endfor %}</select></div>
+<div><label for="sm">Starting in</label><select id="sm" name="first_month">{% for m in months %}<option value="{{ loop.index }}" {{ 'selected' if (schedule.first_month or 1) == loop.index }}>{{ m }}</option>{% endfor %}</select></div>
+<div><label for="sd">On day</label><input id="sd" type="number" name="start_day" min="1" max="28" value="{{ schedule.start_day or 1 }}"></div>
+<div><label for="sl">Days to finish</label><input id="sl" type="number" name="days" min="3" max="60" value="{{ schedule.days or 14 }}"></div></div>
+<fieldset class="v-fieldset"><legend>Applications</legend>
+{% for a in apps %}<label class="check"><input type="checkbox" name="apps" value="{{ a.RowKey }}" {{ 'checked' if a.RowKey in (schedule.app_ids or []) or not schedule.RowKey }}> {{ a.name }} <span class="sub">{{ kinds[a.kind] }}</span></label>
+{% else %}<div class="sub">Add applications that GRC-pal reads automatically first.</div>{% endfor %}
+{% if ms_on %}<label class="check mt"><input type="checkbox" name="entra_managers" {{ 'checked' if schedule.entra_managers or not schedule.RowKey }}> Take managers from Entra ID (direct reports)</label>{% endif %}
+<label class="check"><input type="checkbox" name="invite" {{ 'checked' if schedule.invite or not schedule.RowKey }}> Email the reviewers when it starts (reminders follow before the due date)</label></fieldset>
+<div><button class="btn" type="submit">Save schedule</button></div></form>
+<div class="hint mt">The nightly job starts the review on its day (only for periods that begin after you save) and emails the admins. If an application cannot be read, nothing is created and the admins are told.</div></details></div>
 {% endif %}
 
 <div class="card"><div class="table-wrap"><table>

@@ -24,8 +24,13 @@ reachable only inside your network) comes in as a CSV export. Every source is re
    One button keeps every account without a flag.
 5. **Managers sign off.** When all their accounts are decided, the manager signs off. That locks their decisions.
    An admin can reopen a sign-off if a manager made a mistake. Every change is in the audit log.
-6. **An admin carries out and confirms the removals.** Do the removal in the application, then confirm it in GRC-pal and
-   say how it was done. A decision without follow-through is a finding in most audits.
+6. **The removals are carried out and confirmed.** With *Remediation tickets* set up, GRC-pal opens one Jira or GitHub
+   ticket per application for the accounts to remove or change (when the last manager signs off, or with a button). The
+   people who run the application make the change; GRC-pal never disables accounts itself. Then an admin confirms each
+   change and says how it was done, or presses **Check with the latest account pulls**: for applications GRC-pal reads
+   every night, a pull taken after the decision shows whether the account is gone, disabled or has a new role, and
+   **Confirm all shown as done** confirms those with a note that names the stored pull. A decision without
+   follow-through is a finding in most audits.
 7. **The admin closes the review.** It needs a reviewer and a decision for every account, a sign-off from every manager, and
    confirmed removals (or a written reason). Closing stores the decisions file write-once in the evidence store.
 
@@ -88,11 +93,39 @@ review: read them as an Entra enterprise application if the dashboard uses Micro
 customers' users who sign in to your product through WorkOS are usually managed by your customers; review them only if
 your system description says you manage them (the WorkOS ready-made settings read them).
 
+## Emails to reviewers
+
+- **Invitation.** Tick *Email the reviewers when the review is ready* when you start a review, or press **Email reviewers
+  who have not signed off** on the review. The email says how many accounts in which applications, the due date, and links
+  to the review. It never lists the accounts themselves.
+- **Reminders** go out by themselves with the nightly job: from 7 days before the due date, every 3 days, to every reviewer
+  who has not signed off. After the due date the email says *Overdue*, and admins get one overdue notice listing who is
+  still waiting.
+- The review page shows when each manager was invited and last reminded.
+
 ## Who needs a portal account
 
 Managers must be able to sign in. Add them as **Control owners** (`grcpal users add manager@example.com --role contributor`,
-or the Users page). A Control owner sees only the accounts assigned to them in a review; nothing else changes for them.
-When you start a review, GRC-pal tells you which managers in the file have no portal account yet.
+or the Users page), or tick *Give managers without a portal account a Control owner account first* when you email the
+reviewers: they get Sign in with Microsoft when it is set up, otherwise a one-time password link. A Control owner sees
+only the accounts assigned to them in a review; nothing else changes for them. When you start a review, GRC-pal tells you
+which managers in the file have no portal account yet.
+
+## Schedule
+
+*Access reviews > Schedule* starts the same review every 3, 6 or 12 months from a start month and day, from the
+applications GRC-pal reads every night, with managers from Entra ID. The nightly job starts it on its day, emails the
+reviewers (if chosen) and tells the admins. It starts each period once, and never a period that began before the
+schedule was saved. If the job did not run for a while, the review still gets its full number of days. If an application
+cannot be read, nothing is created, admins are emailed, and that period is not retried (start it by hand).
+
+## Remediation tickets
+
+*Configuration > Remediation tickets*: Jira Cloud (site address, account email, API token), Jira Data Center (address and
+personal access token, no email) or GitHub Issues (the GitHub token, which then needs *Issues: read and write* on the
+chosen repository). One ticket per application lists account, name and email, the decision, the role and the manager's
+note as plain text (no @mentions or Jira markup). The ticket key and link are kept on each account and in the audit log
+(`access_review.ticket`). Use a Jira account that can only create issues in that one project.
 
 ## The accounts file
 
@@ -129,8 +162,10 @@ sent anywhere else: no AI is involved in access reviews.
   comment, who decided and when, and whether the removal was confirmed.
 - **Independence.** No reviewer reviewed their own account. The audit log shows each decision, sign-off, reassignment and
   confirmation with the application and entry number, but never names or email addresses.
-- **Follow-through.** Each removal or change has a confirmation with how it was done, or the review records why it closed
-  with open items.
+- **Follow-through.** Each removal or change has a confirmation with how it was done (with the ticket key, or the stored
+  account pull that shows it), or the review records why it closed with open items.
+- **On time, every time.** The schedule and the invitation and reminder dates are in the audit log
+  (`access_review.schedule`, `access_review.invite`, `access_review.remind`).
 - **Tamper evidence.** The audit log is hash-chained (*Audit log > Verify integrity*), and a closed review returns the stored
   file, not a rebuilt one.
 
@@ -143,7 +178,9 @@ sent anywhere else: no AI is involved in access reviews.
 - Exports neutralize spreadsheet formulas (cells starting with `=`, `+`, `-` or `@`).
 - Account lists are personal data about employees. They sit in the same storage as the rest of the portal and are included in
   its encrypted backups.
-- Connections are read-only. GRC-pal never removes access itself; removals stay with the application's admins.
+- Connections are read-only. GRC-pal never removes access itself; removals stay with the application's admins. Tickets
+  are the only thing GRC-pal writes elsewhere. The Jira address is checked like every outbound call (public addresses
+  only unless `GRCPAL_JIRA_ALLOW_PRIVATE=1`), and changing it clears the saved Jira token.
 - A custom application's token is encrypted (AES-GCM, bound to the organization and that application), never shown again,
   never written to logs or the audit log, and sent only to that application's host. Redirects are not followed, next-page
   links must stay on the same host, and requests to internal networks and cloud metadata addresses are blocked. An
@@ -153,7 +190,6 @@ sent anywhere else: no AI is involved in access reviews.
 
 ## Not in this version yet
 
-- Email to managers when a review starts. For now, tell them or use the *Access reviews* menu entry, which shows a count.
 - Sending privileged accounts to the application owner instead of the manager (today only accounts without a manager go to the owner).
-- Scheduling a review every quarter.
+- A WorkOS source with roles and active status from organization memberships (today: the custom REST preset).
 - Reading GitHub SAML identities to match logins to people without an identity map.

@@ -1,0 +1,52 @@
+{% extends "base.html" %}{% from "_risk_form.html" import risk_fields %}{% from "_risk_heat.html" import heat %}{% block title %}Risk register{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Risk register</h1>
+<div class="sub">What could stop us meeting our commitments, how likely and how bad it is before and after our controls, and how we treat it (SOC 2 CC3.1 to CC3.4, CC9.1). Every change keeps the previous version.</div></div>
+<div class="head-actions"><a class="btn ghost" href="/risks.csv">Download CSV</a></div></div>
+
+{% if to_import %}<div class="card card-info mb"><div class="row-between"><div><b>{{ to_import|length }} starter risk{{ 's' if to_import|length != 1 }} in registers/risks.yaml {{ 'are' if to_import|length != 1 else 'is' }} not in the register yet</b>
+<div class="sub">Import copies them in (nothing here is changed). Then re-rate each one with its owner.</div></div>
+<form method="post" action="/risks/import"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" type="submit">Import starter risks</button></form></div></div>{% endif %}
+
+<div class="grid v-stats mb">
+<div class="stat"><div class="n">{{ summary.open }}</div><div class="l">Open risks</div></div>
+<div class="stat"><div class="n{{ ' bad-text' if summary.by_band.critical or summary.by_band.high }}">{{ summary.by_band.critical + summary.by_band.high }}</div><div class="l">High or critical after controls</div></div>
+<div class="stat"><div class="n">{{ summary.fraud }}</div><div class="l">Fraud risks (CC3.3)</div></div>
+<div class="stat"><div class="n{{ ' bad-text' if summary.review_due }}">{{ summary.review_due }}</div><div class="l">Review overdue</div></div>
+<div class="stat"><div class="n{{ ' bad-text' if summary.acceptance_expired }}">{{ summary.acceptance_expired }}</div><div class="l">Acceptance expired</div></div>
+<div class="stat"><div class="n{{ ' bad-text' if summary.approval_overdue or not summary.last_approval }}">{{ summary.last_approval.at[:10] if summary.last_approval else 'Never' }}</div><div class="l">Assessment last approved</div></div>
+</div>
+
+<div class="card mb"><div class="risk-heats">{{ heat(inherent, 'Before controls') }}{{ heat(residual, 'With controls') }}</div></div>
+
+<div class="card mb"><div class="table-wrap"><table>
+<thead><tr><th>Risk</th><th>Category</th><th>Owner</th><th>Before</th><th>With controls</th><th>Treatment</th><th>Controls</th><th>Next review</th></tr></thead>
+<tbody>{% for r in rows %}<tr>
+<td><a href="/risks/{{ r.id }}"><b>{{ r.id }}</b> {{ r.title }}</a>{% if r.status != 'open' %}<div class="sub">Closed</div>{% endif %}</td>
+<td>{{ categories.get(r.category, r.category) }}</td><td>{{ r.owner }}</td>
+<td><span class="pill risk-{{ r.band }}">{{ r.score }} {{ r.band }}</span></td>
+<td><span class="pill risk-{{ r.residual_band }}">{{ r.residual_score }} {{ r.residual_band }}</span></td>
+<td>{{ treatments.get(r.treatment, r.treatment) }}{% if r.acceptance_expired %}<div class="sub bad-text">Acceptance expired</div>{% endif %}</td>
+<td><div class="tags">{% for c in r.controls or [] %}<a href="/controls/{{ c }}"><span>{{ c }}</span></a>{% endfor %}</div></td>
+<td class="nowrap"><span class="mono{{ ' bad-text' if r.review_due }}">{{ r.next_review }}</span></td>
+</tr>{% else %}<tr><td colspan="8"><div class="empty">No risks yet.{% if user.is_admin %} Add one below{% if to_import %} or import the starter risks{% endif %}.{% endif %}</div></td></tr>{% endfor %}</tbody>
+</table></div></div>
+
+{% if user.is_admin %}
+<details class="card mb"><summary><b>Add a risk</b></summary>
+<form method="post" action="/risks/new" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+{{ risk_fields({}, categories, treatments, statuses, levels, impacts) }}
+<button class="btn" type="submit">Add risk</button></form></details>
+
+<div class="card mb"><h2>Approve the risk assessment</h2>
+<div class="sub">Do this once a year and after a significant change. The whole register is stored write-once in the evidence store with a SHA-256 hash (RSK-01){% if summary.approval_due %}; next one due {{ summary.approval_due }}{% endif %}.</div>
+<form method="post" action="/risks/approve" class="form-row mt"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="grow"><label for="note">What was reviewed and by whom</label><input id="note" name="note" required minlength="10" maxlength="500" placeholder="Annual risk assessment with the CEO and CTO"></div>
+<div><button class="btn" type="submit">Approve assessment</button></div></form></div>
+{% endif %}
+
+{% if summary.approvals %}<div class="card"><h2>Approvals</h2><div class="table-wrap"><table>
+<thead><tr><th>When</th><th>By</th><th>Risks</th><th>Note</th><th>Evidence</th></tr></thead>
+<tbody>{% for a in summary.approvals %}<tr><td class="nowrap">{{ a.at[:16].replace('T', ' ') }}</td><td>{{ a.by }}</td><td>{{ a.risks }}</td><td>{{ a.note }}</td><td class="mono">{{ a.evidence_run }}<div class="sub">sha256 {{ a.sha256[:16] }}…</div></td></tr>{% endfor %}</tbody>
+</table></div></div>{% endif %}
+{% endblock %}

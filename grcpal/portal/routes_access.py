@@ -8,10 +8,15 @@ from fastapi.responses import HTMLResponse
 
 from grcpal import accesssources as src
 from grcpal.portal import accessapps as aa
+from grcpal.portal import accessfollowup as fu
 from grcpal.portal import accessreview as ar
 from grcpal.portal.auth import User
 from grcpal.portal.security import MAX_UPLOAD_BYTES
 from grcpal.portal.service import Forbidden, Invalid
+
+
+MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+          "November", "December")
 
 
 def register(app, h) -> None:
@@ -46,7 +51,25 @@ def register(app, h) -> None:
                       statuses=ar.STATUS, columns=ar.COLUMNS, max_accounts=ar.MAX_ACCOUNTS,
                       max_mb=MAX_UPLOAD_BYTES // (1024 * 1024), apps=[a for a in apps if a["kind"] != "csv"],
                       kinds=src.KINDS, jobs=portal.access_review_jobs(user),
-                      ms_on=portal.settings.flag("GRCPAL_MS_ENABLED"))
+                      ms_on=portal.settings.flag("GRCPAL_MS_ENABLED"),
+                      schedule=portal.access_schedule(user) if user.is_admin else {}, frequencies=fu.FREQUENCIES,
+                      months=MONTHS)
+
+    @app.post("/access-reviews/schedule")
+    async def review_schedule(request: Request, user: User = Depends(current_user)):
+        form = await posted(request, user)
+        on = lambda k: str(form.get(k, "")) in ("on", "true", "1")  # noqa: E731
+        try:
+            s = p().save_access_schedule(user, on("active"), str(form.get("name", "")), str(form.get("every", "")),
+                                         str(form.get("first_month", "")), str(form.get("start_day", "")),
+                                         str(form.get("days", "")), [str(a) for a in form.getlist("apps")],
+                                         on("entra_managers"), on("invite"))
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back("/access-reviews#schedule", err=str(exc))
+        msg = f"Schedule saved. Next review starts on {s['next_start']}" if s.get("active") else "Schedule turned off"
+        return back("/access-reviews#schedule", msg=msg)
 
     @app.get("/access-reviews/template.csv")
     def reviews_template(user: User = Depends(current_user)):
@@ -59,10 +82,11 @@ def register(app, h) -> None:
         people = await read_file(form, "people")
         apps = [str(a) for a in form.getlist("apps")]
         managers = str(form.get("entra_managers", "")) in ("on", "true", "1")
+        invite = str(form.get("invite", "")) in ("on", "true", "1")
         if apps or managers:  # pulling from applications runs in the background
             try:
                 p().start_access_review(user, str(form.get("name", "")), str(form.get("due", "")), apps, accounts,
-                                        people, managers)
+                                        people, managers, invite=invite)
             except Forbidden as exc:
                 raise h.HTTPError(403, str(exc)) from exc
             except Invalid as exc:
@@ -79,6 +103,9 @@ def register(app, h) -> None:
             return back("/access-reviews", err=str(exc))
         warn = camp["reviewers_without_account"]
         msg = f"Review started with {camp['records']} accounts."
+        if invite and len(warn) < len(camp["reviewers"]):
+            sent = p().invite_access_reviewers(user, camp["RowKey"])["sent"]
+            msg += f" Emailed {len(sent)} reviewer{'s' if len(sent) != 1 else ''}."
         if warn:
             msg += (f" {len(warn)} manager{'s have' if len(warn) != 1 else ' has'} no portal account yet: "
                     "add them as Control owners so they can review.")
@@ -182,8 +209,69 @@ def register(app, h) -> None:
         except Invalid as exc:
             raise h.HTTPError(404, str(exc)) from exc
         choices = portal.access_reviewer_choices(user) if user.is_admin else []
+        extras = (portal.access_review_extras(view["campaign"], view.get("entries") or [])
+                  if view["sees_all"] else {})
         return render(request, user, "access_review.html", nav_active="access", v=view, decisions=ar.DECISIONS,
-                      flag_labels=ar.FLAGS, statuses=ar.STATUS, choices=choices)
+                      flag_labels=ar.FLAGS, statuses=ar.STATUS, choices=choices, x=extras)
+
+    @app.post("/access-reviews/{cid}/invite")
+    async def review_invite(request: Request, cid: str, user: User = Depends(current_user)):
+        form = await posted(request, user)
+        dest = f"/access-reviews/{cid}"
+        try:
+            r = p().invite_access_reviewers(user, cid, str(form.get("create_accounts", "")) in ("on", "1"))
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(dest, err=str(exc))
+        msg = f"Emailed {len(r['sent'])} reviewer{'s' if len(r['sent']) != 1 else ''}"
+        if r["created"]:
+            msg += f"; gave {len(r['created'])} manager{'s' if len(r['created']) != 1 else ''} a Control owner account"
+        if r["without_account"]:
+            msg += (f". {len(r['without_account'])} without a portal account were not emailed: tick \"give them an "
+                    "account\" or add them on Users and roles")
+        return back(dest, msg=msg)
+
+    @app.post("/access-reviews/{cid}/tickets")
+    async def review_tickets(request: Request, cid: str, user: User = Depends(current_user)):
+        await posted(request, user)
+        dest = f"/access-reviews/{cid}"
+        try:
+            r = p().create_access_tickets(user, cid)
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(dest, err=str(exc))
+        if r["failed"]:
+            return back(dest, err=f"Opened {len(r['created'])} ticket(s); failed for "
+                                  + "; ".join(f"{f['app']}: {f['error']}" for f in r["failed"]))
+        return back(dest, msg="Opened " + ", ".join(f"{t['key']} ({t['app']})" for t in r["created"]))
+
+    @app.post("/access-reviews/{cid}/check")
+    async def review_check(request: Request, cid: str, user: User = Depends(current_user)):
+        await posted(request, user)
+        dest = f"/access-reviews/{cid}"
+        try:
+            c = p().check_access_changes(user, cid)
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(dest, err=str(exc))
+        done = sum(c[k] for k in fu.DONE_CHECKS)
+        return back(dest, msg=f"Checked against the latest pulls: {done} done, {c['still_there']} still there, "
+                              f"{c['no_newer_pull'] + c['no_pull']} without a newer pull")
+
+    @app.post("/access-reviews/{cid}/confirm-checked")
+    async def review_confirm_checked(request: Request, cid: str, user: User = Depends(current_user)):
+        await posted(request, user)
+        dest = f"/access-reviews/{cid}"
+        try:
+            n = p().confirm_checked_changes(user, cid)
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(dest, err=str(exc))
+        return back(dest, msg=f"Confirmed {n} change{'s' if n != 1 else ''} shown as done in the pulls")
 
     @app.post("/access-reviews/{cid}/decide")
     async def review_decide(request: Request, cid: str, user: User = Depends(current_user)):

@@ -166,6 +166,13 @@ def _automation_mail(args) -> None:
             print(f"digest {d['kind']}: sent to {len(d['sent'])} admin(s)")
         for r in portal.send_approval_reminders(SYSTEM):
             print(f"reminder: {r['doc']} v{r['version']} still waiting for approval")
+        for s in portal.run_access_review_schedules(SYSTEM):
+            print(f"access review schedule {s['period']}: " + (f"started {s['campaign']}" if s.get("campaign")
+                                                              else f"FAILED {s.get('error', '')}"))
+        for r in portal.send_policy_ack_reminders(SYSTEM):
+            print(f"policy {r['doc']}: {r['reminded']} acknowledgement reminder(s)")
+        for r in portal.send_access_review_reminders(SYSTEM):
+            print(f"access review {r['campaign']}: {r['reminded']} reminder(s){' (overdue)' if r['overdue'] else ''}")
         portal.mailer._pool and portal.mailer._pool.shutdown(wait=True)
     except Exception as exc:  # noqa: BLE001 - mail must never break evidence collection
         print(f"WARN  automation email: {type(exc).__name__}: {exc}", file=sys.stderr)
@@ -382,7 +389,7 @@ def cmd_serve(args) -> int:
         os.environ["GRCPAL_BASE"] = str(Path(args.base).resolve())
     print(f"GRC-pal portal on http://{args.host}:{args.port}  (auth: {os.environ['GRCPAL_AUTH_MODE']}, "
           f"data: {os.environ['GRCPAL_SQLITE']}{', demo data' if args.demo else ''})")
-    uvicorn.run("grcpal.portal.app:app", host=args.host, port=args.port, log_level="warning")
+    uvicorn.run("grcpal.portal.app:app", host=args.host, port=args.port, log_level="warning", server_header=False)
     return 0
 
 

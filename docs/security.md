@@ -67,6 +67,12 @@ file contents.
   nightly a ZAP baseline crawls a demo container ([Security scanning in CI](#security-scanning-in-ci)).
 - GitHub Actions are pinned to exact commit hashes and get the least permissions they need; checkouts do
   not keep the token on disk. Dependabot proposes updates after a 7-day cooldown.
+- **Reproducible inputs.** The image's base (`python:3.12-slim`) is pinned by digest, and every Python
+  package comes from `requirements/image.txt` with its SHA-256 (pip refuses anything else, and GRC-pal itself is
+  installed without fetching anything). CI's Python 3.12 tests and pip-audit use the same locked versions.
+  Dependabot proposes new digests and versions after a 7-day cooldown.
+- **What is scanned is what ships.** A release pushes the image by digest only, scans that exact digest
+  (both platforms) for high or critical vulnerabilities with a fix, and only then gives it its version tags.
 - Releases need a maintainer approval, are built in CI with an SBOM and signed build provenance.
   Verify an image before you run it: `gh attestation verify oci://ghcr.io/seattlespicybite/grc-pal:<version> --owner seattlespicybite`
 

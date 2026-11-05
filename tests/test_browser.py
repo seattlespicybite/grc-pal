@@ -66,3 +66,43 @@ def test_forms_work_in_chromium(server):
         page.wait_for_load_state()
         assert portal.settings.get("GRCPAL_ORG_NAME") == "Browser Test Co"
         browser.close()
+
+
+def test_control_panel_and_slim_menu_in_chromium(server):
+    """The control side panel opens from a list (no new page), tabs work with the keyboard, Esc closes it, a
+    #control= link opens it, and the slim menu is remembered. Also: no errors under the strict CSP."""
+    portal, base = server
+    with playwright.sync_playwright() as p:
+        try:
+            browser = p.chromium.launch()
+        except Exception as exc:  # noqa: BLE001
+            pytest.skip(f"Chromium not available: {exc}")
+        page = browser.new_page(viewport={"width": 1400, "height": 900})
+        errors = []
+        page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+        page.goto(base + "/dev/login")
+        page.click("text=Alex Admin")
+        page.goto(base + "/criteria/CC6.1")
+        page.click('a[data-panel="IAM-02"] >> nth=0')
+        page.wait_for_selector("[data-drawer]:not([hidden])")
+        assert page.url.endswith("/criteria/CC6.1#control=IAM-02"), "the list stays; no new page"
+        assert page.evaluate("document.activeElement.id") == "drawer-title"
+        assert page.is_visible("#cp-overview") and page.is_hidden("#cp-evidence")
+        page.focus("#cpt-overview")
+        page.keyboard.press("ArrowRight")
+        assert page.is_visible("#cp-evidence") and page.get_attribute("#cpt-evidence", "aria-selected") == "true"
+        page.keyboard.press("Escape")
+        assert page.is_hidden("[data-drawer]") and "#control=" not in page.url
+        page.goto(base + "/controls#control=HR-01")
+        page.wait_for_selector("[data-drawer]:not([hidden])")
+        assert "HR-01" in page.inner_text("[data-drawer]")
+        page.evaluate("window.location.hash = '#control=IAM-02'")
+        page.wait_for_selector('[data-panel-id="IAM-02"]')  # the hash alone switches the panel
+        page.click("[data-drawer-close]")
+        page.click("[data-nav-toggle]")
+        assert page.evaluate("document.body.classList.contains('nav-slim')")
+        page.goto(base + "/controls")
+        assert page.evaluate("document.body.classList.contains('nav-slim')"), "remembered in this browser"
+        assert page.get_attribute("[data-nav-toggle]", "aria-expanded") == "false"
+        assert not errors, errors
+        browser.close()

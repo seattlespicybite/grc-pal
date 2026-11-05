@@ -1,0 +1,13 @@
+{# Left pane of the framework view: every in-scope family and its criteria, with a status dot each. #}
+<nav class="fw-tree" aria-label="SOC 2 criteria">
+  <a class="fw-top{{ ' on' if not crit_id }}" href="/criteria"{% if not crit_id %} aria-current="page"{% endif %}>Overview</a>
+  {% for f in tree if f.in_scope %}
+  <details class="fw-fam"{% if f.id == family or f.id == open_family %} open{% endif %}>
+    <summary><span class="fw-fam-id">{{ f.id }}</span><span class="fw-fam-name">{{ f.name }}</span>
+      <span class="fw-fam-n" title="{{ f.counts.ok + f.counts.accepted }} of {{ f.total }} controls passing or accepted">{{ f.counts.ok + f.counts.accepted }}/{{ f.total }}</span></summary>
+    {% for c in f.criteria %}<a class="fw-crit{{ ' on' if c.id == crit_id }}" href="/criteria/{{ c.id }}"{% if c.id == crit_id %} aria-current="page"{% endif %}>
+      <span class="dot dot-{{ c.status }}" aria-hidden="true"></span><span class="sr-only">{{ status_labels[c.status] }}:</span>
+      <b>{{ c.id }}</b> <span class="fw-crit-t">{{ c.title }}</span></a>{% endfor %}
+  </details>
+  {% endfor %}
+</nav>

@@ -90,6 +90,16 @@ change record as evidence (CC8.1).
 Download it (Cloud Shell: **Manage files → Download**), keep it in a password manager away from the backups,
 then delete the copy.
 
+**Your own address (optional).** Add `--custom-domain grc.example.com`. The first run prints two DNS records
+to create at your DNS provider (a CNAME to the default address and a TXT record `asuid.grc.example.com`).
+Create them, wait a few minutes and run the script again with the same options: Azure issues a free managed
+certificate, the portal moves to `https://grc.example.com` (email links and sign-in included) and the
+default address keeps working. **Always pass `--custom-domain` when you re-run the script**, or the binding
+is removed.
+
+**Alerts** (`--alert-email`): no successful backup in two days; changes to locks, role assignments, write-once
+policies or sign-in settings; and **every break-glass sign-in** (within about five minutes).
+
 > Prefer clicking? `deploy/azure/azuredeploy.json` is the same template for the Azure portal's
 > *Deploy a custom template* page. You then create the app registration yourself and pass its
 > client ID and secret as parameters.
@@ -123,11 +133,38 @@ curl -sI "$URL/healthz" | grep -iE 'content-security-policy|strict-transport-sec
 Then sign in, send a forged address (`curl -H "X-Forwarded-For: 6.6.6.6" ...` with your session) and check
 **Audit log**: your real address is shown, not 6.6.6.6 (V-2).
 
-## Step 3b. Allow only your staff, on managed devices (Conditional Access)
+## Step 3b. Allow only your staff
 
-Sign-in happens in Entra ID before any request reaches GRC-pal, so Conditional Access (CA) decides
-who gets in. This needs Entra ID P1 (included in Microsoft 365 E3/E5 and Business Premium) and Intune
-for device compliance.
+Sign-in happens in Entra ID before any request reaches GRC-pal. What you can require there depends on
+your licence. Check yours: Entra admin center → Overview → *License*.
+
+### Without Entra ID P1 (Microsoft 365 Business Basic/Standard, E1, or free Entra)
+
+Conditional Access is not available, and neither is assigning a **group** to an app. Use what is free:
+
+1. **Assign people one by one.** Run the script with `--require-assignment`, then Entra admin center →
+   Enterprise applications → **GRC-pal (acme)** → Users and groups → Add assignment → each user (yourself
+   first). Anyone not assigned is refused by Entra ID itself (AADSTS50105).
+2. **Turn on Security Defaults.** Entra admin center → Overview → Properties → *Manage security defaults* →
+   Enabled. Everyone must register MFA; admins are asked for MFA at every sign-in and users when Entra
+   judges it necessary; legacy authentication (old mail protocols) is blocked. There are no exclusions, so
+   your two emergency accounts register MFA too (a FIDO2 key each, kept in a safe). Security Defaults cannot
+   be on together with Conditional Access policies.
+3. **Devices.** Without P1 nothing can stop an unmanaged laptop at sign-in. Make it a detective control:
+   Intune compliance reporting (the `intune_devices` collector) and the `no-device-compliance` finding,
+   reviewed monthly. Word your device control that way (for example AST-02) so the auditor tests what is
+   really in place.
+4. **Sign-in logs** are kept 7 days in Entra without P1. GRC-pal records every sign-in in its own audit log
+   (`auth.signin`), which is the durable evidence. Look at the emergency accounts' sign-ins weekly.
+
+The `conditional_access` collector checks Security Defaults (Graph permission Policy.Read.All): with them on
+and no Conditional Access policy, MFA and legacy authentication count as covered and only the device finding
+remains, with the reason.
+
+### With Entra ID P1 (Conditional Access)
+
+Conditional Access (CA) decides who gets in. This needs Entra ID P1 (included in Microsoft 365 E3/E5 and
+Business Premium) and Intune for device compliance.
 
 1. **One group.** Create a security group, e.g. `GRC-pal users`, and add the people who use the
    portal, yourself included.

@@ -107,6 +107,17 @@ def policy_reminder(p, policy: dict, actor) -> dict:
             "button": ("Read and acknowledge", p.link(f"/policies/{policy['id']}"))}
 
 
+def document_ack(p, doc: dict, first: bool) -> dict:
+    """Ask someone to read and acknowledge a published document. Number, title, version and a link only."""
+    name = f"{doc['number']} {doc['title']}".strip()
+    return {"subject": f"{'Please read' if first else 'Reminder: please read'} and acknowledge: {name} v{doc['version']}",
+            "title": f"Read and acknowledge {name}",
+            "intro": ("A new version was approved. Please read it and confirm you have read it. It takes a few minutes."
+                      if first else "You have not acknowledged this document yet. Please read it and confirm."),
+            "fields": [("Document", name), ("Version", doc["version"]), ("Owner", doc["owner"] or "-")],
+            "button": ("Read and acknowledge", p.link(doc["href"]))}
+
+
 def doc_approval(p, kind: str, number: str, title: str, did: str, v: dict, note: str, actor) -> dict:
     """Approval workflow emails: request, reminder, approved, denied, closed (withdrawn, reassigned or approved
     directly). Only the document's number, title and version and a link; never the file or its text."""
@@ -157,3 +168,34 @@ def config_changed(p, section, changed: list[str], cleared: list[str], endpoints
             "fields": [("Section", section.title), ("Changed by", actor.email)],
             "sections": sections,
             "button": ("Review the configuration", p.link(f"/settings/{section.id}"))}
+
+
+def access_review(p, kind: str, camp: dict, mine: dict) -> dict:
+    """Invitation, reminder or overdue notice to one reviewer. Counts and application names only: the accounts
+    themselves are shown in GRC-pal to the signed-in reviewer, never in an email."""
+    due, name, n = camp["due"], camp["name"], mine["total"]
+    accounts = f"{n} account{'s' if n != 1 else ''}"
+    subject, title, intro = {
+        "invite": (f"Access review: {accounts} to review by {due}", "Please review your team's access",
+                   f"You are asked to review who should keep access in {name}. For each account choose keep, "
+                   "remove or change, then sign off. It takes a few minutes."),
+        "reminder": (f"Reminder: access review due {due} ({mine['left']} left)", "Your access review is waiting",
+                     f"{name} is due on {due}. {mine['left']} of your {accounts} still need a decision, or you "
+                     "have not signed off yet."),
+        "overdue": (f"Overdue: access review was due {due}", "Your access review is overdue",
+                    f"{name} was due on {due}. Please finish it today: the auditors check that reviews are "
+                    "completed on time."),
+    }[kind]
+    return {"subject": subject, "title": title, "intro": intro,
+            "fields": [("Review", name), ("Accounts for you", accounts), ("Applications", ", ".join(mine["apps"])),
+                       ("Due", due)],
+            "button": ("Open my review", p.link(f"/access-reviews/{camp['RowKey']}"))}
+
+
+def access_review_overdue_admins(p, camp: dict, waiting: list[str]) -> dict:
+    return {"subject": f"Access review overdue: {camp['name']}", "title": "An access review is past its due date",
+            "intro": f"{camp['name']} was due on {camp['due']} and {len(waiting)} reviewer"
+                     f"{'s have' if len(waiting) != 1 else ' has'} not signed off. Reviewers get a reminder every "
+                     "few days; you may want to follow up directly or reassign their accounts.",
+            "sections": [("Waiting for", waiting)],
+            "button": ("Open the review", p.link(f"/access-reviews/{camp['RowKey']}"))}

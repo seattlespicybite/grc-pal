@@ -243,7 +243,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                    review_count=len(portal.reviewable(user)), ar_open=portal.access_review_badge(user),
                    calendar_due=portal.calendar_past_due_count() if user.is_admin else 0,
                    my_open=sum(1 for a in portal.assignments(user=user, mine=True) if a["status"] in ("open", "returned"))
-                   + (len(portal.pending_approvals(user)["mine"]) if user.can_write else 0),
+                   + (len(portal.pending_approvals(user)["mine"]) if user.can_write else 0)
+                   + (len(portal.documents_to_acknowledge(user)) if user.can_write else 0),
                    flash=request.query_params.get("msg"), error=request.query_params.get("err"))
         return templates.TemplateResponse(request, name, ctx)
 
@@ -332,7 +333,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         attention = [c for c in data["controls"] if c["status"] in ("attention", "findings")][:8]
         work = portal.assignments()
         progress = {s: sum(1 for a in work if a["status"] == s) for s in ("open", "submitted", "returned", "approved")}
-        policies = [(pol, portal.policy_status(pol)) for pol in portal.catalog.policies if pol.get("acknowledge", True)]
+        policies = [d for d in portal.published_documents(user) if d["ack"] != "none"]
         return render(request, user, "dashboard.html", data=data, by_cat=by_cat, attention=attention, progress=progress,
                       overdue=[a for a in work if a["overdue"]][:8], policies=policies)
 
@@ -399,8 +400,9 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                       crit_options=crit_options, hits={criterion} if criterion else (set(crit_options) if family else set()),
                       list_qs=_list_query(str(request.url.query)))
 
-    @app.get("/controls/{control_id}", response_class=HTMLResponse)
-    def control_detail(request: Request, control_id: str, user: User = Depends(current_user)):
+    def control_context(request: Request, user: User, control_id: str) -> dict:
+        """Everything the control page and the control side panel show. Same visibility rule for both: a Control
+        owner sees only their own controls (404 otherwise), auditors read, admins act."""
         from grcpal.collectors import disabled_sources
         from grcpal.portal import soc2
 
@@ -429,7 +431,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         if user.is_contributor:
             mine = [a for a in assignments if user.email in portal.participants(a)]
             assignments = mine or assignments
-        return render(request, user, "control.html", ctl=ctl, status=status_of(control_id), points=points,
+        return dict(ctl=ctl, status=status_of(control_id), points=points,
                       assignments=assignments, uploads=portal.uploads(control=control_id),
                       prev=prev, prev_uploads=portal.uploads(control=control_id, cycle=prev["RowKey"]) if prev else [],
                       prev_assignments=portal.assignments(control=control_id, cycle=prev["RowKey"]) if prev else [],
@@ -450,7 +452,20 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                       checks=portal.checks_for(control_id) if user.sees_everything else [],
                       ai=portal.ai_status() if user.sees_everything else None,
                       ai_reviews=portal.ai_reviews(control_id)[:10] if user.sees_everything else [],
-                      schedule=portal.control_schedule(user, control_id) if user.is_admin else None)
+                      schedule=portal.control_schedule(user, control_id) if user.is_admin else None,
+                      documents=portal.control_documents(user, control_id))
+
+    @app.get("/controls/{control_id}", response_class=HTMLResponse)
+    def control_detail(request: Request, control_id: str, user: User = Depends(current_user)):
+        return render(request, user, "control.html", **control_context(request, user, control_id))
+
+    @app.get("/controls/{control_id}/panel", response_class=HTMLResponse)
+    def control_panel(request: Request, control_id: str, user: User = Depends(current_user)):
+        """The control as a side panel next to a list (loaded by app.js). Without JavaScript the link opens the full
+        page. The fragment has no page layout of its own; same data and rules as the full page."""
+        resp = render(request, user, "control_panel.html", **control_context(request, user, control_id))
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
 
     @app.post("/controls/{control_id}/upload")
     async def control_upload(request: Request, control_id: str, file: UploadFile = File(...), comment: str = Form(""),
@@ -517,7 +532,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
             s = stat.get(c, "not_started")
             totals[s if s in totals else "not_started"] += 1
         categories = [cat for cat in soc2.CATEGORY_ORDER if any(f["category"] == cat and f["in_scope"] for f in fams)]
-        return render(request, user, "criteria.html", families=fams, totals=totals, open_family=open,
+        return render(request, user, "criteria.html", families=fams, tree=fams, totals=totals, open_family=open,
                       scoped_criteria=len(portal.catalog.in_scope_criteria), scoped_controls=len(scoped_controls),
                       scope_names=[CATEGORY_NAMES.get(c, c) for c in categories])
 
@@ -543,6 +558,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         how = {c["id"]: soc2.evidenced_by(c, skip) for c in controls}
         family = soc2.family_of(crit_id)
         return render(request, user, "criterion.html", crit_id=crit_id, crit=crit, stat=stat,
+                      tree=soc2.families(portal.catalog, stat), nav_active="framework",
                       points=portal.catalog.points_of_focus.get(crit_id, []), open_by_point=open_by_point,
                       controls=controls, how=how, prev_id=prev_id, next_id=next_id, position=position,
                       order_total=len(order), family=family, family_name=soc2.FAMILY_NAMES.get(family, family),
@@ -560,6 +576,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         owned = sorted(portal.owned_controls(user.email))
         approvals = portal.pending_approvals(user)
         return render(request, user, "work.html", rows=rows, show=show, managed=managed, approvals=approvals,
+                      to_read=portal.documents_to_acknowledge(user),
                       owned=[portal.catalog.control(c) for c in owned])
 
     @app.get("/assignments/{assignment_id}", response_class=HTMLResponse)
@@ -950,9 +967,64 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     # ------------------------------------------------------------------ policies
     @app.get("/policies", response_class=HTMLResponse)
     def policies(request: Request, user: User = Depends(current_user)):
-        portal = p()
-        rows = [(pol, portal.policy_status(pol)) for pol in portal.catalog.policies]
-        return render(request, user, "policies.html", rows=rows)
+        """Approved, in-force documents by tier (policies.py); Markdown policies from the repository in their own
+        section."""
+        return render(request, user, "policies.html", sections=p().policy_sections(user))
+
+    @app.get("/policies/acknowledgements.csv")
+    def policies_ack_report(user: User = Depends(current_user)):
+        try:
+            data = p().acknowledgement_report(user)
+        except Forbidden as exc:
+            raise _HTTPError(403, str(exc)) from exc
+        return _attachment(f"grcpal-policy-acknowledgements-{p().today}.csv", data)
+
+    @app.get("/policies/doc/{did}", response_class=HTMLResponse)
+    def policy_doc(request: Request, did: str, user: User = Depends(current_user)):
+        from grcpal.portal.policies import ACK_CHOICES, REGISTER_KINDS
+
+        try:
+            doc = p().published_document(user, did)
+        except Invalid as exc:
+            raise _HTTPError(404, str(exc)) from exc
+        return render(request, user, "policy_doc.html", doc=doc, ack_choices=ACK_CHOICES,
+                      register=doc["kind"] in REGISTER_KINDS, nav_active="policies")
+
+    @app.post("/policies/doc/{did}/ack")
+    def policy_doc_ack(request: Request, did: str, vid: str = Form(""), read: str = Form(""), csrf: str = Form(""),
+                       user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        try:
+            p().acknowledge_document(user, did, vid, read == "1")
+        except Forbidden as exc:
+            raise _HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(f"/policies/doc/{did}", err=str(exc))
+        return back(f"/policies/doc/{did}", msg="Thank you. Your acknowledgement is recorded.")
+
+    @app.post("/policies/doc/{did}/request")
+    def policy_doc_request(request: Request, did: str, csrf: str = Form(""), user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        try:
+            r = p().request_acknowledgement(user, did)
+        except Forbidden as exc:
+            raise _HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(f"/policies/doc/{did}", err=str(exc))
+        return back(f"/policies/doc/{did}", msg=f"Asked {len(r['sent'])} people. Weekly reminders follow until all "
+                                                "have acknowledged")
+
+    @app.post("/policies/doc/{did}/audience")
+    def policy_doc_audience(request: Request, did: str, ack: str = Form(""), csrf: str = Form(""),
+                            user: User = Depends(current_user)):
+        check_csrf(request, user.email, csrf)
+        try:
+            p().set_document_ack(user, did, ack)
+        except Forbidden as exc:
+            raise _HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(f"/policies/doc/{did}", err=str(exc))
+        return back(f"/policies/doc/{did}", msg="Saved")
 
     @app.get("/policies/{policy_id}", response_class=HTMLResponse)
     def policy_detail(request: Request, policy_id: str, user: User = Depends(current_user)):
@@ -984,7 +1056,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     from types import SimpleNamespace
 
     from grcpal.portal import (routes_access, routes_accounts, routes_automation, routes_backups, routes_calendar,
-                               routes_doclib, routes_extra, routes_matrix, routes_vendors)
+                               routes_doclib, routes_extra, routes_matrix, routes_risks, routes_vendors)
 
     if mode == "local":
         routes_accounts.register(app, SimpleNamespace(p=p, templates=templates, HTTPError=_HTTPError, ip_of=ip_of,
@@ -1013,6 +1085,9 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     routes_matrix.register(app, SimpleNamespace(
         p=p, current_user=current_user, check_csrf=check_csrf, render=render, back=back,
         invalidate=invalidate, HTTPError=_HTTPError, attachment=_attachment))
+    routes_risks.register(app, SimpleNamespace(
+        p=p, current_user=current_user, check_csrf=check_csrf, render=render, back=back,
+        HTTPError=_HTTPError, attachment=_attachment))
     routes_automation.register(app, SimpleNamespace(
         p=p, current_user=current_user, need=need, check_csrf=check_csrf, render=render, back=back,
         invalidate=invalidate, HTTPError=_HTTPError))

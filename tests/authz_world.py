@@ -33,6 +33,10 @@ SPARE = User("sid.spare@example.com", "Sid Spare", "contributor")               
 EXPIRED = User("old.auditor@cpa-firm.example", "Old Auditor", "auditor")           # access_until in the past
 DISABLED = User("gone.admin@example.com", "Gone Admin", "admin")                   # an admin whose account is off
 
+RISK_FORM = {"title": "Laptop with customer data is stolen", "category": "confidentiality", "owner": "it-lead",
+             "likelihood": "3", "impact": "4", "residual_likelihood": "2", "residual_impact": "3",
+             "treatment": "mitigate", "controls": "IAM-02"}
+
 
 def callers(tenant: str) -> dict[str, User | None]:
     """Who each role is. In the second organization the same names get another domain, so nobody is shared."""
@@ -191,6 +195,17 @@ def build(tmp: Path, base: SqliteStore, tenant: str) -> SimpleNamespace:
     versions = sorted(portal.store.list("docversions", w.doc), key=lambda v: v["RowKey"])
     w.ver_draft, w.ver_review = versions[0]["RowKey"], versions[1]["RowKey"]
     portal.request_approval(admin, w.doc, w.ver_review, "please review")
+    # a published policy (approved version): on the Policies page, acknowledged by staff
+    w.doc_pub = portal.add_doc(admin, folder, f"P-{tenant}", f"Published policy {tenant}", kind="policy")["id"]
+    portal.upload_official(admin, w.doc_pub, "published.pdf", PDF + b"pub", "", "major", "first", "")
+    pub = portal.store.list("docversions", w.doc_pub)[0]
+    portal._approve(admin, w.doc_pub, pub, "direct", "approved for the test")
+    # ---- risk register (admins change it, auditors read it)
+    # Risk IDs (R-001, R-002...) are numbered per organization. The second organization gets one extra risk so
+    # its test risk has an ID the first organization does not have, and "other organization's ID" means something.
+    if tenant != "acme":
+        portal.create_risk(admin, {**RISK_FORM, "title": f"Filler risk {tenant}"})
+    w.risk = portal.create_risk(admin, RISK_FORM)["RowKey"]
     w.doc_trashed = portal.add_doc(admin, folder, f"Z-{tenant}", f"Trashed doc {tenant}")["id"]
     portal.trash_docs(admin, [w.doc_trashed], "not needed")
     w.doc_to_trash = portal.add_doc(admin, folder, f"Y-{tenant}", f"Doc to trash {tenant}")["id"]

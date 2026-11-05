@@ -51,14 +51,20 @@
 {% endif %}
 
 {% if v.sees_all %}
-<div class="card mb"><h2>Progress by manager</h2><div class="table-wrap"><table>
-<thead><tr><th>Manager</th><th>Accounts</th><th>Decided</th><th>Sign-off</th><th></th></tr></thead>
+<div class="card mb"><h2>Progress by manager</h2>
+{% if user.is_admin and is_open and x.waiting %}<form method="post" action="/access-reviews/{{ c.RowKey }}/invite" class="filters mb"><input type="hidden" name="csrf" value="{{ csrf }}">
+<button class="btn small" type="submit">Email reviewers who have not signed off ({{ x.waiting|length }})</button>
+{% if v.reviewers|selectattr('has_account', 'false')|list %}<label class="check"><input type="checkbox" name="create_accounts"> Give managers without a portal account a Control owner account first</label>{% endif %}</form>
+<div class="hint mb">Reminders go out by themselves from 7 days before the due date, every few days, until each manager signs off. Admins are told once when the review is overdue.</div>{% endif %}
+<div class="table-wrap"><table>
+<thead><tr><th>Manager</th><th>Accounts</th><th>Decided</th><th>Emailed</th><th>Sign-off</th><th></th></tr></thead>
 <tbody>{% for r in v.reviewers %}<tr>
 <td>{{ r.email }}{% if not r.has_account %}<div class="sub"><span class="pill attention">No portal account</span> add them as a Control owner</div>{% endif %}</td>
 <td>{{ r.progress.total }}</td><td>{{ r.progress.decided }}</td>
+<td class="sub nowrap">{% if x.invited.get(r.email) %}Invited {{ x.invited[r.email] }}{% else %}—{% endif %}{% if x.reminded.get(r.email) %}<br>Reminded {{ x.reminded[r.email] }}{% endif %}</td>
 <td>{% if r.signed_off %}<span class="pill ok">Signed off {{ r.signed_off.at[:10] }}</span>{% else %}<span class="pill pending">Waiting</span>{% endif %}</td>
 <td>{% if user.is_admin and r.signed_off and is_open %}<form method="post" action="/access-reviews/{{ c.RowKey }}/reopen"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="reviewer" value="{{ r.email }}"><button class="btn ghost small" type="submit">Reopen</button></form>{% endif %}</td>
-</tr>{% else %}<tr><td colspan="5"><div class="empty">No account has a reviewer yet.</div></td></tr>{% endfor %}</tbody></table></div></div>
+</tr>{% else %}<tr><td colspan="6"><div class="empty">No account has a reviewer yet.</div></td></tr>{% endfor %}</tbody></table></div></div>
 
 {% if v.unassigned %}
 <div class="card mb"><h2>Needs a reviewer</h2>
@@ -73,16 +79,25 @@
 </tr>{% endfor %}</tbody></table></div></div>
 {% endif %}
 
-{% if v.to_confirm %}
+{% if v.to_confirm or x.tickets %}
 <div class="card mb"><h2>Removals and changes to confirm</h2>
-<div class="sub mb">A decision is only evidence when the change was actually made. Do it in the application, then say how.</div>
-<div class="table-wrap"><table>
-<thead><tr><th>Application</th><th>Account</th><th>Decision</th><th>What the manager wrote</th><th>Done</th></tr></thead>
+<div class="sub mb">A decision is only evidence when the change was actually made. GRC-pal never changes accounts itself: a ticket asks the people who run the application, then you confirm here. The nightly account pull can show it is done.</div>
+{% if user.is_admin %}<div class="filters mb">
+{% if x.untracked and x.tickets_on %}<form method="post" action="/access-reviews/{{ c.RowKey }}/tickets" class="m0"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small" type="submit">Open {{ 'Jira' if x.ticket_system == 'jira' else 'GitHub' }} tickets ({{ x.untracked }} account{{ 's' if x.untracked != 1 }}, one ticket per application)</button></form>
+{% elif x.untracked %}<span class="sub">To open Jira or GitHub tickets for these, set up <a href="/settings/tickets">Remediation tickets</a>.</span>{% endif %}
+{% if is_open and v.to_confirm %}<form method="post" action="/access-reviews/{{ c.RowKey }}/check" class="m0"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small ghost" type="submit">Check with the latest account pulls</button></form>{% endif %}
+{% if is_open and x.checked_done %}<form method="post" action="/access-reviews/{{ c.RowKey }}/confirm-checked" class="m0" data-confirm="Confirm {{ x.checked_done }} change{{ 's' if x.checked_done != 1 }} that the account pulls show as done? Each confirmation names the stored pull as evidence."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small" type="submit">Confirm all shown as done ({{ x.checked_done }})</button></form>{% endif %}
+</div>{% endif %}
+{% if x.tickets %}<div class="sub mb">Tickets: {% for t in x.tickets %}{% if t.url %}<a href="{{ t.url }}" rel="noopener noreferrer" target="_blank">{{ t.key }}</a>{% else %}{{ t.key }}{% endif %} {{ t.app }} ({{ t.accounts }}, {{ t.at[:10] }}){{ ', ' if not loop.last }}{% endfor %}</div>{% endif %}
+{% if v.to_confirm %}<div class="table-wrap"><table>
+<thead><tr><th>Application</th><th>Account</th><th>Decision</th><th>What the manager wrote</th><th>Ticket</th><th>Latest pull</th><th>Done</th></tr></thead>
 <tbody>{% for e in v.to_confirm %}<tr>
 <td><b>{{ e.app }}</b></td><td>{{ e.name or e.email or e.account_id }}<div class="sub mono">{{ e.account_id }}</div></td><td>{{ decisions[e.decision] }}</td><td>{{ e.comment or '—' }}</td>
+<td class="nowrap">{% if e.ticket_url %}<a href="{{ e.ticket_url }}" rel="noopener noreferrer" target="_blank">{{ e.ticket_key }}</a>{% else %}{{ e.ticket_key or '—' }}{% endif %}</td>
+<td>{% if e.pull_check in x.done_checks %}<span class="pill ok">{{ x.done_checks[e.pull_check] }}</span><div class="sub">{{ e.pull_at[:10] }}</div>{% elif e.pull_check %}<span class="sub">{{ x.other_checks[e.pull_check] }}</span>{% else %}—{% endif %}</td>
 <td>{% if user.is_admin and is_open %}<form method="post" action="/access-reviews/{{ c.RowKey }}/confirm" class="filters m0"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="entry" value="{{ e.RowKey }}">
 <input type="text" name="note" maxlength="500" placeholder="How and when it was done" aria-label="How {{ e.account_id }} was changed" required><button class="btn small" type="submit">Confirm</button></form>{% endif %}</td>
-</tr>{% endfor %}</tbody></table></div></div>
+</tr>{% endfor %}</tbody></table></div>{% endif %}</div>
 {% endif %}
 
 <div class="card mb"><h2>All accounts</h2><div class="table-wrap"><table>

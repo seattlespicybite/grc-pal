@@ -51,11 +51,30 @@ mitigation, then Availability, Confidentiality, Processing Integrity and Privacy
 how many controls it has and their status; open it to see its criteria. Categories that are not in
 the report scope (`catalog/scope.yaml`) are shown as *Not in scope*.
 
+The SOC 2 pages are split in two: the **criteria list** stays on the left (every in-scope family and
+criterion, with a coloured dot for its status and *passing/total* per family) and the chosen criterion,
+or the overview, is on the right. Click any criterion on the left to switch without losing your place.
+
 A criterion page lists its controls with **how each is evidenced** (automatic, hybrid or manual,
 and from which connected source). Sources that are switched off for this organization, such as AWS
 when only Azure is used, are not shown. Use **‹ ›** to move to the previous or next criterion.
 
-Open a control from a criterion and the page remembers it: the trail shows
+**Controls open beside the list.** Click a control on a criterion page or in the **Controls** list and
+it opens in a side panel instead of a new page, with tabs: *Overview* (what it does, how we meet it,
+evidence wanted, criteria), *Evidence* (uploads this cycle, automated evidence, requests), *Tests*
+(checks, collectors, calendar, latest AI review), *Documents* (policies and document-library documents
+that name the control, reference links), *History* and *Comments*. **Esc** or **Close** closes it, the
+arrow keys move between tabs, and **Open full page** shows everything with all actions. The address
+ends in `#control=IAM-02`, so you can share or bookmark a panel. Ctrl/Cmd-click opens the full page in
+a new tab. Control owners see only their own controls and no Tests or History tab, as on the full page.
+
+The full control page has a bar of section links at the top (Overview, How we meet it, Evidence, Tests,
+Documents, Comments, AI review, History).
+
+**Slim menu.** The button next to the GRC-pal name folds the menu to icons (hover for the name) and
+back. The choice is remembered in this browser; medium-width windows start slim.
+
+Open a control's full page from a criterion and the page remembers it: the trail shows
 *SOC 2 / CC6 / CC6.1*, **Back to CC6.1** and **All SOC 2 criteria** take you back, **‹ ›** moves
 through that criterion's controls, and the criterion you came from is highlighted. Open a control
 from the **Controls** list and **Back to controls list** keeps your filters. The list can be
@@ -375,3 +394,21 @@ Operators: `exists`, `equals`, `not_equals`, `contains`, `matches` (regex), `lt`
   credentials), multicast and reserved addresses are refused. The connection is pinned to the
   checked address (no DNS rebinding) and every redirect is checked again. On an internal-only
   self-hosted deployment, `GRCPAL_CHECKS_ALLOW_PRIVATE=1` lifts this rule.
+
+## Risk register
+
+Compliance > **Risk register** (admins change it, auditors read it, control owners do not see it). Each risk has
+a likelihood and impact from 1 to 5 before controls and with them (score = likelihood × impact: 1-4 low, 5-9
+medium, 10-16 high, 20-25 critical), a treatment and the controls that treat it. The rules the auditor will test:
+
+- A mitigated risk names at least one control from the catalog; the score with controls is never higher than
+  the score before them.
+- An accepted risk needs a reason, records the admin who accepted it, and a date when it is decided again. An
+  expired acceptance blocks the annual approval until someone decides again.
+- Every change needs a reason and keeps the previous version (history on the risk page). *Record a review*
+  says the risk still stands and sets the next review 12 months out.
+- **Import starter risks** copies the risks in `registers/risks.yaml` that are not in the register yet (add only;
+  "accept" is imported as mitigate because the file has no acceptance details). Re-rate them with their owners.
+- **Approve the assessment** once a year and after a significant change: the whole register (CSV and JSON) is
+  stored write-once in the evidence store with its SHA-256 as RSK-01 evidence, and the approval is listed on the page.
+- The heat maps show open risks before and with controls. Fraud is its own category (CC3.3).
