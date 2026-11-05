@@ -4,44 +4,34 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
-fix/wcag-contrast
-### Fixed
-- **Light-mode colours meet WCAG 2.2 AA** (B-060). Links, control IDs and primary buttons used a teal at 3.74:1 and
-  status chips were as low as 2.86:1 ("Past due", "Pending"). New light-mode colours: accent `#0f766e`, green
-  `#047857`, amber `#92400e`, red `#b91c1c`, blue `#1d4ed8`, grey `#475569`; all reach 4.5:1 on the page, on cards and
-  on their own chip tint. Links inside sentences are underlined. Dark mode is unchanged. `tests/test_contrast.py`
-  checks every pair, so a later colour change cannot quietly fail again.
-=======
-perf/dashboard-reads
-### Changed
-- **Pages read much less from storage** (B-040). Each request now remembers what it read: the dashboard went from
-  133 table reads on a cold load (80 of them the checks table, once per control) to about 25, which matters on
-  Azure Tables where each read is an HTTPS call. Any write drops that table's remembered reads, rows are handed out
-  as copies, and background jobs always read fresh. A read-budget test keeps the main pages in check.
-=======
-fix/orphaned-jobs
-### Fixed
-- **Jobs no longer stay "running" forever after a restart** (B-042). A replica stopped mid-job (scale to zero,
-  restart, update) left the job row "running", which also blocked new runs of the same kind (for example
-  *Collect now*). Running jobs now send a heartbeat every minute; a queued or running job without a heartbeat for
-  10 minutes is marked **interrupted** with a message to start it again, and a warning goes to the event log.
-=======
-perf/audit-log-reads
-### Changed
-- **Audit log page is faster on a large log** (B-043). The newest records are read month by month, newest first,
-  until the page has enough rows, instead of reading the whole log on every view (about 30 paged calls per view
-  at 30,000 records on Azure Tables). The daily export stores its chain verification, and the Audit log page shows
-  the last result ("Last daily check ... chain verified"); *Verify integrity* still checks the whole chain on demand.
-=======
+## [0.7.2] - 2026-11-05 - Audit log and job reliability, faster pages, accessible colours
+
+No data model change: upgrade in place from 0.7.0, roll back to 0.7.0 without a restore.
+
 ### Fixed
 - **Audit log: no false "tampered" result under concurrent writes** (B-041). The head pointer is now moved with a
   conditional write (SQLite compare, Azure Tables ETag `If-Match`) and only forward, so two replicas or a scheduled
   job appending at the same moment can no longer leave it on an older record, which `verify` reported as
   "head pointer does not match the last record".
- main
-main
-main
-main
+- **Jobs no longer stay "running" forever after a restart** (B-042). A replica stopped mid-job (scale to zero,
+  restart, update) left the job row "running", which also blocked new runs of the same kind (for example
+  *Collect now*). Running jobs now send a heartbeat every minute; a queued or running job without a heartbeat for
+  10 minutes is marked **interrupted** with a message to start it again, and a warning goes to the event log.
+- **Light-mode colours meet WCAG 2.2 AA** (B-060). Links, control IDs and primary buttons used a teal at 3.74:1 and
+  status chips were as low as 2.86:1 ("Past due", "Pending"). New light-mode colours: accent `#0f766e`, green
+  `#047857`, amber `#92400e`, red `#b91c1c`, blue `#1d4ed8`, grey `#475569`; all reach 4.5:1 on the page, on cards and
+  on their own chip tint. Links inside sentences are underlined. Dark mode is unchanged. `tests/test_contrast.py`
+  checks every pair, so a later colour change cannot quietly fail again.
+
+### Changed
+- **Audit log page is faster on a large log** (B-043). The newest records are read month by month, newest first,
+  until the page has enough rows, instead of reading the whole log on every view (about 30 paged calls per view
+  at 30,000 records on Azure Tables). The daily export stores its chain verification, and the Audit log page shows
+  the last result ("Last daily check ... chain verified"); *Verify integrity* still checks the whole chain on demand.
+- **Pages read much less from storage** (B-040). Each request now remembers what it read: the dashboard went from
+  133 table reads on a cold load (80 of them the checks table, once per control) to about 25, which matters on
+  Azure Tables where each read is an HTTPS call. Any write drops that table's remembered reads, rows are handed out
+  as copies, and background jobs always read fresh. A read-budget test keeps the main pages in check.
 
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 
