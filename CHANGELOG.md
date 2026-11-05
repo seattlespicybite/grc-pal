@@ -9,6 +9,37 @@ All notable changes are listed here. The project follows [semantic versioning](h
 No data model change: upgrade in place from 0.7.2, roll back to 0.7.2 without a restore. On Azure, re-run `deploy.sh`
 (or the update workflow) to get the backup retention on the Backups page and the new collection alert.
 
+### Added
+- **Azure alert when the daily evidence collection does not run** (B-025). GRC-pal already emails admins about
+  failed collectors and checks (Calendar > Email alerts), and the calendar's automated rows show the same runs, so
+  calendar failures are covered. What was not covered: the collection never starting at all (job deleted, broken
+  image, schedule off), because those emails are sent by the run itself. `grcpal collect --all` now logs one
+  `collect.run_all` line per run, and with `--alert-email` Azure emails when none is logged in two days
+  (`collectAlertWindow`). Re-run `deploy.sh` to add the alert.
+
+### Fixed
+- **Implementation notes: two people editing at once never lose a save** (B-044, first slice). The edit form now
+  carries the version it started from. If someone saved in between, nothing is written and the page shows both
+  texts side by side, keeps what you typed, and lets you save again on top of the newer version. Two saves landing
+  at the same moment no longer end in an error page. Approvals, vendor reviews and access-review decisions follow.
+- **Backups page on Azure says what is really kept** (B-020). It showed *Keep: 7 daily, 4 weekly, 12 monthly*, but
+  Azure storage keeps every backup for `backupRetentionDays` (35 by default), write-once, then deletes it. The page
+  now shows that number (new setting `GRCPAL_BACKUP_RETENTION_DAYS`, filled from `main.bicep`) and hides the Keep
+  numbers when Azure storage is the only location; with folder locations as well, it says the numbers apply to the
+  folders only. Re-run `deploy.sh` (or an update) to set the new value; until then the page names the default.
+
+### Changed
+- **Calendar badge counts only recent slips** (B-061). On a fresh install the Calendar and Compliance menu badges
+  showed every unrecorded month since the observation period started (135 on the demo), so red stopped meaning
+  anything. The badge now counts occurrences past due in the last 30 days (December still counts in January).
+  The calendar page keeps marking every past-due month and, when older ones wait, says how many and what to do
+  (record Performed with the date, or Missed with the reason). Exports and digests are unchanged.
+- **Release and CI workflows without warnings** (B-033). `docker/metadata-action` v5.10.0 (Node 20, deprecated on
+  GitHub runners) moved to v6.2.0, pinned by commit. Every workflow runs on `ubuntu-24.04` instead of
+  `ubuntu-latest`, which GitHub is moving to Ubuntu 26, so a runner change is a reviewed edit and not a surprise.
+  The Dockerfile skips BuildKit's `SecretsUsedInArgOrEnv` check (it flagged `GRCPAL_AUTH_MODE`, a mode, not a
+  secret); a test now fails if any `ENV` or `ARG` name looks like a secret.
+
 ## [0.7.2] - 2026-11-05 - Audit log and job reliability, faster pages, accessible colours
 
 No data model change: upgrade in place from 0.7.0, roll back to 0.7.0 without a restore.
@@ -37,36 +68,6 @@ No data model change: upgrade in place from 0.7.0, roll back to 0.7.0 without a 
   133 table reads on a cold load (80 of them the checks table, once per control) to about 25, which matters on
   Azure Tables where each read is an HTTPS call. Any write drops that table's remembered reads, rows are handed out
   as copies, and background jobs always read fresh. A read-budget test keeps the main pages in check.
-### Changed
-- **Calendar badge counts only recent slips** (B-061). On a fresh install the Calendar and Compliance menu badges
-  showed every unrecorded month since the observation period started (135 on the demo), so red stopped meaning
-  anything. The badge now counts occurrences past due in the last 30 days (December still counts in January).
-  The calendar page keeps marking every past-due month and, when older ones wait, says how many and what to do
-  (record Performed with the date, or Missed with the reason). Exports and digests are unchanged.
-### Fixed
-- **Implementation notes: two people editing at once never lose a save** (B-044, first slice). The edit form now
-  carries the version it started from. If someone saved in between, nothing is written and the page shows both
-  texts side by side, keeps what you typed, and lets you save again on top of the newer version. Two saves landing
-  at the same moment no longer end in an error page. Approvals, vendor reviews and access-review decisions follow.
-### Fixed
-- **Backups page on Azure says what is really kept** (B-020). It showed *Keep: 7 daily, 4 weekly, 12 monthly*, but
-  Azure storage keeps every backup for `backupRetentionDays` (35 by default), write-once, then deletes it. The page
-  now shows that number (new setting `GRCPAL_BACKUP_RETENTION_DAYS`, filled from `main.bicep`) and hides the Keep
-  numbers when Azure storage is the only location; with folder locations as well, it says the numbers apply to the
-  folders only. Re-run `deploy.sh` (or an update) to set the new value; until then the page names the default.
-### Changed
-- **Release and CI workflows without warnings** (B-033). `docker/metadata-action` v5.10.0 (Node 20, deprecated on
-  GitHub runners) moved to v6.2.0, pinned by commit. Every workflow runs on `ubuntu-24.04` instead of
-  `ubuntu-latest`, which GitHub is moving to Ubuntu 26, so a runner change is a reviewed edit and not a surprise.
-  The Dockerfile skips BuildKit's `SecretsUsedInArgOrEnv` check (it flagged `GRCPAL_AUTH_MODE`, a mode, not a
-  secret); a test now fails if any `ENV` or `ARG` name looks like a secret.
-### Added
-- **Azure alert when the daily evidence collection does not run** (B-025). GRC-pal already emails admins about
-  failed collectors and checks (Calendar > Email alerts), and the calendar's automated rows show the same runs, so
-  calendar failures are covered. What was not covered: the collection never starting at all (job deleted, broken
-  image, schedule off), because those emails are sent by the run itself. `grcpal collect --all` now logs one
-  `collect.run_all` line per run, and with `--alert-email` Azure emails when none is logged in two days
-  (`collectAlertWindow`). Re-run `deploy.sh` to add the alert.
 
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 
