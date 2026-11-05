@@ -45,6 +45,7 @@ code, .mono { font-family: Consolas, "SFMono-Regular", Menlo, monospace; font-si
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px;
   box-shadow: var(--shadow); margin-bottom: 18px; }
 .grid { display: grid; gap: 16px; }
+.note-compare { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
 .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .g5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }

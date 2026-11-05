@@ -4,6 +4,12 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Fixed
+- **Implementation notes: two people editing at once never lose a save** (B-044, first slice). The edit form now
+  carries the version it started from. If someone saved in between, nothing is written and the page shows both
+  texts side by side, keeps what you typed, and lets you save again on top of the newer version. Two saves landing
+  at the same moment no longer end in an error page. Approvals, vendor reviews and access-review decisions follow.
+
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 
 ### Added

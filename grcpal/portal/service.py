@@ -66,6 +66,15 @@ class Invalid(Exception):
     pass
 
 
+class Conflict(Invalid):
+    """Someone saved a newer version since this form was opened (B-044). `current` is that newer row, so the page
+    can show both texts; nothing was saved."""
+
+    def __init__(self, message: str, current: dict | None = None) -> None:
+        super().__init__(message)
+        self.current = current or {}
+
+
 def _now() -> str:
     return utcnow().isoformat()
 

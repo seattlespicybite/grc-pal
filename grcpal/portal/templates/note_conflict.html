@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block title %}Notes not saved: {{ ctl.id }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="sub"><a href="/controls/{{ ctl.id }}#notes">{{ ctl.id }} {{ ctl.title }}</a> /</div><h1>Your notes were not saved</h1></div></div>
+<div class="flash err" role="alert">{{ message }}</div>
+<div class="grid note-compare">
+<section class="card"><h2>Saved by {{ theirs.by or 'someone else' }} (version {{ theirs.version }})</h2>
+<div class="note">{{ theirs.text }}</div></section>
+<section class="card"><h2>Your text</h2>
+<form method="post" action="/controls/{{ ctl.id }}/note">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="base_version" value="{{ theirs.version }}">
+<label for="note-text">Edit your text so it keeps what they added, then save. Saving replaces version {{ theirs.version }}; both stay in the history.</label>
+<textarea id="note-text" name="text" rows="10" maxlength="{{ note_max }}">{{ mine }}</textarea>
+<div class="actions"><button class="btn" type="submit">Save my version</button> <a class="btn ghost" href="/controls/{{ ctl.id }}#notes">Discard mine</a></div>
+</form></section>
+</div>
+{% endblock %}

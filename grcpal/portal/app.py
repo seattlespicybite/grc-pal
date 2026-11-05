@@ -32,7 +32,7 @@ from grcpal.portal.auth import (DEV_COOKIE, ROLE_HELP, ROLE_LABELS, ROLES, AuthE
 from grcpal.portal.observability import configure_logging, current_actor, event, new_request_id, request_id
 from grcpal.portal.security import (MAX_UPLOAD_BYTES, BodyLimit, SECURITY_HEADERS, clear_cookie, client_ip, cookie_name, csrf_token,
                                     csrf_valid, legacy_cookies, read_cookie, session_binding, set_cookie)
-from grcpal.portal.service import Forbidden, Invalid, Portal
+from grcpal.portal.service import Conflict, Forbidden, Invalid, Portal
 
 HERE = Path(__file__).parent
 STATUS_LABELS = report_mod._LABELS
@@ -482,13 +482,19 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     @app.post("/controls/{control_id}/note")
     def control_note_save(request: Request, control_id: str, text: str = Form(""), csrf: str = Form(""),
-                          user: User = Depends(current_user)):
+                          base_version: str = Form(""), user: User = Depends(current_user)):
         check_csrf(request, user.email, csrf)
         portal = p()
         if not portal.catalog.control(control_id) or not portal.can_see_control(user, control_id):
             raise _HTTPError(404, "Control not found, or it is not assigned to you")
         try:
-            portal.save_control_note(user, control_id, text)
+            portal.save_control_note(user, control_id, text,
+                                     int(base_version) if base_version.strip().isdigit() else None)
+        except Conflict as exc:  # keep what they typed: show both versions and let them save again
+            page = render(request, user, "note_conflict.html", ctl=portal.catalog.control(control_id),
+                          message=str(exc), theirs=exc.current, mine=text, note_max=portal.NOTE_MAX)
+            page.status_code = 409
+            return page
         except (Invalid, Forbidden) as exc:
             return back(f"/controls/{control_id}#notes", err=str(exc))
         return back(f"/controls/{control_id}#notes", msg="Implementation notes saved")
