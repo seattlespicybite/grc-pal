@@ -4,6 +4,11 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-11-05 - Safer edits, calm badges, honest Azure backup retention, collection alert
+
+No data model change: upgrade in place from 0.7.2, roll back to 0.7.2 without a restore. On Azure, re-run `deploy.sh`
+(or the update workflow) to get the backup retention on the Backups page and the new collection alert.
+
 ## [0.7.2] - 2026-11-05 - Audit log and job reliability, faster pages, accessible colours
 
 No data model change: upgrade in place from 0.7.0, roll back to 0.7.0 without a restore.
