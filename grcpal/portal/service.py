@@ -35,6 +35,7 @@ from grcpal.portal.features import FeaturesMixin
 from grcpal.portal.accessapps import AccessAppsMixin
 from grcpal.portal.accessfollowup import AccessFollowUpMixin
 from grcpal.portal.policies import PoliciesMixin
+from grcpal.portal.risks import RisksMixin
 from grcpal.portal.accessreview import AccessReviewMixin
 from grcpal.portal.doclib import DocLibMixin
 from grcpal.portal.vendor_import import VendorImportMixin
@@ -74,7 +75,7 @@ def _rk() -> str:
 
 
 class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, AutomationHubMixin, VendorsMixin, VendorImportMixin, DocLibMixin,
-             AccessReviewMixin, AccessAppsMixin, AccessFollowUpMixin, PoliciesMixin, AccountsMixin, BackupsMixin, UpdatesMixin, SetupGuideMixin):
+             AccessReviewMixin, AccessAppsMixin, AccessFollowUpMixin, PoliciesMixin, RisksMixin, AccountsMixin, BackupsMixin, UpdatesMixin, SetupGuideMixin):
     def __init__(self, catalog, store, evidence: EvidenceStore, mailer: Mailer | None = None,
                  today: dt.date | None = None, public_url: str | None = None, jobs_sync: bool | None = None) -> None:
         self.base_catalog, self.store, self.evidence = catalog, store, evidence

@@ -394,3 +394,21 @@ Operators: `exists`, `equals`, `not_equals`, `contains`, `matches` (regex), `lt`
   credentials), multicast and reserved addresses are refused. The connection is pinned to the
   checked address (no DNS rebinding) and every redirect is checked again. On an internal-only
   self-hosted deployment, `GRCPAL_CHECKS_ALLOW_PRIVATE=1` lifts this rule.
+
+## Risk register
+
+Compliance > **Risk register** (admins change it, auditors read it, control owners do not see it). Each risk has
+a likelihood and impact from 1 to 5 before controls and with them (score = likelihood × impact: 1-4 low, 5-9
+medium, 10-16 high, 20-25 critical), a treatment and the controls that treat it. The rules the auditor will test:
+
+- A mitigated risk names at least one control from the catalog; the score with controls is never higher than
+  the score before them.
+- An accepted risk needs a reason, records the admin who accepted it, and a date when it is decided again. An
+  expired acceptance blocks the annual approval until someone decides again.
+- Every change needs a reason and keeps the previous version (history on the risk page). *Record a review*
+  says the risk still stands and sets the next review 12 months out.
+- **Import starter risks** copies the risks in `registers/risks.yaml` that are not in the register yet (add only;
+  "accept" is imported as mitigate because the file has no acceptance details). Re-rate them with their owners.
+- **Approve the assessment** once a year and after a significant change: the whole register (CSV and JSON) is
+  stored write-once in the evidence store with its SHA-256 as RSK-01 evidence, and the approval is listed on the page.
+- The heat maps show open risks before and with controls. Fraud is its own category (CC3.3).
