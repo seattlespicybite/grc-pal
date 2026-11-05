@@ -28,6 +28,7 @@ explain choices in plain words, keep changes small, never leave the test suite r
   | `update.py`, `deploy/vm/*` (updater, installer) | `tests/test_update.py` |
   | `deploy/azure/update.sh` (fake az/curl/gh in `tests/fake_azure/`) | `tests/test_azure_update.py` |
   | `deploy/azure/breakglass.sh`, break-glass rules in `accounts.py`/`auth.py` | `tests/test_azure_breakglass.py tests/test_accounts.py` |
+  | `deploy/azure/check.py`, `check.sh`, `kit.sh`, `write_kit.py`, step order in `deploy.sh` (fakes in `tests/fake_azure_check/`) | `tests/test_azure_check.py tests/test_deploy.py` |
   | templates, `app.js`, `app.css` | `tests/test_portal.py -k render` (also checks strict CSP), then the full suite |
 - Show diffs or changed parts only; do not paste whole files or full test output back.
 - Done means: full suite green, pyflakes clean, docs/CHANGELOG updated if behavior changed.
@@ -78,7 +79,7 @@ explain choices in plain words, keep changes small, never leave the test suite r
 | CI security scans (bandit, pip-audit, Trivy, SBOM, ZAP; pinned in `.github/security/`) | `.github/workflows/security-scan.yml`, docs `docs/security.md`, tests `tests/test_outbound.py`, `tests/test_deploy.py` |
 | Templates and static | `grcpal/portal/templates/`, `grcpal/portal/static/app.css`, `app.js` |
 | Demo data | `grcpal/portal/demo.py` |
-| Deployment | `Dockerfile`, `docker-compose.yml` (development), `deploy/vm/` (VM), `deploy/azure/main.bicep`, `deploy.sh`, `update.sh` (Azure) |
+| Deployment | `Dockerfile`, `docker-compose.yml` (development), `deploy/vm/` (VM), `deploy/azure/main.bicep`, `deploy.sh`, `update.sh`, `check.sh` (post-deploy check), `kit.sh` (recovery kit) (Azure) |
 | Tests | `tests/test_framework.py` (engine), `test_portal.py` (portal core), `test_features.py` (config, logs, frameworks, checks, AI), `test_backup.py`, `test_browser.py` |
 | Docs | `README.md`, `docs/*.md`, `CHANGELOG.md` |
 

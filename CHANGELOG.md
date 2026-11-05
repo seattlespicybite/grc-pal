@@ -3,6 +3,19 @@
 All notable changes are listed here. The project follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+### Added
+- `deploy/azure/check.sh`: post-deploy check for an Azure instance (healthy revision, sign-in enforced,
+  redirect address and secret in place, assignment required, and from the internet: `/healthz` answers while a
+  forged identity header, `/dev/login` and `/login` are refused). `--fix` registers a missing redirect address.
+  `deploy.sh` runs it at the end.
+- `deploy/azure/kit.sh`: write the recovery kit of an existing instance.
+
+### Changed
+- `deploy.sh` is safe to repeat after an interrupted run: it registers the sign-in redirect and writes the
+  recovery kit right after the deployment, and a re-run keeps a kit that already holds the same keys instead
+  of stopping.
+- The sign-in edge check accepts `401` as well as a redirect to Microsoft sign-in (Azure answers `401` to
+  clients that do not look like a browser); `200` still fails.
 
 ### Added
 - **Sign in with Microsoft on a VM** (local sign-in mode). Configuration > Sign in with Microsoft takes a separate

@@ -38,5 +38,15 @@ def main(path: str, instance: str) -> None:
         fh.write(text)
 
 
+def matches(path: str) -> bool:
+    """True when the kit at PATH holds the keys in the environment (a re-run of deploy.sh may keep it)."""
+    with open(path) as fh:
+        kit = json.load(fh)
+    want = json.loads(kit_text(os.environ["GRCPAL_BACKUP_KEY"], os.environ.get("GRCPAL_ENCRYPTION_KEY", ""), ""))
+    return all(kit.get(k) == want[k] for k in ("format", "backup_key_id", "settings_key_id"))
+
+
 if __name__ == "__main__":
+    if sys.argv[1] == "--matches":
+        sys.exit(0 if matches(sys.argv[2]) else 1)
     main(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else "")
