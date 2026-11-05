@@ -92,6 +92,10 @@ def job_outcome(job: dict) -> dict:
     but reports a failed verification ("verified"/"ok" is False) counts as a problem, not a success."""
     label = _JOB_LABELS.get(job.get("kind", ""), job.get("title") or "Job")
     res = job.get("result") or {}
+    if job.get("status") == "interrupted":
+        return {"ok": False, "title": f"{label} was interrupted",
+                "text": job.get("message") or "The portal stopped while the job was running.",
+                "next": "Start it again."}
     if job.get("status") == "failed":
         return {"ok": False, "title": f"{label} failed",
                 "text": job.get("message") or "See Logs for details.", "next": "Fix the problem and try again."}
