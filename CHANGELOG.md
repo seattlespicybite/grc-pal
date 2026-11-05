@@ -32,6 +32,12 @@ No data model change: upgrade in place from 0.7.0, roll back to 0.7.0 without a 
   133 table reads on a cold load (80 of them the checks table, once per control) to about 25, which matters on
   Azure Tables where each read is an HTTPS call. Any write drops that table's remembered reads, rows are handed out
   as copies, and background jobs always read fresh. A read-budget test keeps the main pages in check.
+### Changed
+- **Calendar badge counts only recent slips** (B-061). On a fresh install the Calendar and Compliance menu badges
+  showed every unrecorded month since the observation period started (135 on the demo), so red stopped meaning
+  anything. The badge now counts occurrences past due in the last 30 days (December still counts in January).
+  The calendar page keeps marking every past-due month and, when older ones wait, says how many and what to do
+  (record Performed with the date, or Missed with the reason). Exports and digests are unchanged.
 
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 

@@ -242,7 +242,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         ctx.update(fw_in_use=in_use, view=view, view_fw=in_use.get(view), library_owner=portal.library_owner(),request=request, user=user, csrf=form_token(request, user.email), today=portal.today.isoformat(),
                    cycle=portal.active_cycle(), org=portal.org, request_id=request_id.get(),
                    review_count=len(portal.reviewable(user)), ar_open=portal.access_review_badge(user),
-                   calendar_due=portal.calendar_past_due_count() if user.is_admin else 0,
+                   calendar_due=portal.calendar_badge_count() if user.is_admin else 0,
                    my_open=sum(1 for a in portal.assignments(user=user, mine=True) if a["status"] in ("open", "returned"))
                    + (len(portal.pending_approvals(user)["mine"]) if user.can_write else 0)
                    + (len(portal.documents_to_acknowledge(user)) if user.can_write else 0),

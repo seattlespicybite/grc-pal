@@ -46,7 +46,8 @@ def register(app, h) -> None:
         return render(request, user, "calendar.html", nav_active="calendar", year=year, show_auto=show_auto,
                       manual=data["manual"], automated=data["automated"], counts=counts,
                       months=MONTHS, this_month=this_month, labels=STATUSES, auto_labels=AUTO_STATUSES,
-                      program_start=portal.calendar_program_start(), vendor_months=portal.vendor_calendar(year))
+                      program_start=portal.calendar_program_start(), vendor_months=portal.vendor_calendar(year),
+                      backlog=portal.calendar_backlog() if year == portal.today.year else None)
 
     @app.get("/calendar.csv")
     def calendar_csv(year: int = 0, user: User = Depends(current_user)):
