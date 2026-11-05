@@ -94,6 +94,9 @@ param alertEmail string = ''
 @description('Alert when no successful scheduled backup was logged for this long (ISO 8601). Use P8D for a weekly schedule.')
 param backupAlertWindow string = 'P2D'
 
+@description('Alert when the scheduled evidence collection (grcpal collect --all) has not run for this long (ISO 8601).')
+param collectAlertWindow string = 'P2D'
+
 @description('Optional allow-list of source IP ranges (CIDR). Empty = reachable from anywhere, still behind sign-in.')
 param allowedIpRanges array = []
 
@@ -358,6 +361,7 @@ var appEnv = [
   { name: 'GRCPAL_SMTP_PASSWORD', secretRef: 'smtp-password' }
   { name: 'GRCPAL_BACKUP_KEY', secretRef: 'backup-key' }
   { name: 'GRCPAL_BACKUP_CONTAINER', value: 'backups' }
+  { name: 'GRCPAL_BACKUP_RETENTION_DAYS', value: string(backupRetentionDays) }
 ]
 
 resource app 'Microsoft.App/containerApps@2024-03-01' = {
@@ -568,6 +572,34 @@ resource backupAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-preview'
       allOf: [
         {
           query: 'ContainerAppConsoleLogs_CL | where Log_s has "backup.run_due" and Log_s contains \'"kind": "scheduled"\' and Log_s contains \'"ok": true\''
+          timeAggregation: 'Count'
+          operator: 'Equal'
+          threshold: 0
+          failingPeriods: { numberOfEvaluationPeriods: 1, minFailingPeriodsToAlert: 1 }
+        }
+      ]
+    }
+    actions: { actionGroups: [alertGroup.id] }
+  }
+}
+
+// The daily evidence collection did not run at all (job deleted, image broken, schedule off). The app emails failed
+// runs itself, but only from inside that run, so a run that never starts would otherwise go unnoticed.
+resource collectAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-preview' = if (!empty(alertEmail)) {
+  name: 'grcpal-${instanceName}-no-collection'
+  location: location
+  properties: {
+    displayName: 'GRC-pal ${instanceName}: evidence collection did not run'
+    description: 'No scheduled evidence collection (grcpal collect --all) in the window. Check the collect job runs in the Azure portal and Administration > Automation.'
+    severity: 2
+    enabled: true
+    scopes: [logs.id]
+    evaluationFrequency: 'PT1H'
+    windowSize: collectAlertWindow
+    criteria: {
+      allOf: [
+        {
+          query: 'ContainerAppConsoleLogs_CL | where Log_s has "collect.run_all"'
           timeAggregation: 'Count'
           operator: 'Equal'
           threshold: 0

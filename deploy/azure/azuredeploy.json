@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "10911923069905076267"
+      "templateHash": "12157587382542491472"
     }
   },
   "parameters": {
@@ -182,6 +182,13 @@
       "defaultValue": "P2D",
       "metadata": {
         "description": "Alert when no successful scheduled backup was logged for this long (ISO 8601). Use P8D for a weekly schedule."
+      }
+    },
+    "collectAlertWindow": {
+      "type": "string",
+      "defaultValue": "P2D",
+      "metadata": {
+        "description": "Alert when the scheduled evidence collection (grcpal collect --all) has not run for this long (ISO 8601)."
       }
     },
     "allowedIpRanges": {
@@ -739,6 +746,10 @@
                 {
                   "name": "GRCPAL_BACKUP_CONTAINER",
                   "value": "backups"
+                },
+                {
+                  "name": "GRCPAL_BACKUP_RETENTION_DAYS",
+                  "value": "[string(parameters('backupRetentionDays'))]"
                 }
               ],
               "probes": [
@@ -902,6 +913,10 @@
                 {
                   "name": "GRCPAL_BACKUP_CONTAINER",
                   "value": "backups"
+                },
+                {
+                  "name": "GRCPAL_BACKUP_RETENTION_DAYS",
+                  "value": "[string(parameters('backupRetentionDays'))]"
                 }
               ]
             }
@@ -1080,6 +1095,47 @@
           "allOf": [
             {
               "query": "ContainerAppConsoleLogs_CL | where Log_s has \"backup.run_due\" and Log_s contains '\"kind\": \"scheduled\"' and Log_s contains '\"ok\": true'",
+              "timeAggregation": "Count",
+              "operator": "Equal",
+              "threshold": 0,
+              "failingPeriods": {
+                "numberOfEvaluationPeriods": 1,
+                "minFailingPeriodsToAlert": 1
+              }
+            }
+          ]
+        },
+        "actions": {
+          "actionGroups": [
+            "[resourceId('Microsoft.Insights/actionGroups', take(format('ag-{0}', variables('appName')), 64))]"
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/actionGroups', take(format('ag-{0}', variables('appName')), 64))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-{0}', variables('appName')))]"
+      ]
+    },
+    {
+      "condition": "[not(empty(parameters('alertEmail')))]",
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2023-03-15-preview",
+      "name": "[format('grcpal-{0}-no-collection', parameters('instanceName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "displayName": "[format('GRC-pal {0}: evidence collection did not run', parameters('instanceName'))]",
+        "description": "No scheduled evidence collection (grcpal collect --all) in the window. Check the collect job runs in the Azure portal and Administration > Automation.",
+        "severity": 2,
+        "enabled": true,
+        "scopes": [
+          "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-{0}', variables('appName')))]"
+        ],
+        "evaluationFrequency": "PT1H",
+        "windowSize": "[parameters('collectAlertWindow')]",
+        "criteria": {
+          "allOf": [
+            {
+              "query": "ContainerAppConsoleLogs_CL | where Log_s has \"collect.run_all\"",
               "timeAggregation": "Count",
               "operator": "Equal",
               "threshold": 0,

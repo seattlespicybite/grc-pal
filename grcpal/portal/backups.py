@@ -92,8 +92,12 @@ class BackupsMixin:
             except Exception as exc:  # noqa: BLE001 - show the problem, keep the page usable
                 items, problem = [], f"Cannot read {d.where()}: {type(exc).__name__}"
             places.append({"id": d.id, "label": d.label, "where": d.where(), "kind": d.kind, "problem": problem,
-                           "backups": items, "can_delete": d.can_delete})
+                           "backups": items, "can_delete": d.can_delete,
+                           "retention_days": getattr(d, "retention_days", None)})
+        blob = [x for x in places if x["kind"] == "blob"]
         return {"blocker": self.backups_blocker(), "schedule": sched, "places": places,
+                "storage_retention": {"days": blob[0]["retention_days"] if blob else None, "any": bool(blob),
+                                      "only": bool(blob) and len(blob) == len(places)},
                 "queue_mode": self.backup_queue_mode, "can_restore": self.deployment == "vm",
                 "request": self.settings_store.state(backup_store.REQUEST_KEY, None),
                 "running": self.jobs.running("backup"), "kit": state.get("kit") or {},
