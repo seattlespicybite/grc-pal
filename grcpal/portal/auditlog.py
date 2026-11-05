@@ -7,7 +7,10 @@ result as evidence. The daily export to write-once storage anchors the chain ext
 an attacker with database access cannot rewrite history already exported.
 
 Concurrency: a record is inserted with a unique sequence key, so two writers cannot both
-claim the same position; the loser retries with the next number.
+claim the same position; the loser retries with the next number. The head pointer only ever moves forward:
+it is replaced with a conditional write (SQLite compare, Azure ETag If-Match) and only when the stored head is
+behind, so two replicas or a scheduled job appending at once cannot leave it pointing at an older record (which
+`verify()` would report as tampering).
 """
 from __future__ import annotations
 
@@ -58,10 +61,20 @@ class AuditLog:
                         raise
                     seq, prev = seq + 1, taken["hash"]
                     continue
-                self.store.upsert(self.TABLE, {"PartitionKey": "head", "RowKey": "head", "seq": seq,
-                                               "hash": record["hash"], "pk": record["PartitionKey"]})
+                self._advance_head(seq, record["hash"], record["PartitionKey"])
                 return record
             raise RuntimeError("audit log contention: could not append after 50 attempts")
+
+    def _advance_head(self, seq: int, digest: str, pk: str) -> None:
+        """Move the head to `seq` unless another writer already moved it there or further."""
+        new = {"PartitionKey": "head", "RowKey": "head", "seq": seq, "hash": digest, "pk": pk}
+        for _ in range(50):
+            head, version = self.store.get_versioned(self.TABLE, "head", "head")
+            if head is not None and int(head.get("seq", 0)) >= seq:
+                return
+            if self.store.replace_if(self.TABLE, new, version):
+                return
+        raise RuntimeError("audit log contention: could not move the head pointer after 50 attempts")
 
     def _find(self, seq: int) -> dict | None:
         rk = f"{seq:012d}"
