@@ -63,6 +63,8 @@
         {% if auth_mode == 'dev' %}{{ navlink('/dev/outbox', 'mail', 'Email outbox (dev)', path.startswith('/dev')) }}{% endif %}{% endif %}
       {% endcall %}{% endif %}
     </nav>
+    {# Runs here, before the rest of the page is drawn: restores open groups, slim menu and menu scroll. #}
+    <script src="/static/nav.js?v={{ asset_v['nav.js'] }}" data-nav-state></script>
     <div class="side-user"><b>{{ user.name }}</b>{{ user.email }}
       <div class="mt-s"><span class="role role-{{ user.role }}">{{ role_labels[user.role] }}</span> <span class="sub-dark">Cycle: {{ cycle.name }}</span></div>
       {% if auth_mode == 'local' %}<a class="signout" href="/account/mfa">Two-step sign-in</a>
@@ -79,9 +81,18 @@
     {% block content %}{% endblock %}
   </main>
   {# Control side panel (app.js fills it from /controls/<id>/panel). Without JavaScript the links open the full page. #}
-  <aside class="drawer" id="drawer" role="dialog" aria-modal="false" aria-labelledby="drawer-title" data-drawer hidden>
+  <div class="drawer-backdrop" data-drawer-backdrop hidden></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" data-drawer hidden>
     <div class="drawer-body" data-drawer-body></div></aside>
 </div>
+{# Asked before closing the panel or leaving a page while a form has changes that were not saved (app.js). #}
+<dialog class="unsaved-dialog" data-unsaved-dialog aria-labelledby="unsaved-title">
+  <h2 id="unsaved-title">You have changes that are not saved</h2>
+  <p class="sub">These fields were changed and not saved. Each section has its own Save button.</p>
+  <ul class="list" data-unsaved-list></ul>
+  <div class="actions"><button type="button" class="btn" data-unsaved-keep>Keep editing</button>
+  <button type="button" class="btn ghost" data-unsaved-discard>Close without saving</button></div>
+</dialog>
 <script src="/static/app.js?v={{ asset_v['app.js'] }}"></script>
 </body>
 </html>
