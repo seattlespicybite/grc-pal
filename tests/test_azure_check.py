@@ -44,7 +44,7 @@ def healthy_state():
                   "passwordCredentials": [{"endDateTime": end}]}],
         "assignment_required": True,
         "http": {"/healthz": ["200 "], "/": [f"302 {LOGIN}"], "/dev/login": [f"302 {LOGIN}"], "/login": ["401 "]},
-        "secrets": {"backup-key": base64.b64encode(b"k" * 32).decode(), "encryption-key": "a" * 64},
+        "stored": {"backup-key": base64.b64encode(b"k" * 32).decode(), "encryption-key": "a" * 64},
     }
 
 
@@ -157,9 +157,9 @@ def test_kit_sh_writes_the_running_instances_keys_and_never_overwrites(tmp_path)
                        text=True, env=env, timeout=60)
     assert r.returncode == 0, r.stderr + r.stdout
     kit = json.loads(out.read_text())
-    assert kit["backup_key"] == st["secrets"]["backup-key"] and kit["settings_key"] == "a" * 64
+    assert kit["backup_key"] == st["stored"]["backup-key"] and kit["settings_key"] == "a" * 64
     assert kit["instance"] == f"https://{FQDN}" and out.stat().st_mode & 0o077 == 0
-    assert st["secrets"]["backup-key"] not in r.stdout + r.stderr  # keys are never printed
+    assert st["stored"]["backup-key"] not in r.stdout + r.stderr  # keys are never printed
     again = subprocess.run(["bash", str(AZ / "kit.sh"), "--name", "acme", "--out", str(out)], capture_output=True,
                            text=True, env=env, timeout=60)
     assert again.returncode == 1 and "already exists" in again.stdout

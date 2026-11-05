@@ -16,8 +16,8 @@ elif a[:3] == ["containerapp", "revision", "list"]:
     print(json.dumps(st["revisions"]))
 elif a[:3] == ["containerapp", "auth", "show"]:
     print(json.dumps(st["auth"]))
-elif a[:3] == ["containerapp", "secret", "show"]:
-    print(st["secrets"][opt("--secret-name")])
+elif a[:3] == ["containerapp", "secret", "show"]:  # dummy test values written to stdout like the real CLI
+    sys.stdout.write(st["stored"][opt("--secret-name")] + "\n")
 elif a[:3] == ["ad", "app", "list"]:
     print(json.dumps([x for x in st["apps"] if x["displayName"] == opt("--display-name")]))
 elif a[:3] == ["ad", "app", "update"]:
