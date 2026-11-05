@@ -5,6 +5,15 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Added
+- **Control panel and menu.** The control side panel now shows every section of the full control page
+  (one shared template, `_control_body.html`, so each role sees the same sections and actions in both). It opens
+  from the right at 80% width (full width on small screens) over a backdrop, from the whole list row; Escape, the
+  backdrop, Close and the browser's Back close it and keep the list's filters and scroll. Each section has its own
+  labelled Save button: saved in the panel, you return to the list with the same panel open (`?panel=` on the form,
+  only list pages accepted, only redirects to the same control rewritten); saved on the full page, you stay there.
+  Unsaved changes ask first in an in-page dialog that names the section and fields (plus the browser's own question
+  on reload or tab close). The menu remembers open groups, slim mode and its scroll per browser, restored before the
+  page is drawn (`static/nav.js`); the current page's group is always open. No new routes, permissions or data.
 - **Retire any control as not applicable, built in or custom, and restore it.** Starter controls that do not fit
   your organization can now be taken out of the active control set: from the control's page, several at once on
   the new **Controls > Retired controls** page, or with Status `retired` in the control matrix data file (built-in
