@@ -14,6 +14,10 @@ All notable changes are listed here. The project follows [semantic versioning](h
   until the page has enough rows, instead of reading the whole log on every view (about 30 paged calls per view
   at 30,000 records on Azure Tables). The daily export stores its chain verification, and the Audit log page shows
   the last result ("Last daily check ... chain verified"); *Verify integrity* still checks the whole chain on demand.
+- **Jobs no longer stay "running" forever after a restart** (B-042). A replica stopped mid-job (scale to zero,
+  restart, update) left the job row "running", which also blocked new runs of the same kind (for example
+  *Collect now*). Running jobs now send a heartbeat every minute; a queued or running job without a heartbeat for
+  10 minutes is marked **interrupted** with a message to start it again, and a warning goes to the event log.
 
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 
