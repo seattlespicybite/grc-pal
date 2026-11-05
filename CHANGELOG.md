@@ -18,6 +18,11 @@ All notable changes are listed here. The project follows [semantic versioning](h
   restart, update) left the job row "running", which also blocked new runs of the same kind (for example
   *Collect now*). Running jobs now send a heartbeat every minute; a queued or running job without a heartbeat for
   10 minutes is marked **interrupted** with a message to start it again, and a warning goes to the event log.
+### Changed
+- **Pages read much less from storage** (B-040). Each request now remembers what it read: the dashboard went from
+  133 table reads on a cold load (80 of them the checks table, once per control) to about 25, which matters on
+  Azure Tables where each read is an HTTPS call. Any write drops that table's remembered reads, rows are handed out
+  as copies, and background jobs always read fresh. A read-budget test keeps the main pages in check.
 
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 
