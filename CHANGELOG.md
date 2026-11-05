@@ -4,6 +4,13 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Changed
+- **Calendar badge counts only recent slips** (B-061). On a fresh install the Calendar and Compliance menu badges
+  showed every unrecorded month since the observation period started (135 on the demo), so red stopped meaning
+  anything. The badge now counts occurrences past due in the last 30 days (December still counts in January).
+  The calendar page keeps marking every past-due month and, when older ones wait, says how many and what to do
+  (record Performed with the date, or Missed with the reason). Exports and digests are unchanged.
+
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 
 ### Added

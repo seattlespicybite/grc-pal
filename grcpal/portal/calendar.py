@@ -491,9 +491,32 @@ class CalendarMixin:
                                                      "version": version, "note": note[:300]})
         return row
 
+    BADGE_DAYS = 30  # the menu badge counts what slipped recently, not the whole backlog (B-061)
+
     def calendar_past_due_count(self) -> int:
+        """Every past-due occurrence this year (summaries and digests)."""
         data = self.calendar_year(self.today.year, show_automated=False)
         return sum(1 for a in data["manual"] for c in a["cells"] if c and c["past_due"])
+
+    def calendar_badge_count(self) -> int:
+        """Menu badge: occurrences past due by at most BADGE_DAYS days. A fresh install with months of unrecorded
+        history otherwise shows a three-digit red number that people learn to ignore; the calendar page still
+        marks every past-due month and says how many older ones wait (calendar_backlog)."""
+        return self.calendar_backlog()["recent"]
+
+    def calendar_backlog(self) -> dict:
+        since = (self.today - dt.timedelta(days=self.BADGE_DAYS)).isoformat()
+        years = {self.today.year, (self.today - dt.timedelta(days=self.BADGE_DAYS)).year}
+        recent = older = 0
+        for year in sorted(years):
+            for a in self.calendar_year(year, show_automated=False)["manual"]:
+                for c in a["cells"]:
+                    if c and c["past_due"]:
+                        if c["due"] >= since:
+                            recent += 1
+                        elif year == self.today.year:
+                            older += 1
+        return {"recent": recent, "older": older, "since": since, "days": self.BADGE_DAYS}
 
     # ================================================================ feeds into control status and exports
     def completed_tasks(self) -> dict[str, str]:

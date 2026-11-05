@@ -305,7 +305,7 @@ def test_occurrence_page_lists_evidence_from_its_month(client, portal, monkeypat
 
 def test_nav_counts_past_due(client):
     page = as_(client, ADMIN).get("/policies").text
-    assert 'href="/calendar"' in page and "Past due, not recorded" in page
+    assert 'href="/calendar"' in page and "Past due in the last 30 days, not recorded" in page
 
 
 # ---------------------------------------------------------------- exports
@@ -498,3 +498,30 @@ def test_calendar_popup_lists_linked_controls(portal, client):
     as_(client, ADMIN)
     pop = client.get("/calendar/o/vulnerability-review~2026-10?popup=1").text
     assert 'href="/controls/VUL-01"' in pop and 'href="/controls/VUL-03"' in pop
+
+
+# ---------------------------------------------------------------- badge and backlog (B-061)
+def test_menu_badge_counts_only_recent_slips_and_the_page_names_the_backlog(portal, client):
+    total = portal.calendar_past_due_count()
+    backlog = portal.calendar_backlog()
+    assert backlog["since"] == "2026-09-12" and backlog["older"] > 0
+    assert portal.calendar_badge_count() == backlog["recent"] < total
+    recent = [c for a in portal.calendar_year(2026, show_automated=False)["manual"] for c in a["cells"]
+              if c and c["past_due"] and c["due"] >= "2026-09-12"]
+    assert backlog["recent"] == len(recent) and backlog["recent"] + backlog["older"] == total
+    page = as_(client, ADMIN).get("/calendar").text
+    assert f"{backlog['older']} earlier months still have no record" in page
+    assert "stay marked Past due here and in the export" in page
+    for c in recent:  # recording the recent ones clears the badge; the backlog stays visible on the page
+        portal.update_occurrence(ADMIN, f"{c['activity']}~{c['year']}-{c['month']:02d}", "performed", "2026-10-01",
+                                 "Done")
+    assert portal.calendar_badge_count() == 0 and portal.calendar_backlog()["older"] == backlog["older"]
+
+
+def test_badge_in_january_still_counts_december(portal):
+    import datetime as dt
+
+    portal._today = dt.date(2027, 1, 10)
+    dec = [c for a in portal.calendar_year(2026, show_automated=False)["manual"] for c in a["cells"]
+           if c and c["past_due"] and c["due"] >= "2026-12-11"]
+    assert dec and portal.calendar_badge_count() >= len(dec)
