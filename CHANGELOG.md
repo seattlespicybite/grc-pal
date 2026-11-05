@@ -4,6 +4,12 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Changed
+- **Pages read much less from storage** (B-040). Each request now remembers what it read: the dashboard went from
+  133 table reads on a cold load (80 of them the checks table, once per control) to about 25, which matters on
+  Azure Tables where each read is an HTTPS call. Any write drops that table's remembered reads, rows are handed out
+  as copies, and background jobs always read fresh. A read-budget test keeps the main pages in check.
+
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 
 ### Added
