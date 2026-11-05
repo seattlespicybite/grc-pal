@@ -2,7 +2,8 @@
 {% block content %}
 <div class="page-head"><div><h1>Audit log</h1><div class="sub">Every change in GRC-pal, newest first. Records are hash-chained (tamper-evident) and exported daily to write-once evidence storage.</div></div>
 <a class="btn ghost small" href="/audit?verify=1">Verify integrity</a></div>
-{% if verify %}<div class="flash {{ 'ok' if verify.ok else 'err' }}" role="status">{% if verify.ok %}Chain verified: {{ verify.records }} records, head {{ verify.head[:16] }}…{% else %}Integrity problems found: {{ verify.problems|join('; ') }}{% endif %}</div>{% endif %}
+{% if verify %}<div class="flash {{ 'ok' if verify.ok else 'err' }}" role="status">{% if verify.ok %}Chain verified: {{ verify.records }} records, head {{ verify.head[:16] }}…{% else %}Integrity problems found: {{ verify.problems|join('; ') }}{% endif %}</div>
+{% elif last_verify %}<p class="sub">Last daily check {{ when(last_verify.verified_at) }}: {% if last_verify.ok %}chain verified, {{ last_verify.records }} records.{% else %}<strong>integrity problems found</strong>: {{ last_verify.problems|join('; ') }}{% endif %}</p>{% endif %}
 <form class="filters" method="get" action="/audit" role="search">
 <input name="actor" value="{{ actor }}" placeholder="Who (email)" aria-label="Actor">
 <input name="action" value="{{ action }}" placeholder="Action, e.g. evidence. or user." aria-label="Action">
