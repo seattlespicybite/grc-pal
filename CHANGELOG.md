@@ -55,6 +55,13 @@ No data model change: upgrade in place from 0.7.0, roll back to 0.7.0 without a 
   `ubuntu-latest`, which GitHub is moving to Ubuntu 26, so a runner change is a reviewed edit and not a surprise.
   The Dockerfile skips BuildKit's `SecretsUsedInArgOrEnv` check (it flagged `GRCPAL_AUTH_MODE`, a mode, not a
   secret); a test now fails if any `ENV` or `ARG` name looks like a secret.
+### Added
+- **Azure alert when the daily evidence collection does not run** (B-025). GRC-pal already emails admins about
+  failed collectors and checks (Calendar > Email alerts), and the calendar's automated rows show the same runs, so
+  calendar failures are covered. What was not covered: the collection never starting at all (job deleted, broken
+  image, schedule off), because those emails are sent by the run itself. `grcpal collect --all` now logs one
+  `collect.run_all` line per run, and with `--alert-email` Azure emails when none is logged in two days
+  (`collectAlertWindow`). Re-run `deploy.sh` to add the alert.
 
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 

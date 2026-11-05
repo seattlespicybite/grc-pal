@@ -97,8 +97,11 @@ certificate, the portal moves to `https://grc.example.com` (email links and sign
 default address keeps working. **Always pass `--custom-domain` when you re-run the script**, or the binding
 is removed.
 
-**Alerts** (`--alert-email`): no successful backup in two days; changes to locks, role assignments, write-once
-policies or sign-in settings; and **every break-glass sign-in** (within about five minutes).
+**Alerts** (`--alert-email`): no successful backup in two days; the daily evidence collection did not run in two
+days (`collectAlertWindow`); changes to locks, role assignments, write-once policies or sign-in settings; and
+**every break-glass sign-in** (within about five minutes). Failed collectors and checks are emailed by GRC-pal
+itself (Calendar > Email alerts, needs email set up); the Azure alert covers the case where the collection never
+starts, which the app cannot report.
 
 > Prefer clicking? `deploy/azure/azuredeploy.json` is the same template for the Azure portal's
 > *Deploy a custom template* page. You then create the app registration yourself and pass its
