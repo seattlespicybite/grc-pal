@@ -23,6 +23,11 @@ All notable changes are listed here. The project follows [semantic versioning](h
   133 table reads on a cold load (80 of them the checks table, once per control) to about 25, which matters on
   Azure Tables where each read is an HTTPS call. Any write drops that table's remembered reads, rows are handed out
   as copies, and background jobs always read fresh. A read-budget test keeps the main pages in check.
+- **Light-mode colours meet WCAG 2.2 AA** (B-060). Links, control IDs and primary buttons used a teal at 3.74:1 and
+  status chips were as low as 2.86:1 ("Past due", "Pending"). New light-mode colours: accent `#0f766e`, green
+  `#047857`, amber `#92400e`, red `#b91c1c`, blue `#1d4ed8`, grey `#475569`; all reach 4.5:1 on the page, on cards and
+  on their own chip tint. Links inside sentences are underlined. Dark mode is unchanged. `tests/test_contrast.py`
+  checks every pair, so a later colour change cannot quietly fail again.
 
 ## [0.7.0] - 2026-11-04 - Sign in with Microsoft, access review follow-up, new layout, policies, risk register
 
