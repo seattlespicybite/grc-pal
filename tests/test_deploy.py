@@ -171,6 +171,13 @@ def test_deploy_rejects_a_bad_domain(tmp_path):
     assert code == 1 and "must be a host name" in out and not calls
 
 
+def test_runtime_image_has_no_package_manager():
+    """Nothing is installed after the build, so the final stage removes apt (attack surface, scanner findings)."""
+    runtime = (ROOT / "Dockerfile").read_text().rsplit("\nFROM ", 1)[1]
+    assert "dpkg --purge --force-remove-essential --force-depends apt libapt-pkg" in runtime
+    assert "apt-get" not in runtime
+
+
 def test_image_is_built_only_from_pinned_inputs():
     """What CI tested and scanned is what the release ships: base image by digest, every package hash-locked."""
     import tomllib

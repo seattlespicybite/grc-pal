@@ -89,6 +89,8 @@ All notable changes are listed here. The project follows [semantic versioning](h
   both platforms, and only then tags it.
 - Pinned CI scanner tools: `filelock` 4.1.0 → 4.2.9 (17 advisories, the open Dependabot alerts on main). App
   dependencies had no known vulnerabilities (pip-audit).
+- The runtime image has no package manager (`apt` removed after the build): nothing is installed at runtime, and
+  it cleared two HIGH findings in the base image's `apt` (Trivy).
 - No `Server` header from Caddy on VMs or from `grcpal serve` (the container already sent none).
 
 ## [0.6.1] - 2026-11-03 - Fix startup crash on Azure
