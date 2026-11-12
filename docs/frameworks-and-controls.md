@@ -302,6 +302,28 @@ collected automatically is listed but changed in the catalog or Configuration.
   release later changes the starter text of a control you edited, your version stays in use and
   the control page says the starter changed, so you can compare and decide.
 
+## Retiring controls that do not apply (control library owner)
+
+GRC-pal ships with a starter set of controls. Not all of them fit every organization. **Retire** a control
+to mark it *not applicable*: it leaves dashboards, reports, the control matrix, coverage and the calendar's
+control links, and stops counting toward status. Built-in and custom controls are retired the same way.
+
+- **From a control's page:** *Retire this control (not applicable)*, with a reason.
+- **Several at once:** **Controls > Retired controls > Retire several controls** (tick the boxes), or set
+  Status to `retired` in the control matrix data file and import it.
+- **A reason is required.** It is shown to auditors.
+- **Coverage check:** if retiring would leave an in-scope SOC 2 criterion with no control, GRC-pal names the
+  criterion and asks you to confirm. For several controls the check looks at the whole selection.
+- **Nothing is destroyed.** The definition (and your edits to it), evidence already collected and history stay.
+  **Restore** on **Controls > Retired controls** brings a control back exactly as it was.
+- **Auditors see what was retired.** **Controls > Retired controls** lists every retired control with who
+  retired it, when and why (admins and auditors). The audit log has `control.retire`, `control.retire.batch`
+  (several at once) and `control.restore`, each with the reason.
+
+Retiring is per organization: an MSP retiring a control for one client changes nothing for the others.
+Collectors keep running while their platform is connected; their evidence for retired controls is kept but
+not shown against a control.
+
 ## Control matrix: export, bulk edit and import, report
 
 **Controls > Control matrix** (admins and auditors) offers two different files on purpose:
@@ -329,9 +351,10 @@ What an import does and does not do:
 | Existing Control ID, values changed | The control is updated; each changed field is replaced with the file's text |
 | Existing Control ID, nothing changed | Nothing happens |
 | New Control ID | A custom control is created |
-| Status `retired` (custom control) | The custom control is retired (history kept) |
+| Status `retired` (built-in or custom control) | The control is retired as not applicable (history kept; restore it on **Controls > Retired controls**) |
+| A row for a control that is already retired | Refused for that row: restore the control in GRC-pal first |
 | Row deleted from the file | **Nothing happens.** An import never deletes or hides a control |
-| Status `retired` on a built-in control, unknown requirement ID, unknown owner role, duplicate ID | The whole import is refused and the rows are listed |
+| Status other than `active` or `retired`, unknown requirement ID, unknown owner role, duplicate ID | The whole import is refused and the rows are listed |
 | A row changed in GRC-pal after you downloaded the file | That row is refused (conflict), so nobody's edit is overwritten silently |
 | File exported from another organization | Refused |
 
@@ -355,7 +378,8 @@ way through an apply, the import is marked **partial** and the result lists exac
 - reference links to documents kept elsewhere (SharePoint, Confluence, a vendor portal).
 
 Custom controls behave like catalog controls: requests, uploads, reviews, comments, reminders,
-overrides, AI review, export. Retire one instead of deleting it; history stays. To version-control
+overrides, AI review, export. Retire one instead of deleting it; history stays (see
+[Retiring controls](#retiring-controls-that-do-not-apply-control-library-owner)). To version-control
 them, copy them into `catalog/controls.yaml` when the program matures.
 
 ## Checks: pull data from a URL and test it

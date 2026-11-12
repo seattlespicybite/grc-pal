@@ -15,8 +15,8 @@ Import rules (every rule and permission check lives here; routes only parse form
 - Each changed row goes through the same functions as the edit forms (`save_control_definition`,
   `save_custom_control`), so the same validation, version history and audit entries apply. Every row is
   validated (dry run) before the first write, so a business-rule failure cannot stop an import half way.
-- Rows missing from the file are left alone. Nothing is ever deleted; custom controls can be retired by
-  setting Status to "retired". Built-in controls cannot be retired.
+- Rows missing from the file are left alone. Nothing is ever deleted; any control (built in or custom) can be
+  retired ("not applicable") by setting Status to "retired". Restoring a retired control is done in GRC-pal.
 - The uploaded file and the result are kept as write-once evidence (`control_matrix_import`,
   `control_matrix_apply`), so an auditor can see exactly what was imported, by whom, why, and what changed.
 """
@@ -151,7 +151,7 @@ class MatrixMixin:
             "3. Separate several framework requirements or owner emails with a semicolon, e.g. CC6.1; CC6.2.",
             "4. Owner role must be a role from roles.yaml; Owner emails become Control owners in GRC-pal.",
             "5. To add a custom control, add a row with a new Control ID (capital letters, digits, dots, hyphens).",
-            "6. To retire a custom control, set Status to retired. Built-in controls cannot be retired.",
+            "6. To retire a control that does not apply to you (built in or custom), set Status to retired.",
             "7. Rows you delete from this file are NOT deleted in GRC-pal. Nothing is ever deleted by an import.",
             "8. Frequency can be changed for custom controls only. Do not type formulas.",
             "9. Upload the file on the Control matrix page. You will see every change before anything is saved.",
@@ -218,7 +218,8 @@ class MatrixMixin:
             warnings.append(f"Columns for frameworks not switched on are ignored: {', '.join(off)}.")
 
         current = {c["id"]: c for c in self.matrix_controls()}
-        retired = {r["RowKey"] for r in self.custom_controls() if r.get("status") == "retired"}
+        retired = {r["RowKey"] for r in self.custom_controls() if r.get("status") == "retired"} | \
+            self._retired_builtin_ids()
         labels_fw = {f"map:{f}": fw.name.split(" (")[0].split(":")[0] for f, fw in in_use.items()}
         changes, errors, seen = [], [], set()
         unchanged = 0
@@ -240,7 +241,7 @@ class MatrixMixin:
                 errors.append(f"{where}: Status must be active or retired.")
                 continue
             if cid in retired:
-                errors.append(f"{where}: this custom control is retired. Restore it in GRC-pal first.")
+                errors.append(f"{where}: this control is retired. Restore it in GRC-pal first (Controls > Retired).")
                 continue
             new = {"title": cell["title"], "description": cell["description"], "owner": cell["owner"],
                    "owner_emails": _emails(cell["owner_emails"]),
@@ -263,9 +264,6 @@ class MatrixMixin:
                 old_shown = self._shown(cur, cur["frequency"])
                 action = "update"
                 if status == "retired":
-                    if not cur["custom"]:
-                        errors.append(f"{where}: built-in controls cannot be retired.")
-                        continue
                     action = "retire"
             new_shown = self._shown(new, freq)
             diff = [{"key": k, "field": FIELD_LABELS.get(k) or labels_fw.get(k, k), "old": old_shown.get(k, ""),
@@ -428,7 +426,7 @@ class MatrixMixin:
                 if ch["action"] == "create":
                     self.save_custom_control(actor, self._custom_form(new, new["frequency"], None, cid))
                 elif ch["action"] == "retire":
-                    self.retire_custom_control(actor, cid, why)
+                    self.retire_control(actor, cid, why, accept_gaps=True)  # gaps were confirmed for the plan
                 elif ch["custom"]:
                     self.save_custom_control(actor, self._custom_form(new, new["frequency"], cid), existing_id=cid)
                 else:

@@ -62,7 +62,10 @@ class FeaturesMixin:
             controls = []
             edits = {r["RowKey"]: r for r in self.store.list("controledits", "c")}
             known = self.frameworks if edits else {}
+            retired = self._retired_builtin_ids()
             for c in self.base_catalog.controls:
+                if c["id"] in retired:
+                    continue
                 if c["id"] in edits:
                     c = self._apply_edit(c, edits[c["id"]], known)
                 extra = [{"artifact": k.get("title") or f"Check {k['RowKey']}", "via": f"check:{k['RowKey']}"}
@@ -517,16 +520,111 @@ class FeaturesMixin:
         self._changed()
         return row
 
-    def retire_custom_control(self, actor, cid: str, reason: str) -> None:
+    # ================================================================ retire / restore (built-in and custom)
+    # Retiring marks a control "not applicable" for this organization. It leaves the active control set (dashboards,
+    # matrix, reports, coverage, calendar links) but nothing is destroyed: the definition, any edits, evidence and
+    # history stay, the audit log records who, when and why, and the Retired controls page lists it for auditors.
+    # Built-in definitions live in the program files, so retiring one stores a mark in `retiredcontrols`;
+    # a custom control keeps its own status field.
+    def _retired_builtin_ids(self) -> set[str]:
+        return {r["RowKey"] for r in self.store.list("retiredcontrols", "r") if r.get("status") == "retired"}
+
+    def retire_gaps(self, ids) -> list[str]:
+        """In-scope SOC 2 criteria that would be left with no control if these controls were retired."""
+        ids = set(ids)
+        cov = self.catalog.coverage()
+        return [crit for crit in self.catalog.in_scope_criteria if cov.get(crit) and set(cov[crit]) <= ids]
+
+    def _retire_reason(self, reason: str) -> str:
+        reason = (reason or "").strip()
+        if len(reason) < 5:
+            raise self._invalid("Give a reason (at least 5 characters); auditors will read it")
+        return reason
+
+    def _retire_one(self, actor, cid: str, reason: str, gaps=None) -> None:
+        """Retire one active control. Callers check the role, the reason and coverage gaps first."""
+        if self.custom_control(cid):
+            self.store.update("customcontrols", "c", cid, {"status": "retired", "retired_reason": reason[:300],
+                                                           "updated_by": actor.email, "updated_at": _now()})
+            builtin = False
+        else:
+            self.store.upsert("retiredcontrols", {"PartitionKey": "r", "RowKey": cid, "status": "retired",
+                                                  "reason": reason[:300], "by": actor.email, "at": _now()})
+            builtin = True
+        self.audit(actor, "control.retire", cid, {"controls": [cid], "reason": reason[:300], "built_in": builtin,
+                                                  "accepted_gaps": gaps or None})
+
+    def retire_controls(self, actor, ids, reason: str, accept_gaps: bool = False) -> list[str]:
+        """Retire one or more active controls (built-in or custom). Library owner only. Every control is checked
+        before the first write, so a bad ID cannot stop the batch half way. Returns the IDs retired."""
         self._library(actor)
-        row = self.custom_control(cid)
-        if not row:
-            raise self._invalid("Custom control not found")
-        if len((reason or "").strip()) < 5:
-            raise self._invalid("Give a reason (at least 5 characters)")
-        self.store.update("customcontrols", "c", cid, {"status": "retired", "updated_by": actor.email, "updated_at": _now()})
-        self.audit(actor, "control.retire", cid, {"controls": [cid], "reason": reason[:300]})
+        reason = self._retire_reason(reason)
+        ids = list(dict.fromkeys(str(i).strip().upper() for i in ids if str(i).strip()))
+        if not ids:
+            raise self._invalid("Choose at least one control to retire")
+        if len(ids) > 1000:
+            raise self._invalid("Retire at most 1000 controls at once")
+        unknown = [i for i in ids if not self.catalog.control(i)]
+        if unknown:
+            raise self._invalid(f"Not an active control: {', '.join(unknown[:20])}")
+        gaps = self.retire_gaps(ids)
+        if gaps and not accept_gaps:
+            raise self._invalid(f"Retiring this leaves {', '.join(gaps)} with no control. Tick the box to confirm "
+                                "you accept the gap, or map another control first.")
+        for cid in ids:
+            self._retire_one(actor, cid, reason, gaps if len(ids) == 1 else None)
+        if len(ids) > 1:
+            self.audit(actor, "control.retire.batch", ids[0], {"controls": ids[:500], "count": len(ids),
+                                                               "reason": reason[:300], "accepted_gaps": gaps or None})
         self._changed()
+        return ids
+
+    def retire_control(self, actor, cid: str, reason: str, accept_gaps: bool = False) -> None:
+        self.retire_controls(actor, [cid], reason, accept_gaps)
+
+    def retire_custom_control(self, actor, cid: str, reason: str) -> None:
+        """Kept for callers that only handle custom controls (the edit form's Retire button before 0.7)."""
+        if not self.custom_control(cid):
+            self._library(actor)
+            raise self._invalid("Custom control not found")
+        self.retire_control(actor, cid, reason, accept_gaps=True)
+
+    def restore_control(self, actor, cid: str, reason: str) -> None:
+        """Bring a retired control back into the active set, with its definition, edits and history."""
+        self._library(actor)
+        reason = self._retire_reason(reason)
+        cid = (cid or "").strip().upper()
+        custom = self.custom_control(cid)
+        if custom and custom.get("status") == "retired":
+            self.store.update("customcontrols", "c", cid, {"status": "active", "retired_reason": "",
+                                                           "updated_by": actor.email, "updated_at": _now()})
+        elif not custom and cid in self._retired_builtin_ids():
+            self.store.update("retiredcontrols", "r", cid, {"status": "restored", "restored_by": actor.email,
+                                                            "restored_at": _now(), "restore_reason": reason[:300]})
+        else:
+            raise self._invalid(f"{cid} is not a retired control")
+        self.audit(actor, "control.restore", cid, {"controls": [cid], "reason": reason[:300], "built_in": not custom})
+        self._changed()
+
+    def retired_controls(self, user) -> list[dict]:
+        """Every retired control with who retired it, when and why. Admins and auditors (read only)."""
+        if not user.sees_everything:
+            raise self._forbidden("Only admins and auditors can see retired controls")
+        edits = {r["RowKey"]: (r.get("edit") or {}) for r in self.store.list("controledits", "c")}
+        out = []
+        for r in self.store.list("retiredcontrols", "r"):
+            base = self.base_catalog.control(r["RowKey"])
+            if r.get("status") != "retired" or not base:
+                continue
+            out.append({"id": r["RowKey"], "title": edits.get(r["RowKey"], {}).get("title") or base["title"],
+                        "custom": False, "reason": r.get("reason", ""), "by": r.get("by", ""), "at": r.get("at", ""),
+                        "criteria": base.get("criteria", [])})
+        for r in self.custom_controls():
+            if r.get("status") == "retired":
+                out.append({"id": r["RowKey"], "title": r.get("title", ""), "custom": True,
+                            "reason": r.get("retired_reason", ""), "by": r.get("updated_by", ""),
+                            "at": r.get("updated_at", ""), "criteria": (r.get("mappings") or {}).get("soc2", [])})
+        return sorted(out, key=lambda x: x["id"])
 
     # ================================================================ checks
     def _ui_checks_for(self, control_id: str) -> list[dict]:

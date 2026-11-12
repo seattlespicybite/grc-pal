@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% from "_macros.html" import when %}{% block title %}Retired controls{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Retired controls</h1>
+<div class="sub">Controls marked not applicable to this organization ({{ rows|length }}). They are out of dashboards, reports, the control matrix and coverage. Nothing is deleted: definitions, evidence and history are kept, and every retirement and restore is in the audit log.</div></div>
+<a class="btn ghost small" href="/controls">Back to controls</a></div>
+
+<div class="card table-wrap"><table>
+<thead><tr><th>ID</th><th>Control</th><th>Kind</th><th>Retired</th><th>By</th><th>Reason</th>{% if is_lib %}<th></th>{% endif %}</tr></thead>
+<tbody>{% for r in rows %}<tr><td class="mono">{{ r.id }}</td><td>{{ r.title }}</td>
+<td>{% if r.custom %}<span class="pill custom">Custom</span>{% else %}Built in{% endif %}</td>
+<td class="nowrap">{{ when(r.at) if r.at else '-' }}</td><td>{{ r.by or '-' }}</td><td>{{ r.reason or '-' }}</td>
+{% if is_lib %}<td><details><summary>Restore</summary><form method="post" action="/controls/{{ r.id }}/restore" class="mt-s">
+<input type="hidden" name="csrf" value="{{ csrf }}"><label>Reason<input name="reason" required minlength="5"></label>
+<div class="actions"><button class="btn ghost small" type="submit">Restore {{ r.id }}</button></div></form></details></td>{% endif %}</tr>
+{% else %}<tr><td colspan="{{ 7 if is_lib else 6 }}" class="sub">No retired controls.</td></tr>{% endfor %}</tbody></table></div>
+
+{% if is_lib and active %}<section class="card mt-l"><details><summary>Retire several controls</summary>
+<p class="sub mt">Tick the controls that do not apply to this organization. To retire many at once you can also set Status to <span class="mono">retired</span> in the <a href="/matrix">control matrix</a> data file.</p>
+<form method="post" action="/controls/retire" class="mt-s" data-confirm="Retire the ticked controls? They can be restored later from this page.">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="table-wrap"><table><tbody>{% for c in active %}<tr><td><label class="check"><input type="checkbox" name="ids" value="{{ c.id }}"> <span class="mono">{{ c.id }}</span></label></td><td>{{ c.title }}</td><td class="sub">{{ (c.criteria or [])|join(', ') }}</td></tr>{% endfor %}</tbody></table></div>
+<label>Reason (auditors will read it)<input name="reason" required minlength="5"></label>
+<label class="check"><input type="checkbox" name="accept_gaps" value="yes"> If this leaves a SOC 2 criterion with no control, I accept the gap</label>
+<div class="actions"><button class="btn" type="submit">Retire ticked controls</button></div></form></details></section>{% endif %}
+{% endblock %}

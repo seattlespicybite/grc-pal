@@ -165,6 +165,9 @@ def build(tmp: Path, base: SqliteStore, tenant: str) -> SimpleNamespace:
         "id": w.custom, "title": f"Custom control of {tenant}", "description": "A control made for the authz suite.",
         "frequency": "annual", "owner_emails": admin.email, "map_soc2": "CC9.2",
         "evidence_wanted": "A test file"})
+    # ---- a built-in control retired as not applicable (restore route) and one still active (retire routes)
+    w.retired, w.retire_target = "PRV-06", "PI-05"
+    portal.retire_control(admin, w.retired, "Not applicable in the authz suite.", accept_gaps=True)
     w.check = f"chk-{tenant}"
     portal.save_check(admin, w.ctl_a, {"id": w.check, "type": "http", "url": "https://example.com/health",
                                        "schedule": "manual", "method": "GET", "expect_status": "200-399"})

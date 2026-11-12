@@ -213,11 +213,11 @@ def test_bad_rows_block_the_whole_import(portal):
         set_cell("GOV-02", "Title", "Fine change")(rows)
         set_cell("GOV-01", "SOC 2", "CC1.1; CC99.9")(rows)          # unknown requirement
         set_cell("GOV-03", "Owner role", "nobody-role")(rows)        # not in roles.yaml
-        set_cell("GOV-04", "Status", "retired")(rows)                # built-in cannot be retired
+        set_cell("GOV-04", "Status", "deleted")(rows)                # not a status
         rows.append(list(row_of(rows, "GOV-02")))                    # duplicate ID
     r = portal.matrix_preview(ADMIN, "m.xlsx", rewrite(portal.matrix_xlsx(ADMIN), bad))
     text = " | ".join(r["errors"])
-    assert "CC99.9" in text and "nobody-role" in text and "cannot be retired" in text and "more than once" in text
+    assert "CC99.9" in text and "nobody-role" in text and "active or retired" in text and "more than once" in text
     assert r["import_id"] == "" and portal.store.list("matriximports", "i") == []    # nothing kept, nothing applied
 
 
