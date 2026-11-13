@@ -59,20 +59,33 @@ A criterion page lists its controls with **how each is evidenced** (automatic, h
 and from which connected source). Sources that are switched off for this organization, such as AWS
 when only Azure is used, are not shown. Use **‹ ›** to move to the previous or next criterion.
 
-**Controls open beside the list.** Click a control on a criterion page or in the **Controls** list and
-it opens in a side panel instead of a new page, with tabs: *Overview* (what it does, how we meet it,
-evidence wanted, criteria), *Evidence* (uploads this cycle, automated evidence, requests), *Tests*
-(checks, collectors, calendar, latest AI review), *Documents* (policies and document-library documents
-that name the control, reference links), *History* and *Comments*. **Esc** or **Close** closes it, the
-arrow keys move between tabs, and **Open full page** shows everything with all actions. The address
-ends in `#control=IAM-02`, so you can share or bookmark a panel. Ctrl/Cmd-click opens the full page in
-a new tab. Control owners see only their own controls and no Tests or History tab, as on the full page.
+**Controls open beside the list.** Click a control (anywhere on its row) on a criterion page or in
+the **Controls** list and it opens in a panel from the right (80% of the window, the full width on a
+phone) over the dimmed list. The panel has every section of the full control page, with the same
+actions for your role: what it does, how we meet it, upload, evidence, schedule, comments, requests,
+documents, tests, AI review, points of focus and history. **Esc**, **Close**, a click on the dimmed
+list or the browser's **Back** closes it, and the list keeps its filters and scroll position. **Open
+full page** opens the control on its own page. The address ends in `#control=IAM-02`, so you can share
+or bookmark a panel. Ctrl/Cmd-click opens the full page in a new tab; the keyboard still works (Tab to
+a control link, Enter). Control owners see only their own controls and no Tests, AI review or
+definition history, auditors see everything and change nothing: the same rules as the full page.
+
+**Saving.** Each section has its own Save button (Save notes, Upload, Post comment, Add check and so on);
+a Save sends only that section. Saved in the panel, you come back to the list with the same panel
+open and the "saved" message. Saved on the full control page, you stay on that page.
+
+**Unsaved changes.** If you changed a field and did not save it, closing the panel, opening another
+control or following a link first asks: the question lists each section and field you changed, with
+**Keep editing** and **Close without saving**. Reloading or closing the browser tab asks the browser's
+own question. Pressing a Save button is never "unsaved".
 
 The full control page has a bar of section links at the top (Overview, How we meet it, Evidence, Tests,
-Documents, Comments, AI review, History).
+Documents, Comments, AI review, History); the panel has the same bar.
 
-**Slim menu.** The button next to the GRC-pal name folds the menu to icons (hover for the name) and
-back. The choice is remembered in this browser; medium-width windows start slim.
+**Menu.** The button next to the GRC-pal name folds the menu to icons (hover for the name) and back.
+This browser remembers the slim menu, which groups you opened or closed and how far you scrolled the
+menu, and puts them back before the page is drawn. The group of the page you are on is always open.
+Medium-width windows start slim.
 
 Open a control's full page from a criterion and the page remembers it: the trail shows
 *SOC 2 / CC6 / CC6.1*, **Back to CC6.1** and **All SOC 2 criteria** take you back, **‹ ›** moves

@@ -84,7 +84,7 @@ def asset_versions() -> dict[str, str]:
     import hashlib
 
     return {name: hashlib.sha256((HERE / "static" / name).read_bytes()).hexdigest()[:12]
-            for name in ("app.css", "app.js")}
+            for name in ("app.css", "app.js", "nav.js")}
 
 
 def create_app(portal: Portal | None = None) -> FastAPI:
@@ -109,6 +109,18 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     # Inner to trace_and_secure (added first), so a refused oversized body still gets the security headers and a
     # request log line.
     app.add_middleware(BodyLimit)
+
+    @app.middleware("http")
+    async def panel_return(request: Request, call_next):
+        """A form saved inside the control side panel posts with ?panel=<list page>. When the route sends the
+        person back to that control's page, send them to the list instead, with #control=ID so the same panel
+        reopens and the same message shows. Only changes where a redirect goes, never what is allowed."""
+        response = await call_next(request)
+        if request.method == "POST" and response.status_code == 303 and "panel" in request.query_params:
+            dest = _panel_dest(request.query_params["panel"], response.headers.get("location", ""))
+            if dest:
+                response.headers["location"] = dest
+        return response
 
     @app.middleware("http")
     async def trace_and_secure(request: Request, call_next):
@@ -1136,6 +1148,26 @@ def _guide_links(portal, a: dict) -> list[tuple[str, str]]:
 
 
 LIST_FILTERS = ("q", "status", "category", "owner", "sort", "framework", "family", "criterion", "evidenced", "deferred")
+
+
+_PANEL_LISTS = re.compile(r"^/(controls|criteria(/[A-Za-z0-9._-]{1,64})?|frameworks/[A-Za-z0-9._-]{1,64})$")
+_CONTROL_PAGE = re.compile(r"^/controls/([A-Za-z0-9][A-Za-z0-9._-]{0,63})$")
+
+
+def _panel_dest(panel: str, location: str) -> str:
+    """Where a save made in the side panel should land: the list page it was opened from (a known list path; the
+    controls list keeps only its known filters), with the message of the original redirect and #control=ID.
+    Empty when the original redirect is not the same control's page (then nothing changes)."""
+    from urllib.parse import parse_qsl, urlsplit
+
+    target = urlsplit(location)
+    m = _CONTROL_PAGE.match(target.path)
+    origin = urlsplit(panel[:1200])
+    if not m or target.scheme or target.netloc or origin.scheme or origin.netloc or not _PANEL_LISTS.match(origin.path):
+        return ""
+    pairs = parse_qsl(_list_query(origin.query)) if origin.path == "/controls" else []
+    pairs += [(k, v) for k, v in parse_qsl(target.query) if k in ("msg", "err")]
+    return f"{origin.path}{'?' + urlencode(pairs) if pairs else ''}#control={m.group(1)}"
 
 
 def _list_query(raw: str) -> str:
