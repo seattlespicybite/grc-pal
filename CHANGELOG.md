@@ -14,6 +14,12 @@ All notable changes are listed here. The project follows [semantic versioning](h
   `control.retire.batch` and `control.restore`. Per organization. New table `retiredcontrols` (no migration needed;
   included in backups).
 
+### Security
+- **Container image: zlib heap-overflow fixes (CVE-2026-76844, CVE-2026-85091, both HIGH).** The pinned Python base
+  image still carried the vulnerable zlib after Debian had fixed it, so the image scan failed daily. The image build
+  now applies Debian's security updates to the packages the base image already has (nothing new is installed) and
+  then removes apt as before. Everyone running the 0.7.3 image or older should update to the next release.
+
 ## [0.7.3] - 2026-11-05 - Safer edits, calm badges, honest Azure backup retention, collection alert
 
 No data model change: upgrade in place from 0.7.2, roll back to 0.7.2 without a restore. On Azure, re-run `deploy.sh`

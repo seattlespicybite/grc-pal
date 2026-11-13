@@ -172,10 +172,14 @@ def test_deploy_rejects_a_bad_domain(tmp_path):
 
 
 def test_runtime_image_has_no_package_manager():
-    """Nothing is installed after the build, so the final stage removes apt (attack surface, scanner findings)."""
+    """The final stage only upgrades what the base image already has (Debian security fixes), installs nothing
+    new, and then removes apt (attack surface, scanner findings)."""
     runtime = (ROOT / "Dockerfile").read_text().rsplit("\nFROM ", 1)[1]
-    assert "dpkg --purge --force-remove-essential --force-depends apt libapt-pkg" in runtime
-    assert "apt-get" not in runtime
+    purge = runtime.index("dpkg --purge --force-remove-essential --force-depends apt libapt-pkg")
+    calls = re.findall(r"apt-get[^\n\\&]*", runtime)
+    assert calls == ["apt-get update ", "apt-get -y --no-install-recommends upgrade "], calls
+    assert runtime.index("apt-get") < purge and "rm -rf /var/lib/apt" in runtime[purge:]
+    assert not re.search(r"apt(-get)?[^\n]*\sinstall\b", runtime)
 
 
 def test_image_is_built_only_from_pinned_inputs():
