@@ -240,3 +240,94 @@ def test_open_work_on_a_retired_control_does_not_break_pages(portal, client):
         r = as_(client, who).get(path)
         assert r.status_code == 200, f"{who.email} {path}: {r.text[:300]}"
     assert as_(client, ADMIN).get(f"/controls/{cid}").status_code == 404
+
+
+# ================================================================ setup guide: starting control set
+def test_clean_slate_retires_every_builtin_control_and_keeps_custom_ones(portal):
+    portal.save_custom_control(ADMIN, {"id": "CUS-01", "title": "Clean desk", "frequency": "annual",
+                                       "map_soc2": "CC6.4", "owner_emails": HR.email})
+    builtin = [c["id"] for c in portal.catalog.controls if not c.get("custom")]
+    with pytest.raises(Invalid, match="confirm"):
+        portal.start_clean_slate(ADMIN, confirm=False)
+    with pytest.raises(Forbidden):
+        portal.start_clean_slate(ADMIN2, confirm=True)      # not the library owner
+    assert len(portal.catalog.controls) == len(builtin) + 1
+    done = portal.start_clean_slate(ADMIN, confirm=True)
+    assert sorted(done) == sorted(builtin) and [c["id"] for c in portal.catalog.controls] == ["CUS-01"]
+    assert portal.control_set_choice()["choice"] == "own"
+    assert len(actions(portal, "control.retire")) == len(builtin)
+    assert actions(portal, "setup.control_set")[0]["detail"]["retired"] == len(builtin)
+    assert all(r["reason"] == portal.CLEAN_SLATE_REASON for r in portal.retired_controls(AUDITOR) if not r["custom"])
+    for cid in builtin[:3]:                               # reversible, one control at a time
+        portal.restore_control(ADMIN, cid, "We use this one after all")
+    assert len(portal.catalog.controls) == 4
+
+
+def test_clean_slate_then_import_own_controls(portal):
+    from grcpal import xlsx
+    from grcpal.portal import matrix
+
+    portal.start_clean_slate(ADMIN, confirm=True)
+    data = portal.matrix_xlsx(ADMIN)                      # an empty template with the right columns
+
+    def add(rows):
+        head = rows[0]
+        new = [""] * len(head)
+        new[0] = "ORG-AC-01"
+        for name, value in (("Title", "Quarterly access review"), ("Description", "Managers review access."),
+                            ("Owner emails", HR.email), ("Frequency", "quarterly"), ("SOC 2", "CC6.2; CC6.3"),
+                            ("Status", "active")):
+            new[next(i for i, h in enumerate(head) if h.startswith(name))] = value
+        rows.append(new)
+    assert len(xlsx.read_values(data)[matrix.DATA_SHEET]) == 1
+    r = portal.matrix_preview(ADMIN, "m.xlsx", rewrite(data, add))
+    assert r["errors"] == [] and [(c["id"], c["action"]) for c in r["changes"]] == [("ORG-AC-01", "create")]
+    portal.matrix_apply(ADMIN, r["import_id"], r["plan_hash"], "Import our own control matrix")
+    assert [c["id"] for c in portal.catalog.controls] == ["ORG-AC-01"]
+
+
+def test_clean_slate_can_take_the_free_library_owner_role(tmp_path):
+    from test_portal import make_portal as mk
+
+    portal = mk(tmp_path, people=(ADMIN2, AUDITOR))       # nobody holds the library owner role
+    assert not portal.library_owner()
+    with pytest.raises(Forbidden):
+        portal.start_clean_slate(ADMIN2, confirm=True)
+    portal.start_clean_slate(ADMIN2, confirm=True, take_library_owner=True)
+    assert portal.library_owner() == ADMIN2.email and portal.catalog.controls == []
+    assert actions(portal, "library_owner.set")
+    with pytest.raises(Forbidden):                        # an auditor never can
+        portal.start_clean_slate(AUDITOR, confirm=True, take_library_owner=True)
+
+
+def test_choosing_builtin_changes_nothing(portal):
+    before = [c["id"] for c in portal.catalog.controls]
+    with pytest.raises(Forbidden):
+        portal.choose_builtin_controls(AUDITOR)
+    portal.choose_builtin_controls(ADMIN2)               # any admin; it only records the choice
+    assert [c["id"] for c in portal.catalog.controls] == before
+    assert portal.control_set_choice()["choice"] == "builtin" and actions(portal, "setup.control_set")
+
+
+def test_setup_step_page_and_forms(portal, client):
+    as_(client, ADMIN)
+    page = strict(client.get("/setup/controls"))
+    assert 'value="builtin"' in page and 'value="own"' in page and 'name="confirm"' in page
+    token = csrf(client, "/setup/controls")
+    r = client.post("/setup/controls", data={"action": "next", "csrf": token}, follow_redirects=False)
+    assert r.status_code == 303 and portal.control_set_choice() == {}   # Continue records nothing
+    r = client.post("/setup/controls", data={"action": "own", "csrf": token})
+    assert "Tick the box" in r.text and portal.catalog.controls       # confirmation is enforced on the server
+    r = client.post("/setup/controls", data={"action": "own", "confirm": "yes", "csrf": token})
+    assert r.status_code == 200 and "Clean slate" in r.text and portal.catalog.controls == []
+    page = strict(client.get("/setup/controls"))
+    assert "already retired" in page and "/matrix" in page
+    for path in ("/", "/controls", "/matrix", "/controls/retired", "/criteria", "/setup/owners"):
+        r = client.get(path)
+        assert r.status_code == 200, f"{path}: {r.text[:300]}"
+    # another admin who is not the library owner is told who is
+    page = strict(as_(client, ADMIN2).get("/setup/controls"))
+    assert 'value="builtin"' in page
+    portal.restore_control(ADMIN, "GOV-01", "Bring one back for the page test")
+    page = strict(as_(client, ADMIN2).get("/setup/controls"))
+    assert ADMIN.email in page and 'value="own"' not in page
