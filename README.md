@@ -166,8 +166,9 @@ development only.
    GitHub and email; set the audit period, control owners, backups and recovery kit, updates, email
    alerts, access review applications and vendors. Each connection is tested before it is saved, and
    each program step shows what is still missing. Turn off what is not used (AWS, Google Cloud).
-4. **Controls:** as library owner, adjust owners and wording to the organization; each change asks
-   for a reason and is kept for the auditor.
+4. **Controls:** in the Setup guide's **Your controls** step, keep the built-in controls or start from a
+   clean slate and import your own control matrix. As library owner, adjust owners and wording, and retire
+   controls that do not apply; each change asks for a reason and is kept for the auditor.
 5. **Requests:** assign evidence requests, or let the recurring activities open them each month.
 6. **Backups:** confirm the nightly backup runs and copies leave the server.
 

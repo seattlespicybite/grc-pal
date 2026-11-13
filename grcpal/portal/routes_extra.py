@@ -40,6 +40,11 @@ STEPS = (
               "until their access end date. "
               "Add at least one more admin so nobody reviews their own uploads. Everyone else can be added later, "
               "or gets access automatically when you assign them work."},
+    {"id": "controls", "title": "Your controls", "kind": "controls",
+     "intro": "GRC-pal comes with a starter set of controls mapped to SOC 2. If you are building your program now, "
+              "start with them and retire the ones that do not apply. If you already have your own controls (a "
+              "control matrix from a consultant or a previous tool), start from a clean slate and import yours. "
+              "Either way nothing is lost: retired controls can be restored at any time."},
     {"id": "cycle", "kind": "readiness"},
     {"id": "owners", "kind": "readiness"},
     {"id": "backups", "kind": "readiness"},
@@ -178,6 +183,8 @@ def register(app, h) -> None:
             if st in ("ok", "failed", "disabled"):
                 return {"ok": "done", "failed": "failed", "disabled": "skipped"}[st]
         saved = (state.get(step["id"]) or {}).get("status", "todo")
+        if step["kind"] == "controls" and p().control_set_choice():
+            return "done"
         if step["kind"] == "readiness" and user is not None:
             ready = p().setup_readiness(user, step["id"])
             if ready["has_required"]:  # the checklist decides; "Continue" never marks it done
@@ -213,9 +220,14 @@ def register(app, h) -> None:
             ctx["running"] = portal.jobs.running("collect")
         if step["kind"] == "readiness":
             ctx["ready"] = portal.setup_readiness(user, step_id)
+        if step["kind"] == "controls":
+            ctx.update(choice=portal.control_set_choice(), library_owner=portal.library_owner(),
+                       is_lib=portal.is_library_owner(user),
+                       builtin_active=sum(1 for c in portal.catalog.controls if not c.get("custom")),
+                       custom_active=sum(1 for c in portal.catalog.controls if c.get("custom")))
         if step["kind"] == "summary":
             ctx["program"] = [(s_["id"], _step(s_["id"])["title"], step_status(s_, state, user))
-                              for s_ in STEPS if s_["kind"] == "readiness"]
+                              for s_ in STEPS if s_["kind"] in ("controls", "readiness")]
             ctx["overview"] = portal.settings_overview()
             ctx["checks"] = portal.deployment_checks(request.headers.get("host", ""))
         return render(request, user, "setup.html", **ctx)
@@ -244,6 +256,22 @@ def register(app, h) -> None:
             p().settings_store.set_state("wizard", state)
             p().audit(user, "setup.skip", step_id, {})
             return RedirectResponse(f"/setup/{nxt}", status_code=303)
+        if step["kind"] == "controls" and action in ("builtin", "own"):
+            try:
+                if action == "builtin":
+                    p().choose_builtin_controls(user)
+                    msg = "Keeping the built-in controls. Retire any that do not apply from the control's page."
+                else:
+                    done = p().start_clean_slate(user, confirm=bool(form.get("confirm")),
+                                                 take_library_owner=bool(form.get("take_library_owner")))
+                    msg = (f"Clean slate: {len(done)} built-in controls retired. Next, import your controls "
+                           "on the Control matrix page.")
+            except (Invalid, Forbidden) as exc:
+                return render_step(request, user, step_id, err=str(exc), form=form)
+            state[step_id] = {"status": "done", "by": user.email}
+            p().settings_store.set_state("wizard", state)
+            h.invalidate()
+            return render_step(request, user, step_id, msg=msg)
         if step["kind"] == "section":
             try:
                 p().save_settings(user, step["section"], form)
@@ -256,6 +284,8 @@ def register(app, h) -> None:
                 return render_step(request, user, step_id, result=result,
                                    msg="Saved. " + ("All checks passed." if result["ok"] else "Some checks failed; see below."))
             return render_step(request, user, step_id, msg="Saved and applied.")
+        if step["kind"] == "controls":  # Continue without a choice records nothing; the step stays To do
+            return RedirectResponse(f"/setup/{nxt}", status_code=303)
         if step["kind"] != "readiness" or not p().setup_readiness(user, step_id)["has_required"]:
             state[step_id] = {"status": "done", "by": user.email}
             p().settings_store.set_state("wizard", state)

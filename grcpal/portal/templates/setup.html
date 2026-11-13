@@ -45,6 +45,29 @@
 {% if not ready.ready %}<button class="btn ghost" name="action" value="skip" type="submit">Skip for now</button>{% endif %}
 <button class="btn {{ '' if ready.ready or not ready.has_required else 'ghost' }}" name="action" value="next" type="submit">Continue</button></form>
 
+{% elif step.kind == 'controls' %}
+<p class="mt">Active now: {{ builtin_active }} built-in control{{ '' if builtin_active == 1 else 's' }}{% if custom_active %} and {{ custom_active }} custom{% endif %}.
+{% if choice.choice == 'own' %}You chose a clean slate on {{ choice.at[:10] }} ({{ choice.by }}).{% elif choice.choice == 'builtin' %}You chose the built-in controls on {{ choice.at[:10] }} ({{ choice.by }}).{% endif %}</p>
+<div class="grid g2 mt">
+<div class="card"><h2>Start with the built-in controls</h2>
+<p class="sub">Use the starter controls as your program. Retire any that do not apply later, one by one from a control's page, several at once on <a href="/controls/retired">Retired controls</a>, or from the <a href="/matrix">control matrix</a> file.</p>
+<form method="post" action="/setup/{{ step.id }}" class="actions"><input type="hidden" name="csrf" value="{{ csrf }}">
+<button class="btn{{ ' ghost' if choice.choice == 'own' }}" name="action" value="builtin" type="submit">Use the built-in controls</button></form></div>
+<div class="card"><h2>I have my own controls</h2>
+<p class="sub">Every built-in control is retired in one step (custom controls stay). Then download the <a href="/matrix">control matrix</a> data file, add your controls (one row each, new Control IDs) and import it. Retired controls are kept, listed for auditors with the reason, and can be restored.</p>
+{% if builtin_active == 0 %}<p class="sub">All built-in controls are already retired. <a class="btn" href="/matrix">Import your controls</a></p>
+{% elif is_lib or not library_owner %}<form method="post" action="/setup/{{ step.id }}" class="mt-s" data-confirm="Retire all {{ builtin_active }} built-in controls?">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+{% if not library_owner %}<label class="check"><input type="checkbox" name="take_library_owner" value="yes" required> Make me the control library owner (the only person who may change controls; you can hand it over later on Users and roles)</label>{% endif %}
+<label class="check"><input type="checkbox" name="confirm" value="yes" required> Retire all {{ builtin_active }} built-in controls. Every SOC 2 criterion shows as uncovered until I import my controls.</label>
+<div class="actions"><button class="btn" name="action" value="own" type="submit">Start from a clean slate</button></div></form>
+{% else %}<p class="hint-box">Only the control library owner ({{ library_owner }}) can do this. Ask them, or have them hand the role to you on <a href="/users">Users and roles</a>.</p>{% endif %}</div>
+</div>
+<form method="post" action="/setup/{{ step.id }}" class="actions"><input type="hidden" name="csrf" value="{{ csrf }}">
+<button class="btn ghost" name="action" value="back" type="submit">Back</button>
+{% if not choice %}<button class="btn ghost" name="action" value="skip" type="submit">Skip for now</button>{% endif %}
+<button class="btn ghost" name="action" value="next" type="submit">Continue</button></form>
+
 {% elif step.kind == 'access' %}
 <table class="mt"><tbody>{% for u in people %}<tr><td><b>{{ u.name }}</b><div class="sub">{{ u.RowKey }}</div></td><td><span class="role role-{{ u.role }}">{{ role_labels[u.role] }}</span></td></tr>{% endfor %}</tbody></table>
 <form method="post" action="/users" class="mt"><input type="hidden" name="csrf" value="{{ csrf }}">

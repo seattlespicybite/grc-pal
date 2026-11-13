@@ -320,6 +320,15 @@ control links, and stops counting toward status. Built-in and custom controls ar
   retired it, when and why (admins and auditors). The audit log has `control.retire`, `control.retire.batch`
   (several at once) and `control.restore`, each with the reason.
 
+**Starting with your own controls.** If you already have a control set (from a consultant, a previous
+tool or a spreadsheet), open **Setup guide > Your controls** and choose **I have my own controls**. It retires
+every built-in control in one step (custom controls stay) with the reason *Clean slate at setup*, so the
+auditor sees one clear decision. Then download the control matrix data file (it
+has the right columns and no rows), add one row per control with your own Control IDs, and import it. When
+nobody holds the control library owner role yet, the same step can give it to you. Choosing **Use the
+built-in controls** records the choice and changes nothing. Either choice can be changed later: restore
+controls on **Retired controls**, or retire them.
+
 Retiring is per organization: an MSP retiring a control for one client changes nothing for the others.
 Collectors keep running while their platform is connected; their evidence for retired controls is kept but
 not shown against a control.
