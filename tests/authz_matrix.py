@@ -75,6 +75,7 @@ PARAMS: dict[str, dict[str, str]] = {
     "/controls/{cid}/definition/reset": {"cid": "ctl_edited"},
     "/controls/{cid}/edit": {"cid": "custom"},
     "/controls/{cid}/retire": {"cid": "custom"},
+    "/controls/{cid}/restore": {"cid": "retired"},
     "/controls/{cid}/checks": {"cid": "ctl_a"},
     "/checks/{check_id}/run": {"check_id": "check"},
     "/checks/{check_id}/delete": {"check_id": "check"},
@@ -227,6 +228,9 @@ FORMS: dict[tuple[str, str], object] = {
     ("POST", "/controls/{cid}/definition/reset"): {"reason": "Back to the starter wording for the test."},
     ("POST", "/controls/{cid}/edit"): lambda w: {**_custom(w, w.custom), "title": "Edited custom control"},
     ("POST", "/controls/{cid}/retire"): {"reason": "Retired for the authz suite."},
+    ("POST", "/controls/{cid}/restore"): {"reason": "Restored for the authz suite."},
+    ("POST", "/controls/retire"): lambda w: {"ids": w.retire_target, "reason": "Retired in bulk for the authz suite.",
+                                             "accept_gaps": "yes"},
     ("POST", "/controls/{cid}/checks"): {"id": "chk-new", "type": "http", "url": "https://example.com/up",
                                          "schedule": "manual", "method": "GET", "expect_status": "200-399"},
     ("POST", "/checks/{check_id}/run"): {"return_to": "/controls"},
@@ -363,6 +367,7 @@ _GROUPS: list[tuple[frozenset, str]] = [
            POST /checks/{check_id}/run | POST /collect | POST /controls/new | POST /controls/{cid}/ai-review
            POST /controls/{cid}/ai/{rid}/disposition | POST /controls/{cid}/checks | POST /controls/{cid}/definition
            POST /controls/{cid}/definition/reset | POST /controls/{cid}/edit | POST /controls/{cid}/retire
+           POST /controls/{cid}/restore | POST /controls/retire
            POST /controls/{control_id}/remind | POST /cycles | POST /cycles/current | POST /frameworks/new
            POST /frameworks/{fid}/use | POST /library/add | POST /library/trash | POST /library/trash/restore
            POST /library/{did}/edit | POST /library/{did}/official | POST /library/{did}/template
@@ -381,7 +386,7 @@ _GROUPS: list[tuple[frozenset, str]] = [
            POST /vendors/{vid}/review/decide | POST /vendors/{vid}/review/exception
            POST /vendors/{vid}/review/start"""),
     # --- admins and auditors (auditors read everything, change nothing)
-    (AU, """GET /access-reviews/accounts
+    (AU, """GET /access-reviews/accounts | GET /controls/retired
            GET /access-reviews/apps | GET /access-reviews/apps/{aid} | GET /access-reviews/{cid}/export.csv | GET /ai
             GET /ai/audits/{audit_id} | GET /ai/audits/{audit_id}/report.html | GET /audit | GET /criteria
             GET /criteria/{crit_id} | GET /cycles | GET /cycles/{cycle_id}/export | GET /evidence
@@ -451,6 +456,7 @@ DOWNLOAD_XFAIL: dict[tuple[str, str], str] = {}
 # IDs that are the same in every organization (starter catalog, fixed names). Routes with only these IDs cannot say
 # anything about two organizations; routes with at least one other ID are used in the two-organization test.
 SHARED = frozenset({"ctl_a", "ctl_b", "ctl_edited", "crit", "section", "step", "framework", "framework_off", "policy",
-                    "auto_source", "collector", "activity", "occurrence", "occ_new", "ev_source", "cycle_closed", "cycle_active"})
+                    "auto_source", "collector", "activity", "occurrence", "occ_new", "ev_source", "cycle_closed", "cycle_active",
+                    "retired", "retire_target"})   # built-in control IDs are the same in every organization
 # POSTs without an ID in the path whose form carries another organization's IDs
 CROSS_FORMS = {("POST", "/comments"), ("POST", "/library/trash"), ("POST", "/library/trash/restore")}

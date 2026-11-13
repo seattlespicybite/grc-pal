@@ -4,6 +4,16 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Added
+- **Retire any control as not applicable, built in or custom, and restore it.** Starter controls that do not fit
+  your organization can now be taken out of the active control set: from the control's page, several at once on
+  the new **Controls > Retired controls** page, or with Status `retired` in the control matrix data file (built-in
+  controls were refused before). A reason is required, a SOC 2 criterion left with no control must be confirmed,
+  and nothing is destroyed: definitions, edits, evidence and history stay, and **Restore** brings a control back as
+  it was. Auditors see the list of retired controls with who, when and why; the audit log has `control.retire`,
+  `control.retire.batch` and `control.restore`. Per organization. New table `retiredcontrols` (no migration needed;
+  included in backups).
+
 ## [0.7.3] - 2026-11-05 - Safer edits, calm badges, honest Azure backup retention, collection alert
 
 No data model change: upgrade in place from 0.7.2, roll back to 0.7.2 without a restore. On Azure, re-run `deploy.sh`

@@ -182,6 +182,14 @@
 <input type="hidden" name="csrf" value="{{ csrf }}"><label>Reason<input name="reason" required minlength="10"></label>
 <div class="actions"><button class="btn ghost small" type="submit">Reset</button></div></form></details>{% endif %}</section>{% endif %}
 
+{% if is_lib %}<section class="card" id="retire"><details><summary>Retire this control (not applicable)</summary>
+<p class="sub mt">Use when {{ ctl.id }} does not apply to this organization. It leaves dashboards, reports, the control matrix and coverage. Nothing is deleted: its definition, evidence and history are kept, the audit log records who retired it and why, and it can be restored from <a href="/controls/retired">Retired controls</a>.</p>
+{% if retire_gaps %}<div class="flash err" role="status">Retiring {{ ctl.id }} leaves {{ retire_gaps|join(', ') }} with no control.</div>{% endif %}
+<form method="post" action="/controls/{{ ctl.id }}/retire" class="mt-s" data-confirm="Retire {{ ctl.id }} as not applicable?">
+<input type="hidden" name="csrf" value="{{ csrf }}"><label>Reason (auditors will read it)<input name="reason" required minlength="5"></label>
+{% if retire_gaps %}<label class="check"><input type="checkbox" name="accept_gaps" value="yes" required> I accept this gap</label>{% endif %}
+<div class="actions"><button class="btn ghost small" type="submit">Retire {{ ctl.id }}</button></div></form></details></section>{% endif %}
+
 {% if history %}<section class="card"><details><summary>History ({{ history|length }} events)</summary>
 <table class="mt"><tbody>{% for h in history %}<tr><td class="nowrap">{{ when(h.at) }}</td><td>{{ h.actor }}</td><td class="mono">{{ h.action }}</td>
 <td class="sub">{% for k, v in (h.detail or {}).items() if k not in ('controls',) and v %}{{ k }}: {{ v }}{{ '; ' if not loop.last }}{% endfor %}</td></tr>{% endfor %}</tbody></table></details></section>{% endif %}

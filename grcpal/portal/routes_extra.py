@@ -516,14 +516,44 @@ def register(app, h) -> None:
         return back(f"/controls/{cid}", msg="Control updated")
 
     @app.post("/controls/{cid}/retire")
-    def control_retire(request: Request, cid: str, reason: str = Form(""), csrf: str = Form(""),
-                       user: User = Depends(current_user)):
+    def control_retire(request: Request, cid: str, reason: str = Form(""), accept_gaps: str = Form(""),
+                       csrf: str = Form(""), user: User = Depends(current_user)):
         h.check_csrf(request, user.email, csrf)
         try:
-            p().retire_custom_control(user, cid, reason)
+            p().retire_control(user, cid, reason, accept_gaps=bool(accept_gaps))
         except (Invalid, Forbidden) as exc:
             return back(f"/controls/{cid}", err=str(exc))
-        return back("/controls", msg=f"{cid} retired")
+        return back("/controls/retired", msg=f"{cid} retired (not applicable). It can be restored here.")
+
+    # ================================================================ retired controls (not applicable)
+    @app.get("/controls/retired", response_class=HTMLResponse)
+    def controls_retired(request: Request, user: User = Depends(current_user)):
+        h.need(user, "admin", "auditor")
+        portal = p()
+        lib = portal.is_library_owner(user)
+        return render(request, user, "controls_retired.html", rows=portal.retired_controls(user), is_lib=lib,
+                      active=sorted(portal.catalog.controls, key=lambda c: c["id"]) if lib else [])
+
+    @app.post("/controls/retire")
+    async def controls_retire_many(request: Request, user: User = Depends(current_user)):
+        form = await request.form()
+        h.check_csrf(request, user.email, form.get("csrf"))
+        ids = [str(x) for x in form.getlist("ids")]
+        try:
+            done = p().retire_controls(user, ids, str(form.get("reason") or ""), accept_gaps=bool(form.get("accept_gaps")))
+        except (Invalid, Forbidden) as exc:
+            return back("/controls/retired", err=str(exc))
+        return back("/controls/retired", msg=f"{len(done)} control{'s' if len(done) != 1 else ''} retired")
+
+    @app.post("/controls/{cid}/restore")
+    def control_restore(request: Request, cid: str, reason: str = Form(""), csrf: str = Form(""),
+                        user: User = Depends(current_user)):
+        h.check_csrf(request, user.email, csrf)
+        try:
+            p().restore_control(user, cid, reason)
+        except (Invalid, Forbidden) as exc:
+            return back("/controls/retired", err=str(exc))
+        return back(f"/controls/{cid}", msg=f"{cid} restored")
 
     # ================================================================ checks
     @app.post("/controls/{cid}/checks")

@@ -454,6 +454,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
                       ai=portal.ai_status() if user.sees_everything else None,
                       ai_reviews=portal.ai_reviews(control_id)[:10] if user.sees_everything else [],
                       schedule=portal.control_schedule(user, control_id) if user.is_admin else None,
+                      retire_gaps=portal.retire_gaps([control_id]) if portal.is_library_owner(user) else [],
                       documents=portal.control_documents(user, control_id))
 
     @app.get("/controls/{control_id}", response_class=HTMLResponse)
@@ -1100,7 +1101,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
         p=p, current_user=current_user, need=need, check_csrf=check_csrf, render=render, back=back,
         invalidate=invalidate, HTTPError=_HTTPError))
     # Literal paths registered later (e.g. /controls/new) must win over parameter routes (/controls/{id}).
-    literal = [r for r in app.router.routes if getattr(r, "path", "") in ("/controls/new", "/frameworks/new")]
+    literal = [r for r in app.router.routes if getattr(r, "path", "") in ("/controls/new", "/controls/retired", "/controls/retire", "/frameworks/new")]
     for r in literal:
         app.router.routes.remove(r)
         app.router.routes.insert(0, r)
