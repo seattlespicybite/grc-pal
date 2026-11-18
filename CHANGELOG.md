@@ -4,6 +4,18 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Added
+- **Tests page: every automated or recurring check, listed once.** A control's evidence items (collectors, external
+  tools, custom checks, recurring tasks, document history) are now also shown as tests under **Compliance > Tests**:
+  one row per check with its status (Passing, Failing, Stale, Error, Not run, Not applicable), the controls it
+  supports, the last run and a named owner. A test's page shows the controls, the latest 20 runs read from the
+  write-once evidence store (each linking to its files and integrity check) and the owner, which an admin sets;
+  the change is in the audit log as `test.owner`. The evidence table on a control links to the test. Admins and
+  auditors see tests; control owners do not yet. Statuses are read from the same control health report as the
+  Controls page, so the two cannot disagree. New table `testmeta` (owner per test; no migration needed; included
+  in backups). Not included yet: a status history for tasks and document history (they store no runs), per-test
+  intervals, comments.
+
 ### Security
 - **The auditor export now shows evidence that has gone missing or was changed.** The export only listed the
   evidence runs it could find, so a run deleted from the store (or one whose `manifest.json` was removed) simply

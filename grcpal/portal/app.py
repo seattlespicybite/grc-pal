@@ -26,6 +26,7 @@ from grcpal.catalog import Catalog
 from grcpal.evidence import EvidenceStore
 from grcpal.portal import mailer as mailer_mod
 from grcpal.portal import store as store_mod
+from grcpal.portal.controltests import test_id
 from grcpal.portal.accounts import SESSION_COOKIE, SESSION_HOURS
 from grcpal.portal.auth import (DEV_COOKIE, ROLE_HELP, ROLE_LABELS, ROLES, AuthError, User, auth_mode,
                                 identity_from_request, require_easyauth_platform)
@@ -96,7 +97,7 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     app.state.report_cache = (0.0, None)
     app.state.portal.on_change(lambda: setattr(app.state, "report_cache", (0.0, None)))
     templates = Jinja2Templates(directory=str(HERE / "templates"))
-    templates.env.globals.update(status_labels=STATUS_LABELS, category_names=CATEGORY_NAMES, role_help=ROLE_HELP, role_labels=ROLE_LABELS,
+    templates.env.globals.update(test_id=test_id, status_labels=STATUS_LABELS, category_names=CATEGORY_NAMES, role_help=ROLE_HELP, role_labels=ROLE_LABELS,
                                  roles=ROLES, auth_mode=mode, accept=ACCEPT)
     from grcpal.settings import OPTION_LABELS
     templates.env.globals["option_labels"] = OPTION_LABELS
@@ -1077,7 +1078,8 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     from types import SimpleNamespace
 
     from grcpal.portal import (routes_access, routes_accounts, routes_automation, routes_backups, routes_calendar,
-                               routes_doclib, routes_extra, routes_matrix, routes_risks, routes_vendors)
+                               routes_doclib, routes_extra, routes_matrix, routes_risks, routes_tests,
+                               routes_vendors)
 
     if mode == "local":
         routes_accounts.register(app, SimpleNamespace(p=p, templates=templates, HTTPError=_HTTPError, ip_of=ip_of,
@@ -1109,6 +1111,9 @@ def create_app(portal: Portal | None = None) -> FastAPI:
     routes_risks.register(app, SimpleNamespace(
         p=p, current_user=current_user, check_csrf=check_csrf, render=render, back=back,
         HTTPError=_HTTPError, attachment=_attachment))
+    routes_tests.register(app, SimpleNamespace(
+        p=p, current_user=current_user, check_csrf=check_csrf, render=render, back=back, health=health,
+        HTTPError=_HTTPError))
     routes_automation.register(app, SimpleNamespace(
         p=p, current_user=current_user, need=need, check_csrf=check_csrf, render=render, back=back,
         invalidate=invalidate, HTTPError=_HTTPError))

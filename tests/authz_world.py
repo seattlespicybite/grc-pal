@@ -142,6 +142,7 @@ def build(tmp: Path, base: SqliteStore, tenant: str) -> SimpleNamespace:
                                                "by the vendor; confirmed with IT.", due, "ticket")["RowKey"]
     w.policy = portal.catalog.policies[0]["id"]
     w.crit = sorted(portal.catalog.in_scope_criteria)[0]
+    w.test_id = "collector-entra_mfa"   # tests come from the starter catalog: the same ID in every organization
     w.section, w.step, w.framework, w.framework_off = "organization", "welcome", "soc2", "iso27001"
     w.admin_email = admin.email
     w.auto_source = next(iter(portal.automated_sources()))

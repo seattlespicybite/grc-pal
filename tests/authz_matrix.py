@@ -95,6 +95,8 @@ PARAMS: dict[str, dict[str, str]] = {
     "/policies/doc/{did}/ack": {"did": "doc_pub"},
     "/policies/doc/{did}/request": {"did": "doc_pub"},
     "/policies/doc/{did}/audience": {"did": "doc_pub"},
+    "/tests/{tid}": {"tid": "test_id"},
+    "/tests/{tid}/owner": {"tid": "test_id"},
     "/risks/{rid}": {"rid": "risk"},
     "/risks/{rid}/review": {"rid": "risk"},
     "/library/{did}/edit": {"did": "doc"},
@@ -266,6 +268,7 @@ FORMS: dict[tuple[str, str], object] = {
     ("POST", "/policies/doc/{did}/ack"): lambda w: {"vid": w.portal.published_document(w.who["admin"], w.doc_pub)["vid"], "read": "1"},
     ("POST", "/policies/doc/{did}/request"): {},
     ("POST", "/policies/doc/{did}/audience"): {"ack": "admins"},
+    ("POST", "/tests/{tid}/owner"): lambda w: {"owner": w.admin2_email},
     ("POST", "/risks/new"): RISK_FORM,
     ("POST", "/risks/{rid}"): {**RISK_FORM, "impact": "5", "reason": "re-rated after an incident"},
     ("POST", "/risks/{rid}/review"): {"note": "controls still effective"},
@@ -358,6 +361,7 @@ _GROUPS: list[tuple[frozenset, str]] = [
            POST /access-reviews/{cid}/confirm-checked | POST /access-reviews/schedule
            POST /policies/doc/{did}/request | POST /policies/doc/{did}/audience
            POST /risks/new | POST /risks/{rid} | POST /risks/{rid}/review | POST /risks/approve | POST /risks/import
+           POST /tests/{tid}/owner
            POST /ai/audits | POST /assignments | POST /assignments/{assignment_id}/cancel
            POST /assignments/{assignment_id}/edit | POST /assignments/{assignment_id}/remind
            POST /backups/download | POST /backups/kit | POST /backups/now | POST /backups/restore
@@ -394,7 +398,8 @@ _GROUPS: list[tuple[frozenset, str]] = [
             GET /frameworks | GET /frameworks/{fid} | GET /jobs | GET /jobs/{job_id} | GET /library/register.xlsx
             GET /library/trash | GET /library/{did}/files/{vid} | GET /logs | GET /logs.csv | GET /matrix
             GET /matrix/data.xlsx | GET /matrix/report | GET /matrix/report.docx | GET /overrides | GET /users.csv
-            GET /policies/acknowledgements.csv | GET /risks | GET /risks.csv | GET /risks/{rid}"""),
+            GET /policies/acknowledgements.csv | GET /risks | GET /risks.csv | GET /risks/{rid}
+            GET /tests | GET /tests/{tid}"""),
     # --- everyone who is signed in and active (what they see is filtered to what is theirs)
     (EVERYONE, """GET / | GET /access-reviews | GET /access-reviews/template.csv | GET /controls | GET /kb
                   GET /kb/{crit_id} | GET /library | GET /policies | GET /policies/{policy_id} | GET /vendors
@@ -457,6 +462,6 @@ DOWNLOAD_XFAIL: dict[tuple[str, str], str] = {}
 # anything about two organizations; routes with at least one other ID are used in the two-organization test.
 SHARED = frozenset({"ctl_a", "ctl_b", "ctl_edited", "crit", "section", "step", "framework", "framework_off", "policy",
                     "auto_source", "collector", "activity", "occurrence", "occ_new", "ev_source", "cycle_closed", "cycle_active",
-                    "retired", "retire_target"})   # built-in control IDs are the same in every organization
+                    "retired", "retire_target", "test_id"})   # built-in control IDs are the same in every organization
 # POSTs without an ID in the path whose form carries another organization's IDs
 CROSS_FORMS = {("POST", "/comments"), ("POST", "/library/trash"), ("POST", "/library/trash/restore")}
