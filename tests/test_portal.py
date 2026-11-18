@@ -21,7 +21,7 @@ from grcpal.evidence import EvidenceStore
 from grcpal.portal import auth, mailer
 from grcpal.portal.app import create_app
 from grcpal.portal.auth import SYSTEM, Identity, User
-from grcpal.portal.service import Forbidden, Invalid, Portal
+from grcpal.portal.service import USER_EXPORT_COLUMNS, Forbidden, Invalid, Portal
 from grcpal.portal.store import SqliteStore, TenantStore
 
 ROOT = Path(__file__).resolve().parents[1] / "grcpal" / "starter"
@@ -951,6 +951,23 @@ def test_auditor_export_zip(env):
     manifest = {row["file"]: row["sha256"] for row in csv.DictReader(io.StringIO(z.read("MANIFEST.csv").decode()))}
     assert manifest[evidence[0]] == hashlib.sha256(PDF).hexdigest()
     assert as_(client, CONTRIB).get(f"/cycles/{portal.active_cycle()['RowKey']}/export").status_code == 403
+
+
+def test_auditor_export_users_has_no_credentials(env):
+    """The export's users.csv is an allow-list: no password hash, two-step secret or session value leaves the portal."""
+    portal, client = env
+    portal.store.update("users", "u", CONTRIB.email, {
+        "password_hash": "scrypt$SECRET-HASH", "totp_secret": "SEALED-TOTP", "totp_pending": "SEALED-PENDING",
+        "signin_session": "SESSION-HASH", "entra_oid": "11111111-2222-3333-4444-555555555555"})
+    z = zipfile.ZipFile(io.BytesIO(portal.export_cycle(AUDITOR, portal.active_cycle()["RowKey"])))
+    text = z.read("users.csv").decode()
+    for secret in ("SECRET-HASH", "SEALED-TOTP", "SEALED-PENDING", "SESSION-HASH", "11111111-2222"):
+        assert secret not in text
+    rows = {r["email"]: r for r in csv.DictReader(io.StringIO(text))}
+    assert set(rows[CONTRIB.email]) == set(USER_EXPORT_COLUMNS)
+    assert rows[CONTRIB.email]["password_set"] == "True" and rows[CONTRIB.email]["entra_linked"] == "True"
+    assert rows[CONTRIB.email]["two_step"] == "True" and rows[ADMIN.email]["password_set"] == "False"
+    assert len(rows) == len(portal.users())
 
 
 # ================================================================ email backends

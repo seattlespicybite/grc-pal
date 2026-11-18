@@ -4,6 +4,14 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Security
+- **The auditor export no longer contains sign-in secrets.** `users.csv` inside the cycle export was written from
+  the whole users table, so it carried each person's password hash, encrypted two-step secret and sign-in session
+  value. It is now a fixed list of columns (email, name, role, active, source, created by, created at, last seen,
+  access end date, sign-in method, and yes/no for password set, two-step sign-in, Entra link and library owner).
+  If you have shared an export made by an earlier version from an instance with password sign-in, change those
+  passwords and reset two-step sign-in for the accounts in it.
+
 ### Added
 - **Control panel and menu.** The control side panel now shows every section of the full control page
   (one shared template, `_control_body.html`, so each role sees the same sections and actions in both). It opens
