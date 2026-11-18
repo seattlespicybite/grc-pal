@@ -35,7 +35,7 @@ program repository for the audit period.
 | `audit_chain_verification.json` | Result of recomputing the chain at export time |
 | `control_status.json` | Control health at export time, including the computed status behind any override |
 | `evidence/` | Every uploaded file |
-| `evidence_run_verification.csv` | Every evidence run dated in the cycle: signature status, the manifest's SHA-256 and the audit-log record that holds the same hash |
+| `evidence_run_verification.csv` | Every evidence run dated in the cycle: signature status, the manifest's SHA-256 and the audit-log record that holds the same hash. File contents are re-hashed at export time. A run the audit log recorded but the store no longer holds is listed with status `missing`; `README.txt` ends with an integrity summary and a warning line when anything is missing |
 | `evidence_signing_key.pem` | Public key for checking each run's `manifest.sig` yourself |
 | `MANIFEST.csv` | SHA-256 of every file in the zip |
 

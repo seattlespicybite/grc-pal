@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import csv
 import datetime as dt
 import hashlib
 import io
@@ -239,6 +240,59 @@ def test_export_has_key_and_run_verification(tmp_path):
     rows = z.read("evidence_run_verification.csv").decode()
     assert run.prefix.split("/")[1] in rows and "verified" in rows
     assert "sha256sum -c SHA256SUMS" in z.read("README.txt").decode()
+
+
+def _export_runs(portal):
+    z = zipfile.ZipFile(io.BytesIO(portal.export_cycle(AUDITOR, portal.active_cycle()["RowKey"])))
+    rows = list(csv.DictReader(io.StringIO(z.read("evidence_run_verification.csv").decode())))
+    return z, {f"{r['source']}/{r['run']}": r for r in rows}
+
+
+def test_export_flags_a_run_deleted_from_the_store(tmp_path):
+    """A run the audit log recorded but the store no longer holds is listed as missing, not left out."""
+    portal = make_portal(tmp_path)
+    kept, gone = _run(portal.evidence, "entra_users"), _run(portal.evidence, "entra_mfa")
+    shutil.rmtree(_path(portal.evidence, gone, "manifest.json").parent)
+    z, rows = _export_runs(portal)
+    assert rows[kept.prefix]["status"] == "verified"
+    assert rows[gone.prefix]["status"] == "missing" and rows[gone.prefix]["audit_record"]
+    assert "not in the evidence store" in rows[gone.prefix]["problems"]
+    assert "1 evidence run(s) recorded in the audit log are missing" in z.read("README.txt").decode()
+    assert [f"{m['source']}/{m['run']}" for m in portal.missing_evidence_runs()] == [gone.prefix]
+    assert portal.missing_evidence_runs(end="2000-01-01") == []  # outside the dates asked for
+
+
+def test_export_flags_a_deleted_manifest_and_a_deleted_upload(tmp_path):
+    portal = make_portal(tmp_path)
+    a = assign(portal)
+    u = portal.upload(CONTRIB, "x.pdf", b"%PDF-1.4 evidence", "", assignment_id=a["RowKey"])
+    source, run = u["evidence_run"].split("/")
+    (portal.evidence.root / portal.evidence._key(f"{u['evidence_run']}/manifest.json")).unlink()
+    z, rows = _export_runs(portal)
+    assert rows[u["evidence_run"]]["status"] == "missing"
+    (portal.evidence.root / portal.evidence._key(f"{u['evidence_run']}/x.pdf")).unlink()
+    z, rows = _export_runs(portal)
+    uploads = list(csv.DictReader(io.StringIO(z.read("uploads_and_reviews.csv").decode())))
+    assert uploads[0]["file_in_export"] == "False"
+    assert "1 uploaded file(s) listed in uploads_and_reviews.csv could not be read" in z.read("README.txt").decode()
+
+
+def test_export_checks_file_contents_of_runs_in_the_cycle(tmp_path):
+    """The export re-hashes every file of the runs it lists: a changed file is reported, not passed as verified."""
+    portal = make_portal(tmp_path)
+    run = _run(portal.evidence)
+    _path(portal.evidence, run, "users.csv").write_text("upn,enabled\nsomeone-else@example.com,True\n")
+    z, rows = _export_runs(portal)
+    assert rows[run.prefix]["status"] == "failed" and "users.csv" in rows[run.prefix]["problems"]
+
+
+def test_export_of_an_intact_store_reports_nothing_missing(tmp_path):
+    portal = make_portal(tmp_path)
+    run = _run(portal.evidence)
+    z, rows = _export_runs(portal)
+    assert rows[run.prefix]["status"] == "verified" and portal.missing_evidence_runs() == []
+    readme = z.read("README.txt").decode()
+    assert "Integrity summary" in readme and "WARNING" not in readme
 
 
 def test_evidence_page_shows_integrity(tmp_path, monkeypatch):
