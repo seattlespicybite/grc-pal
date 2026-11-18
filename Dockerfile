@@ -33,9 +33,13 @@ LABEL org.opencontainers.image.title="GRC-pal" \
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PATH=/opt/grcpal/bin:$PATH
 COPY --from=build /opt/grcpal /opt/grcpal
-# No package manager at runtime: nothing is installed after the build, and apt is the base image's most frequent
-# source of scanner findings (and a tool an intruder could use). dpkg stays so scanners can still read the package list.
-RUN useradd --system --uid 10001 --no-create-home grcpal \
+# Debian security fixes first: the pinned base image can lag behind Debian (2026-11: zlib CVE-2026-76844 and
+# CVE-2026-85091 were fixed in Debian before python:3.12-slim was rebuilt). Only upgrades of installed packages,
+# nothing new. Then no package manager at runtime: apt is the base image's most frequent source of scanner findings
+# (and a tool an intruder could use). dpkg stays so scanners can still read the package list.
+RUN apt-get update \
+ && apt-get -y --no-install-recommends upgrade \
+ && useradd --system --uid 10001 --no-create-home grcpal \
  && mkdir -p /data && chown 10001:10001 /data && chmod 700 /data \
  && dpkg --purge --force-remove-essential --force-depends apt libapt-pkg7.0 >/dev/null \
  && rm -rf /var/lib/apt /var/cache/apt /etc/apt
