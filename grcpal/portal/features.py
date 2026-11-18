@@ -606,6 +606,36 @@ class FeaturesMixin:
         self.audit(actor, "control.restore", cid, {"controls": [cid], "reason": reason[:300], "built_in": not custom})
         self._changed()
 
+    # ================================================================ starting control set (setup guide)
+    CLEAN_SLATE_REASON = "Clean slate at setup: this organization uses its own control set, not the built-in controls"
+
+    def control_set_choice(self) -> dict:
+        """What the setup guide recorded: {} (not chosen yet), or {"choice": "builtin" | "own", "by", "at", ...}."""
+        return self.settings_store.state("control_set", {}) or {}
+
+    def choose_builtin_controls(self, actor) -> None:
+        """Keep the built-in starter controls. Records the choice only; nothing in the control set changes."""
+        self._admin(actor)
+        self.settings_store.set_state("control_set", {"choice": "builtin", "by": actor.email, "at": _now()})
+        self.audit(actor, "setup.control_set", "builtin", {"choice": "builtin"})
+
+    def start_clean_slate(self, actor, confirm: bool, take_library_owner: bool = False) -> list[str]:
+        """Start from the organization's own controls: retire every active built-in control in one step (custom
+        controls are kept). Library owner only, and only with an explicit confirmation. When nobody holds the
+        library owner role yet, an admin may take it on in the same step (the role change is audited on its own).
+        Reversible: each control can be restored from Retired controls."""
+        if not confirm:
+            raise self._invalid("Tick the box to confirm that every built-in control will be retired")
+        if take_library_owner and not self.library_owner():
+            self.set_library_owner(actor, actor.email)
+        self._library(actor)
+        ids = [c["id"] for c in self.catalog.controls if not c.get("custom")]
+        done = self.retire_controls(actor, ids, self.CLEAN_SLATE_REASON, accept_gaps=True) if ids else []
+        self.settings_store.set_state("control_set", {"choice": "own", "by": actor.email, "at": _now(),
+                                                      "retired": len(done)})
+        self.audit(actor, "setup.control_set", "own", {"choice": "own", "controls": done[:500], "retired": len(done)})
+        return done
+
     def retired_controls(self, user) -> list[dict]:
         """Every retired control with who retired it, when and why. Admins and auditors (read only)."""
         if not user.sees_everything:

@@ -15,7 +15,7 @@
 {% else %}<tr><td colspan="{{ 7 if is_lib else 6 }}" class="sub">No retired controls.</td></tr>{% endfor %}</tbody></table></div>
 
 {% if is_lib and active %}<section class="card mt-l"><details><summary>Retire several controls</summary>
-<p class="sub mt">Tick the controls that do not apply to this organization. To retire many at once you can also set Status to <span class="mono">retired</span> in the <a href="/matrix">control matrix</a> data file.</p>
+<p class="sub mt">Tick the controls that do not apply to this organization. To retire many at once you can also set Status to <span class="mono">retired</span> in the <a href="/matrix">control matrix</a> data file. To replace every built-in control with your own, use <a href="/setup/controls">Setup guide: Your controls</a>.</p>
 <form method="post" action="/controls/retire" class="mt-s" data-confirm="Retire the ticked controls? They can be restored later from this page.">
 <input type="hidden" name="csrf" value="{{ csrf }}">
 <div class="table-wrap"><table><tbody>{% for c in active %}<tr><td><label class="check"><input type="checkbox" name="ids" value="{{ c.id }}"> <span class="mono">{{ c.id }}</span></label></td><td>{{ c.title }}</td><td class="sub">{{ (c.criteria or [])|join(', ') }}</td></tr>{% endfor %}</tbody></table></div>

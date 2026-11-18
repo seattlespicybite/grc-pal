@@ -13,6 +13,11 @@ All notable changes are listed here. The project follows [semantic versioning](h
   it was. Auditors see the list of retired controls with who, when and why; the audit log has `control.retire`,
   `control.retire.batch` and `control.restore`. Per organization. New table `retiredcontrols` (no migration needed;
   included in backups).
+- **Setup guide: choose your starting controls.** A new **Your controls** step asks whether to keep the built-in
+  controls or start from a clean slate. A clean slate retires every built-in control in one confirmed step (custom
+  controls stay; audit action `setup.control_set`), then you import your own control matrix; the data file
+  downloads with the right columns even when no control is active. If nobody holds the control library owner role
+  yet, the step can give it to you. Reversible: restore controls on **Retired controls**.
 
 ## [0.7.3] - 2026-11-05 - Safer edits, calm badges, honest Azure backup retention, collection alert
 

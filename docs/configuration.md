@@ -9,7 +9,8 @@ There are two layers:
    last test. Changes take effect immediately and are recorded in the audit log (field names only).
    Secrets are encrypted with AES-256-GCM using `GRCPAL_ENCRYPTION_KEY`, bound to the tenant and
    field, and never shown again. The **Setup guide** walks through the same sections in order, plus
-   the program setup that lives on other pages: audit period, control owners, backups and the recovery
+   the program setup that lives on other pages: your starting control set (built-in controls or a
+   clean slate for your own), audit period, control owners, backups and the recovery
    kit, updates, email alerts, access review applications, vendors, the security calendar and policy
    approvers. Each of those steps shows a checklist of what is done and links to the page where you do
    the rest; it turns **Done** by itself when everything required is green.
