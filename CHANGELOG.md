@@ -5,6 +5,15 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Security
+- **The auditor export now shows evidence that has gone missing or was changed.** The export only listed the
+  evidence runs it could find, so a run deleted from the store (or one whose `manifest.json` was removed) simply
+  dropped out of `evidence_run_verification.csv`, and file contents were not re-hashed. Now every run recorded in
+  the audit log (`evidence.sealed`) and dated in the cycle is compared with the store: one that is gone is listed
+  with status `missing` and its audit record number; files of the listed runs are re-hashed, so a changed file
+  reads `failed`; `uploads_and_reviews.csv` has a new `file_in_export` column; and `README.txt` ends with an
+  integrity summary with a WARNING line when a run or an uploaded file is missing. Exports of large cycles take
+  longer because every file is read. Not covered yet: `grcpal evidence verify` on the command line still checks
+  only the runs that exist.
 - **The auditor export no longer contains sign-in secrets.** `users.csv` inside the cycle export was written from
   the whole users table, so it carried each person's password hash, encrypted two-step secret and sign-in session
   value. It is now a fixed list of columns (email, name, role, active, source, created by, created at, last seen,

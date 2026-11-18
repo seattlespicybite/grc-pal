@@ -1089,6 +1089,22 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Automat
             result["problems"].append("not recorded in the audit log (collected while the portal was not connected)")
         return result
 
+    def missing_evidence_runs(self, start: str = "", end: str = "9999") -> list[dict]:
+        """Runs the audit log recorded as written (action evidence.sealed) that the evidence store no longer
+        lists, dated start to end. Verifying the runs that exist cannot notice a run that was deleted, or one
+        whose manifest was removed; the hash-chained log can."""
+        present = {f"{source}/{run}" for source in self.evidence.list_sources() for run in self.evidence.list_runs(source)}
+        missing: dict[str, dict] = {}
+        for r in self.log.records():
+            prefix = r.get("target") or ""
+            source, _, run = prefix.partition("/")
+            if r.get("action") != "evidence.sealed" or prefix in present or not RUN_ID.match(run):
+                continue
+            if start <= run[:10] <= end:
+                missing[prefix] = {"source": source, "run": run, "seq": r["seq"], "at": r["at"],
+                                   "manifest_sha256": (r.get("detail") or {}).get("sha256") or ""}
+        return [missing[k] for k in sorted(missing)]
+
     def evidence_file(self, source: str, run: str, filename: str) -> bytes:
         manifest = self.manifest(source, run)
         if filename not in ("manifest.json", *INTEGRITY_FILES) and filename not in {f["name"] for f in manifest["files"]}:
@@ -1123,8 +1139,14 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Automat
 
         end = cycle.get("closed_at") or "9999"
         uploads = self.uploads(cycle=cycle_id)
+        upload_files: dict[str, bytes] = {}
+        for u in uploads:
+            source, run = u["evidence_run"].split("/", 1)
+            data = self.evidence.read(source, run, u["filename"])
+            if data is not None:
+                upload_files[u["RowKey"]] = data
         table("assignments", self.assignments(cycle=cycle_id))
-        table("uploads_and_reviews", uploads)
+        table("uploads_and_reviews", [dict(u, file_in_export=u["RowKey"] in upload_files) for u in uploads])
         table("comments", self.comments(cycle=cycle_id))
         table("overrides", [o for o in self.overrides() if o.get("cycle") == cycle_id])
         table("users", self.user_export_rows())
@@ -1145,15 +1167,25 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Automat
         files.update(vendor_files)
         files["audit_chain_verification.json"] = json.dumps(self.log.verify(), indent=2).encode()
         runs = []
+        in_cycle = lambda run: cycle["start"] <= run[:10] <= cycle["end"]  # noqa: E731
         for source in self.evidence.list_sources():
+            # Every run is checked (a signed source must stay signed); file contents are re-hashed for the runs
+            # this export lists, so a changed file is never reported as verified.
             for r in verify_source(self.evidence, source,
-                                   lambda src, run: self.verify_evidence(actor, src, run, check_files=False)):
+                                   lambda src, run: self.verify_evidence(actor, src, run, check_files=in_cycle(run))):
                 run = r["run"]
-                if cycle["start"] <= run[:10] <= cycle["end"]:
+                if in_cycle(run):
                     runs.append({"source": source, "run": run, "status": r["status"], "signed": r["signed"],
                                  "key_id": r["key_id"] or "", "manifest_sha256": r["manifest_sha256"] or "",
                                  "audit_record": (r["anchor"] or {}).get("seq", ""), "problems": "; ".join(r["problems"])})
+        missing_runs = self.missing_evidence_runs(cycle["start"], cycle["end"])
+        runs += [{"source": m["source"], "run": m["run"], "status": "missing", "signed": "", "key_id": "",
+                  "manifest_sha256": m["manifest_sha256"], "audit_record": m["seq"],
+                  "problems": f"recorded in the audit log at {m['at']} but not in the evidence store "
+                              "(run or manifest.json deleted)"} for m in missing_runs]
+        runs.sort(key=lambda r: (r["source"], r["run"]))
         table("evidence_run_verification", runs)
+        missing_uploads = len(uploads) - len(upload_files)
         pem = public_key_pem()
         if pem:
             files["evidence_signing_key.pem"] = pem.encode()
@@ -1161,10 +1193,9 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Automat
         if control_status is not None:
             files["control_status.json"] = json.dumps(control_status, indent=2, default=str).encode()
         for u in uploads:
-            source, run = u["evidence_run"].split("/", 1)
-            data = self.evidence.read(source, run, u["filename"])
-            if data is not None:
-                files[f"evidence/{u['RowKey'][:8]}_{u['filename']}"] = data
+            if u["RowKey"] in upload_files:
+                files[f"evidence/{u['RowKey'][:8]}_{u['filename']}"] = upload_files[u["RowKey"]]
+        not_verified = sum(1 for r in runs if r["status"] in ("failed", "warning"))
         files["README.txt"] = (
             f"GRC-pal export for {self.org}\nCycle: {cycle['name']} ({cycle['start']} to {cycle['end']}, {cycle['status']})\n"
             f"Exported by {actor.email} at {_now()}\n\n"
@@ -1186,7 +1217,13 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Automat
             "the files under vendor_files/ with their sha256; subservice_organizations.csv supports the system description;\n"
             "questionnaire_versions.csv holds every version of the vendor security questionnaire. Vendor contact\n"
             "details are left out on purpose.\n"
-            "MANIFEST.csv lists the SHA-256 of every file in this archive.\n").encode()
+            "MANIFEST.csv lists the SHA-256 of every file in this archive.\n\n"
+            "Integrity summary at export time (details in evidence_run_verification.csv)\n"
+            f"{len(runs)} evidence run(s) dated in the cycle; {not_verified} failed or not fully verified.\n"
+            + (f"WARNING: {len(missing_runs)} evidence run(s) recorded in the audit log are missing from the evidence "
+               "store (status 'missing').\n" if missing_runs else "")
+            + (f"WARNING: {missing_uploads} uploaded file(s) listed in uploads_and_reviews.csv could not be read "
+               "from the evidence store (file_in_export=False).\n" if missing_uploads else "")).encode()
         manifest = io.StringIO()
         mw = csv.writer(manifest)
         mw.writerow(["file", "bytes", "sha256"])
