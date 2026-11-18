@@ -78,7 +78,8 @@ explain choices in plain words, keep changes small, never leave the test suite r
 | Email | `grcpal/portal/mailer.py`, `notify.py`, `templates/email/` |
 | Security headers, CSRF, upload validation, trusted client address | `grcpal/portal/security.py` |
 | CI security scans (bandit, pip-audit, Trivy, SBOM, ZAP; pinned in `.github/security/`) | `.github/workflows/security-scan.yml`, docs `docs/security.md`, tests `tests/test_outbound.py`, `tests/test_deploy.py` |
-| Templates and static | `grcpal/portal/templates/`, `grcpal/portal/static/app.css`, `app.js` |
+| Templates and static | `grcpal/portal/templates/`, `grcpal/portal/static/app.css`, `app.js`, `nav.js` (menu state, loaded right after the menu) |
+| Control page and side panel (same sections: `_control_body.html` in `control.html` and `control_panel.html`; panel saves return to the list via `?panel=`, `_panel_dest` in `app.py`; unsaved-changes dialog in `base.html` + `app.js`) | tests `tests/test_layout.py`, `tests/test_browser.py` |
 | Demo data | `grcpal/portal/demo.py` |
 | Deployment | `Dockerfile`, `docker-compose.yml` (development), `deploy/vm/` (VM), `deploy/azure/main.bicep`, `deploy.sh`, `update.sh`, `check.sh` (post-deploy check), `kit.sh` (recovery kit) (Azure) |
 | Tests | `tests/test_framework.py` (engine), `test_portal.py` (portal core), `test_features.py` (config, logs, frameworks, checks, AI), `test_backup.py`, `test_browser.py` |

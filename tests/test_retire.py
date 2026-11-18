@@ -222,6 +222,13 @@ def test_pages_and_forms(portal, client):
     assert as_(client, CONTRIB).get("/controls/retired").status_code == 403
 
 
+def test_side_panel_offers_retire_like_the_full_page(portal, client):
+    cid = no_gap_control(portal)
+    panel = strict(as_(client, ADMIN).get(f"/controls/{cid}/panel"))
+    assert f'action="/controls/{cid}/retire"' in panel
+    assert f'action="/controls/{cid}/retire"' not in strict(as_(client, ADMIN2).get(f"/controls/{cid}/panel"))
+
+
 def test_gap_warning_on_the_control_page(portal, client):
     cid, crit = sole_control(portal)
     page = strict(as_(client, ADMIN).get(f"/controls/{cid}"))
