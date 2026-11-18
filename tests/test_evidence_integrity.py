@@ -41,6 +41,52 @@ def _path(store, run, name):
     return store.root / store._key(f"{run.prefix}/{name}")
 
 
+def test_two_runs_in_the_same_second_get_their_own_folders(tmp_path):
+    """Run IDs are a UTC second. Two uploads in one second used to share a folder: the second manifest replaced the
+    first, so the first file was no longer covered by any manifest or signature."""
+    store = EvidenceStore(tmp_path / "ev")
+    now = dt.datetime(2026, 3, 1, 12, 0, 0, tzinfo=dt.timezone.utc)
+    runs = []
+    for i in range(3):
+        run = store.new_run("portal_upload", ["IAM-01"], {}, started=now)
+        run.add_bytes(f"file{i}.txt", f"content {i}".encode())
+        run.finish([])
+        runs.append(run)
+    assert len({r.prefix for r in runs}) == 3
+    assert store.list_runs("portal_upload") == ["2026-03-01T120000Z", "2026-03-01T120001Z", "2026-03-01T120002Z"]
+    for i, run in enumerate(runs):
+        name = run.prefix.split("/")[1]
+        result = store.verify_run("portal_upload", name)
+        assert result["status"] == "verified" and result["files"] == 1
+        manifest = json.loads(store.read("portal_upload", name, "manifest.json"))
+        assert [f["name"] for f in manifest["files"]] == [f"file{i}.txt"]
+        assert manifest["started"] == now.isoformat()  # the real time is kept; only the folder name moves on
+
+
+def test_portal_uploads_in_the_same_second_are_both_kept(tmp_path, monkeypatch):
+    now = dt.datetime(2026, 3, 1, 12, 0, 0, tzinfo=dt.timezone.utc)
+    monkeypatch.setattr(ev, "utcnow", lambda: now)
+    portal = make_portal(tmp_path)
+    note = "Approved by the security lead on 1 March"
+    ups = [portal.upload(ADMIN, f"file{i}.txt", f"content {i}".encode(), "", control_id="IAM-01", approval_note=note)
+           for i in range(2)]
+    assert ups[0]["evidence_run"] != ups[1]["evidence_run"]
+    for i, u in enumerate(ups):
+        source, run = u["evidence_run"].split("/")
+        assert portal.evidence_file(source, run, u["filename"]) == f"content {i}".encode()
+        assert portal.verify_evidence(AUDITOR, source, run)["status"] == "verified"
+
+
+def test_new_run_does_not_reuse_a_folder_written_earlier(tmp_path):
+    """Also across restarts and processes: a folder that already exists in the store is never written into again."""
+    now = dt.datetime(2026, 3, 1, 12, 0, 0, tzinfo=dt.timezone.utc)
+    first = EvidenceStore(tmp_path / "ev").new_run("portal_upload", ["IAM-01"], {}, started=now)
+    first.add_bytes("a.txt", b"a")
+    first.finish([])
+    second = EvidenceStore(tmp_path / "ev").new_run("portal_upload", ["IAM-01"], {}, started=now)
+    assert second.prefix == "portal_upload/2026-03-01T120001Z"
+
+
 def test_signed_run_verifies_with_standard_tools(tmp_path):
     store = EvidenceStore(tmp_path / "ev")
     run = _run(store)
