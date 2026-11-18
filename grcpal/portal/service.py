@@ -47,6 +47,10 @@ from grcpal.portal.security import csv_cell, safe_filename, validate_upload
 from grcpal.tasks import period_label
 
 EMAIL = re.compile(r"^[^@\s]{1,64}@(?=[^@\s]{1,253}\Z)[^@\s.]+(?:\.[^@\s.]+)+\Z")  # linear time: labels cannot overlap
+# Columns of users.csv in the auditor export. An allow-list: a new field on the users table (a password hash, a
+# two-step secret, a session value) never reaches an export unless it is added here on purpose.
+USER_EXPORT_COLUMNS = ("email", "name", "role", "active", "source", "created_by", "created_at", "last_seen",
+                       "access_until", "signin_method", "password_set", "two_step", "entra_linked", "library_owner")
 RUN_ID = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{6}Z$")
 SLUG = re.compile(r"[^a-z0-9]+")
 MIN_JUSTIFICATION = 30
@@ -134,6 +138,17 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Automat
 
     def users(self) -> list[dict]:
         return sorted(self.store.list("users", "u"), key=lambda u: (not u.get("active", True), u["role"], u["RowKey"]))
+
+    def user_export_rows(self) -> list[dict]:
+        """The user population for auditors: who has which role and how they sign in. Credentials stay out;
+        the export says only whether a password, two-step sign-in or an Entra link exists."""
+        return [{"email": u["RowKey"], "name": u.get("name", ""), "role": u["role"], "active": u.get("active", True),
+                 "source": u.get("source", ""), "created_by": u.get("created_by", ""),
+                 "created_at": u.get("created_at", ""), "last_seen": u.get("last_seen", ""),
+                 "access_until": u.get("access_until", ""), "signin_method": u.get("signin") or "",
+                 "password_set": bool(u.get("password_hash")), "two_step": bool(u.get("totp_secret")),
+                 "entra_linked": bool(u.get("entra_oid")), "library_owner": bool(u.get("library_owner"))}
+                for u in self.users()]
 
     def active_emails(self, *roles: str) -> list[str]:
         return [u["RowKey"] for u in self.users() if u.get("active", True) and (not roles or u["role"] in roles)]
@@ -1112,7 +1127,7 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Automat
         table("uploads_and_reviews", uploads)
         table("comments", self.comments(cycle=cycle_id))
         table("overrides", [o for o in self.overrides() if o.get("cycle") == cycle_id])
-        table("users", self.users())
+        table("users", self.user_export_rows())
         # repository policies (partition = policy id) and published library documents (partition lib:<id>)
         table("policy_acknowledgments", sorted(self.store.list("acks"), key=lambda r: (r["PartitionKey"], r["RowKey"])))
         table("audit_log", [r for r in self.log.records() if cycle["start"] <= r["at"][:10] and r["at"] <= end])
