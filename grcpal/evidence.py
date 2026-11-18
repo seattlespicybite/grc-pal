@@ -31,6 +31,7 @@ import io
 import json
 import os
 import re
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -143,6 +144,8 @@ class EvidenceStore:
         # Called after a run is written: on_seal(prefix, manifest_sha256, manifest). The portal sets it to
         # record the manifest hash in the tamper-evident audit log.
         self.on_seal = None
+        self._new_run_lock = threading.Lock()
+        self._issued: set[str] = set()  # run folders handed out by this process (see new_run)
 
     # ---- blob container (optional) ----
     @property
@@ -166,8 +169,26 @@ class EvidenceStore:
         if self.container is not None:
             self.container.upload_blob(name, data, overwrite=False)
 
-    def new_run(self, source: str, controls: list[str], meta: dict | None = None) -> "Run":
-        return Run(self, source, controls, meta or {})
+    def new_run(self, source: str, controls: list[str], meta: dict | None = None,
+                started: dt.datetime | None = None) -> "Run":
+        """Start a run in a folder of its own. The folder name is the start time to the second, so a second run
+        of the same source in that second would write into the first one's folder and replace its manifest:
+        the name moves on a second at a time until it is free. The manifest keeps the real start time."""
+        run = Run(self, source, controls, meta or {}, **({"started": started} if started else {}))
+        with self._new_run_lock:
+            while run.prefix in self._issued or self._run_started(run.prefix):
+                run.id_offset += 1
+            self._issued.add(run.prefix)
+        return run
+
+    def _run_started(self, prefix: str) -> bool:
+        """Has anything been written under this run folder, here or in the blob container?"""
+        key = self._key(prefix)
+        if (self.root / key).exists():
+            return True
+        if self.container is not None:
+            return next(iter(self.container.list_blobs(name_starts_with=f"{key}/")), None) is not None
+        return False
 
     # ---- reading (used by report) ----
     def list_runs(self, source: str) -> list[str]:
@@ -294,10 +315,12 @@ class Run:
     # How the data was obtained (API, query, record count, identity), for auditors testing
     # completeness and accuracy. Filled by the CLI from Clients.queries; empty for portal uploads.
     provenance: dict = field(default_factory=dict)
+    # Seconds added to the folder name only, when another run of this source took the same second (new_run).
+    id_offset: int = 0
 
     @property
     def prefix(self) -> str:
-        return f"{self.source}/{self.started:%Y-%m-%dT%H%M%SZ}"
+        return f"{self.source}/{self.started + dt.timedelta(seconds=self.id_offset):%Y-%m-%dT%H%M%SZ}"
 
     def add_bytes(self, filename: str, data: bytes) -> None:
         if filename in (MANIFEST, *INTEGRITY_FILES):

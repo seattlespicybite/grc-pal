@@ -12,6 +12,15 @@ All notable changes are listed here. The project follows [semantic versioning](h
   If you have shared an export made by an earlier version from an instance with password sign-in, change those
   passwords and reset two-step sign-in for the accounts in it.
 
+### Fixed
+- **Two evidence runs in the same second no longer share a folder.** A run's folder is named after its start time
+  to the second. Two uploads (or two runs of one source) in the same second wrote into one folder: the second
+  manifest replaced the first, so the first file was no longer covered by a manifest or signature and the portal
+  refused to show it, while the run still read "verified". On Azure the second upload failed instead. Now the
+  folder name moves on by a second until it is free; the manifest keeps the real start time. Existing runs are
+  not changed. Known limit: two portal replicas starting a run of the same source in the same second can still
+  collide; on Azure the write-once container then refuses the second one (an error, not a silent overwrite).
+
 ### Added
 - **Control panel and menu.** The control side panel now shows every section of the full control page
   (one shared template, `_control_body.html`, so each role sees the same sections and actions in both). It opens
