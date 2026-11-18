@@ -27,6 +27,26 @@ def register(app, h) -> None:
                       f_owner=owner, statuses=T.STATUS_LABELS, kinds=T.KINDS,
                       owners=sorted({t["owner"] for t in rows if t["owner"]}))
 
+    @app.get("/tests/exceptions", response_class=HTMLResponse)
+    def test_exceptions_page(request: Request, user: User = Depends(current_user)):
+        try:
+            rows = p().list_test_exceptions(user)
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        return render(request, user, "test_exceptions.html", nav_active="tests", rows=rows)
+
+    @app.post("/tests/exceptions/{xid}/revoke")
+    async def test_exception_revoke(request: Request, xid: str, user: User = Depends(current_user)):
+        form = await request.form()
+        h.check_csrf(request, user.email, form.get("csrf"))
+        try:
+            x = p().revoke_test_exception(user, xid, form.get("reason", ""))
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back("/tests/exceptions", err=str(exc))
+        return back(f"/tests/{x['test']}", msg="Exception revoked. The finding counts against the test again.")
+
     @app.get("/tests/{tid}", response_class=HTMLResponse)
     def test_page(request: Request, tid: str, user: User = Depends(current_user)):
         try:
@@ -49,3 +69,16 @@ def register(app, h) -> None:
         except Invalid as exc:
             return back(f"/tests/{tid}" if T.TEST_ID.match(tid) else "/tests", err=str(exc))
         return back(f"/tests/{tid}", msg="Owner saved.")
+
+    @app.post("/tests/{tid}/exceptions")
+    async def test_exception_new(request: Request, tid: str, user: User = Depends(current_user)):
+        form = await request.form()
+        h.check_csrf(request, user.email, form.get("csrf"))
+        try:
+            p().create_test_exception(user, h.health(), tid, form.get("key", ""), form.get("reason", ""),
+                                      form.get("expires", ""))
+        except Forbidden as exc:
+            raise h.HTTPError(403, str(exc)) from exc
+        except Invalid as exc:
+            return back(f"/tests/{tid}" if T.TEST_ID.match(tid) else "/tests", err=str(exc))
+        return back(f"/tests/{tid}", msg="Exception recorded. This finding no longer fails the test until it expires.")

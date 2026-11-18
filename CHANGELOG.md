@@ -5,6 +5,17 @@ All notable changes are listed here. The project follows [semantic versioning](h
 ## [Unreleased]
 
 ### Added
+- **Failing resources per test, and exceptions scoped to one resource.** A test's page now lists the findings of
+  its latest run (the user, device or repository that failed, with severity). An admin can accept one finding for
+  a limited time, with a reason of at least 30 characters and an expiry date at most 365 days ahead: that finding
+  stops failing the test and its controls, every other finding still does, a new finding is never covered, and the
+  exception ends by itself on its expiry date. Only a finding in the latest run can be accepted. Each exception
+  and each revocation is stored as write-once evidence (`portal_test_exception/`), recorded in the audit log
+  (`test.exception.create`, `test.exception.revoke`) and listed in the auditor export (`test_exceptions.csv`).
+  **Tests > Exceptions** shows all of them, including expired and revoked ones. Use this instead of overriding a
+  whole control because of one known item. New table `testexceptions` (no migration needed; included in backups).
+  Limits: passing resources are not listed (collectors report problems, the full population is in the run's
+  files); the same admin can record and revoke an exception (no second approver yet).
 - **Tests page: every automated or recurring check, listed once.** A control's evidence items (collectors, external
   tools, custom checks, recurring tasks, document history) are now also shown as tests under **Compliance > Tests**:
   one row per check with its status (Passing, Failing, Stale, Error, Not run, Not applicable), the controls it

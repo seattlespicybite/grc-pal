@@ -59,7 +59,7 @@
 <div class="grid g2">
 <section class="card"><h2>Automated evidence</h2><table><tbody>
 {% for e in status.evidence %}<tr><td>{{ e.artifact }}<div class="sub mono">{% if user.sees_everything and test_id(e.via) %}<a href="/tests/{{ test_id(e.via) }}">{{ e.via }}</a>{% else %}{{ e.via }}{% endif %}</div></td>
-<td>{{ pill(e.status) }}<div class="sub">{{ e.last or '' }}{% if e.findings %} · {{ e.findings }} findings{% endif %}</div></td></tr>
+<td>{{ pill(e.status) }}<div class="sub">{{ e.last or '' }}{% if e.findings %} · {{ e.findings }} findings{% endif %}{% if e.excepted %} · {{ e.excepted }} accepted by exception{% endif %}</div></td></tr>
 {% else %}<tr><td class="empty">No automated evidence for this control.</td></tr>{% endfor %}
 </tbody></table></section>
 

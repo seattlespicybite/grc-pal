@@ -1041,6 +1041,7 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Automat
 
         return {"overrides": self.active_overrides(), "tasks": tasks, "uploads": uploads,
                 "activities": self.performed_by_control(),
+                "test_exceptions": self.active_test_exception_keys(),
                 "skip_sources": disabled_sources(self.catalog, self.settings)}
 
     # ================================================================ evidence browsing (admins, auditors)
@@ -1049,7 +1050,7 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Automat
 
         checks = {f"check-{c['id']}" for c in self.all_checks()}
         return sorted(set(NAMES) | checks | {"prowler", "maester", "testssl", "control_report", "portal_upload",
-                                             "portal_review", "portal_override", "portal_audit", "ai_review", "ai_audit"})
+                                             "portal_review", "portal_override", "portal_test_exception", "portal_audit", "ai_review", "ai_audit"})
 
     def manifest(self, source: str, run: str) -> dict:
         if source not in self.evidence_sources() or not RUN_ID.match(run):
@@ -1150,6 +1151,8 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Automat
         table("uploads_and_reviews", [dict(u, file_in_export=u["RowKey"] in upload_files) for u in uploads])
         table("comments", self.comments(cycle=cycle_id))
         table("overrides", [o for o in self.overrides() if o.get("cycle") == cycle_id])
+        table("test_exceptions", [{k: v for k, v in x.items() if k != "PartitionKey"} for x in self.test_exceptions()
+                                  if x["created_at"][:10] <= cycle["end"] and (x["revoked_at"] or x["expires"]) >= cycle["start"]])
         table("users", self.user_export_rows())
         # repository policies (partition = policy id) and published library documents (partition lib:<id>)
         table("policy_acknowledgments", sorted(self.store.list("acks"), key=lambda r: (r["PartitionKey"], r["RowKey"])))
@@ -1218,6 +1221,8 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Automat
             "the files under vendor_files/ with their sha256; subservice_organizations.csv supports the system description;\n"
             "questionnaire_versions.csv holds every version of the vendor security questionnaire. Vendor contact\n"
             "details are left out on purpose.\n"
+            "test_exceptions.csv lists every finding an admin accepted for a limited time and that was in force during\n"
+            "the cycle: the test, the resource (finding key), reason, who, when, expiry and any revocation.\n"
             "MANIFEST.csv lists the SHA-256 of every file in this archive.\n\n"
             "Integrity summary at export time (details in evidence_run_verification.csv)\n"
             f"{len(runs)} evidence run(s) dated in the cycle; {not_verified} failed or not fully verified.\n"

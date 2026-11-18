@@ -143,6 +143,19 @@ def build(tmp: Path, base: SqliteStore, tenant: str) -> SimpleNamespace:
     w.policy = portal.catalog.policies[0]["id"]
     w.crit = sorted(portal.catalog.in_scope_criteria)[0]
     w.test_id = "collector-entra_mfa"   # tests come from the starter catalog: the same ID in every organization
+    # a failing run of that test with two findings: one already accepted (to revoke), one still open (to accept)
+    from grcpal import report
+
+    mfa = portal.evidence.new_run("entra_mfa", ["IAM-02"], {})
+    mfa.add("rows", [{"upn": f"pat@{tenant}.example"}])
+    w.finding_open = f"no-mfa:pat@{tenant}.example"
+    mfa.finish([{"key": k, "severity": "medium", "title": f"Member without MFA ({k})", "detail": {}}
+                for k in (w.finding_open, f"no-mfa:sam@{tenant}.example")])
+    w.exception_expires = (portal.today + dt.timedelta(days=30)).isoformat()
+    w.test_exception = portal.create_test_exception(
+        admin, report.build(portal.catalog, portal.evidence, portal.today, portal=portal.report_inputs()), w.test_id,
+        f"no-mfa:sam@{tenant}.example", "Service account without interactive sign-in; reviewed for the authz suite.",
+        w.exception_expires)["RowKey"]
     w.section, w.step, w.framework, w.framework_off = "organization", "welcome", "soc2", "iso27001"
     w.admin_email = admin.email
     w.auto_source = next(iter(portal.automated_sources()))

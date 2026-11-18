@@ -15,6 +15,7 @@ program repository for the audit period.
 | `assignments.csv` | Every evidence request: control, assignee, due date, status, link to the previous cycle's request |
 | `comments.csv` | Discussion on each request and file (comments cannot be edited or deleted) |
 | `overrides.csv` | Admin acceptances with justification, expiry, author and revocation |
+| `test_exceptions.csv` | Findings accepted for a limited time and in force during the cycle: test, resource (finding key), reason, author, expiry, revocation. Each is also a run under `portal_test_exception/` |
 | `users.csv` | Who had which role, how they got it, when they were last seen, and how they sign in (yes/no for password, two-step sign-in and Entra link; never the secrets themselves) |
 | `policy_acknowledgments.csv` | Who acknowledged which policy version and when (with the policy hash) |
 | `audit_log.csv` | Every change in the period, hash-chained |
