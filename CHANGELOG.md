@@ -16,6 +16,17 @@ All notable changes are listed here. The project follows [semantic versioning](h
   evidence is uploaded.**
 
 ### Added
+- **People view: one row per person.** **Compliance > People** joins the latest directory, MFA, device and leaver
+  evidence with GRC-pal's own users and policy acknowledgments, by sign-in name. Each person shows the account
+  state, join date (with a "New joiner" flag for 90 days), last sign-in and checks: MFA registered, devices
+  compliant and encrypted, policies acknowledged, and for leavers whether the account is disabled. Filters for
+  people with a problem, new joiners and leavers; the full population downloads as CSV (the download is in the
+  audit log as `people.export`). A check with no data shows as unknown, never as passed. An admin can mark a
+  person out of scope with a reason (a shared mailbox, a break-glass account); that moves them to a separate list
+  on this page only and is audited as `person.scope`. Admins and auditors see the page. It reads only the latest
+  run of each source and stores nothing new except the out-of-scope list (table `peoplescope`, no migration
+  needed, included in backups). Not included: training, background checks and HR system records (there is no
+  collector for them yet).
 - **Next due date and a "Due soon" warning for manual evidence.** Recurring tasks and uploads on monthly, quarterly
   and annual controls show the date they are valid until. In the last 7, 14 or 30 days of the window (monthly,
   quarterly, annual) they are flagged **Due soon**: still passing, renew now. The Tests page has a **Next due**

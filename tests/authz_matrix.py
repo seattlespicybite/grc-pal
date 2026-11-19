@@ -270,6 +270,7 @@ FORMS: dict[tuple[str, str], object] = {
     ("POST", "/policies/doc/{did}/ack"): lambda w: {"vid": w.portal.published_document(w.who["admin"], w.doc_pub)["vid"], "read": "1"},
     ("POST", "/policies/doc/{did}/request"): {},
     ("POST", "/policies/doc/{did}/audience"): {"ack": "admins"},
+    ("POST", "/people/scope"): lambda w: {"email": w.admin2_email, "out": "1", "reason": "Shared account, authz suite"},
     ("POST", "/tests/{tid}/owner"): lambda w: {"owner": w.admin2_email},
     ("POST", "/tests/{tid}/exceptions"): lambda w: {
         "key": w.finding_open, "reason": "Accepted for the authz suite: account is being removed.",
@@ -368,6 +369,7 @@ _GROUPS: list[tuple[frozenset, str]] = [
            POST /policies/doc/{did}/request | POST /policies/doc/{did}/audience
            POST /risks/new | POST /risks/{rid} | POST /risks/{rid}/review | POST /risks/approve | POST /risks/import
            POST /tests/{tid}/owner | POST /tests/{tid}/exceptions | POST /tests/exceptions/{xid}/revoke
+           POST /people/scope
            POST /ai/audits | POST /assignments | POST /assignments/{assignment_id}/cancel
            POST /assignments/{assignment_id}/edit | POST /assignments/{assignment_id}/remind
            POST /backups/download | POST /backups/kit | POST /backups/now | POST /backups/restore
@@ -405,7 +407,7 @@ _GROUPS: list[tuple[frozenset, str]] = [
             GET /library/trash | GET /library/{did}/files/{vid} | GET /logs | GET /logs.csv | GET /matrix
             GET /matrix/data.xlsx | GET /matrix/report | GET /matrix/report.docx | GET /overrides | GET /users.csv
             GET /policies/acknowledgements.csv | GET /risks | GET /risks.csv | GET /risks/{rid}
-            GET /tests | GET /tests/{tid} | GET /tests/exceptions"""),
+            GET /tests | GET /tests/{tid} | GET /tests/exceptions | GET /people | GET /people.csv"""),
     # --- everyone who is signed in and active (what they see is filtered to what is theirs)
     (EVERYONE, """GET / | GET /access-reviews | GET /access-reviews/template.csv | GET /controls | GET /kb
                   GET /kb/{crit_id} | GET /library | GET /policies | GET /policies/{policy_id} | GET /vendors
