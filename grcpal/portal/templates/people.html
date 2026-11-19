@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% from "_macros.html" import pill, when %}{% block title %}People{% endblock %}
+{% macro check_pills(p) %}{% for c in p.checks %}<div>{{ pill({'ok': 'ok', 'problem': 'attention', 'unknown': 'not_started'}[c.state], c.name) }} <span class="sub">{{ c.detail }}</span></div>{% else %}<span class="sub">Nothing to check</span>{% endfor %}{% endmacro %}
+{% block content %}
+<div class="page-head"><div><h1>People</h1>
+<div class="sub">One row per person, joined from the latest directory, MFA, device and leaver evidence and from GRC-pal itself. {{ v.summary.people }} in scope: {{ v.summary.with_problems }} with a problem, {{ v.summary.no_mfa }} without MFA, {{ v.summary.new_joiners }} joined in the last 90 days, {{ v.summary.leavers }} leaver{{ 's' if v.summary.leavers != 1 }}.</div></div>
+<a class="btn ghost small" href="/people.csv">Download CSV</a></div>
+
+<div class="card"><form method="get" action="/people" class="filters" role="search">
+<label>Show<select name="show"><option value="">Everyone in scope</option><option value="problems"{{ ' selected' if show == 'problems' }}>With a problem</option><option value="joiners"{{ ' selected' if show == 'joiners' }}>Joined in the last 90 days</option><option value="leavers"{{ ' selected' if show == 'leavers' }}>Leavers</option></select></label>
+<label>Name or email<input name="q" value="{{ q }}" maxlength="100"></label>
+<div class="actions"><button class="btn ghost small" type="submit">Filter</button></div></form>
+<p class="sub mt-s">Data from: {% for s in v.sources %}<span class="mono">{{ s.source }}</span> {% if s.run %}<a href="/evidence/{{ s.source }}/{{ s.run }}">{{ s.run[:10] }}</a> ({{ s.rows }} rows){% else %}<strong>no data yet</strong>{% endif %}{{ ' · ' if not loop.last }}{% endfor %}. A check with no data shows as unknown, never as passed.</p></div>
+
+<div class="card table-wrap mt"><table>
+<thead><tr><th>Person</th><th>Account</th><th>Joined</th><th>Last sign-in</th><th>Checks</th>{% if user.is_admin %}<th></th>{% endif %}</tr></thead>
+<tbody>{% for p in rows %}<tr><td>{{ p.name }}<div class="sub mono">{{ p.email }}</div><div class="sub">{{ p.job_title }}{{ ' · ' if p.job_title and p.department }}{{ p.department }}{% if p.portal_role %}{{ ' · ' if p.job_title or p.department }}GRC-pal {{ role_labels.get(p.portal_role, p.portal_role) }}{% endif %}</div></td>
+<td>{{ p.account|capitalize }}{% if p.type and p.type != 'member' %}<div class="sub">{{ p.type }}</div>{% endif %}{% if p.termination_date %}<div class="sub">left {{ p.termination_date }}</div>{% endif %}</td>
+<td class="nowrap">{{ p.created or '-' }}{% if p.new_joiner %}<div>{{ pill('pending', 'New joiner') }}</div>{% endif %}</td>
+<td class="nowrap">{{ p.last_sign_in or '-' }}</td><td>{{ check_pills(p) }}</td>
+{% if user.is_admin %}<td><details><summary>Out of scope</summary><form method="post" action="/people/scope" class="mt-s">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="email" value="{{ p.email }}"><input type="hidden" name="out" value="1">
+<label>Reason (auditors will read it)<input name="reason" required minlength="10" maxlength="500"></label>
+<div class="actions"><button class="btn ghost small" type="submit">Mark out of scope</button></div></form></details></td>{% endif %}</tr>
+{% else %}<tr><td colspan="{{ 6 if user.is_admin else 5 }}" class="sub">Nobody matches.{% if not v.people %} Run the Entra ID collectors first (Compliance > Automation).{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+
+{% if v.out_of_scope %}<section class="card mt"><h2>Out of scope ({{ v.out_of_scope|length }})</h2>
+<p class="sub">Left out of the counts above, with the reason. This list affects this page only: collector findings and control status are not changed by it.</p>
+<div class="table-wrap"><table><thead><tr><th>Person</th><th>Account</th><th>Reason</th><th>Marked by</th>{% if user.is_admin %}<th></th>{% endif %}</tr></thead>
+<tbody>{% for p in v.out_of_scope %}<tr><td>{{ p.name }}<div class="sub mono">{{ p.email }}</div></td><td>{{ p.account|capitalize }}</td><td>{{ p.scope_reason }}</td>
+<td>{{ p.scope_by }}<div class="sub">{{ when(p.scope_at) }}</div></td>
+{% if user.is_admin %}<td><details><summary>Back in scope</summary><form method="post" action="/people/scope" class="mt-s">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="email" value="{{ p.email }}"><input type="hidden" name="out" value="0">
+<label>Reason<input name="reason" required minlength="10" maxlength="500"></label>
+<div class="actions"><button class="btn ghost small" type="submit">Put back in scope</button></div></form></details></td>{% endif %}</tr>{% endfor %}</tbody></table></div></section>{% endif %}
+{% endblock %}

@@ -509,6 +509,34 @@ revocation, is stored as write-once evidence under `portal_test_exception/`, rec
 Prefer this to an override: an override accepts a whole control whatever its tests say, an exception accepts one
 named resource and leaves the test working for everything else.
 
+## People: one row per person
+
+Auditors sample people, not systems: "show me this joiner", "show me this leaver". **Compliance > People** puts what
+GRC-pal already holds about each person in one row.
+
+| Column | Comes from (latest run) |
+| --- | --- |
+| Account, type, join date, last sign-in, department, job title | `entra_users` |
+| MFA registered | `entra_mfa` |
+| Devices: managed, compliant, encrypted | `intune_devices` |
+| Leaver: termination date, account disabled | `leaver_reconcile` (your HR leavers file) |
+| GRC-pal role, policies acknowledged | GRC-pal itself |
+
+People are matched by sign-in name, ignoring letter case. The line under the filters names the evidence run each
+column came from and links to it, so every value can be traced to a stored, signed file. When a source has never
+run, its check reads **unknown**; it is never shown as passed. Guests and disabled accounts are listed but not held
+to the MFA and device checks. A leaver whose account is still enabled is a problem and is listed first.
+
+**Download CSV** gives the whole population (in and out of scope) for sampling; the download is recorded in the
+audit log.
+
+**Out of scope.** An admin can move a person to the out-of-scope list with a reason: a shared mailbox, a
+break-glass account, a room account. This changes this page and its counts only. It does not change any collector
+finding or control status; use a test exception for that.
+
+Not covered yet: security training, background checks and data from an HR system. Track those with recurring tasks
+or uploads until a collector exists.
+
 ## Risk register
 
 Compliance > **Risk register** (admins change it, auditors read it, control owners do not see it). Each risk has
