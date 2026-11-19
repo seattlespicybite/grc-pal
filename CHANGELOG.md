@@ -4,6 +4,15 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-18 - Tests and exceptions, evidence validity, People view, audit requests
+
+No data model change (new tables only, no migration): upgrade in place from 0.7.3 or any earlier 0.6/0.7 release,
+roll back to the previous version without a restore. **Read the Changed section first:** controls whose only
+evidence is an old upload will show "Needs attention" after the update until current evidence is uploaded.
+**Role change:** auditors can now write on Audit requests (ask, comment, draw samples, accept or return); everywhere
+else they stay read-only. On Azure, re-run `deploy.sh` if you skipped 0.7.x deploys, to get the collection and
+break-glass alerts and the backup retention setting.
+
 ### Changed
 - **Manual evidence is judged by when the work was done, and it expires.** The upload form asks "When was this
   work done?" (today by default, never in the future, at most three years back). An approved upload now counts from
