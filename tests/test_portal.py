@@ -442,7 +442,8 @@ ADMIN_PAGES = ["/backups", "/updates", "/", "/controls", "/controls/IAM-04", "/c
                "/controls?status=not_started&category=privacy&sort=owner", "/kb", "/kb/CC6.1", "/kb/CC1.2", "/kb/P5.1",
                "/library?edit=1", "/library/trash", "/calendar/o/access-review~2026-07?popup=1", "/automation",
                "/controls/IAM-02/panel", "/controls/GOV-01/panel", "/risks",
-               "/tests", "/tests?status=not_run&kind=task", "/tests/collector-entra_mfa", "/tests/task-policy-review"]
+               "/tests", "/tests?status=not_run&kind=task", "/tests/collector-entra_mfa", "/tests/task-policy-review",
+               "/tests/exceptions"]
 
 
 @pytest.mark.parametrize("path", ADMIN_PAGES)

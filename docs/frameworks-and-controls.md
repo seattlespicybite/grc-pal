@@ -466,6 +466,28 @@ A control's status is still worked out from its evidence items, and the Tests pa
 control and its tests always agree. To re-perform a test, an auditor opens a run from the test's history: the run
 page shows the files, their SHA-256 hashes, the signature and the audit-log record.
 
+### Failing resources and exceptions for one resource
+
+For collectors, tools and custom checks, the test's page lists the **failing resources in the last run**: each
+finding with its key (for example `no-mfa:pat@example.com`), a description and a severity.
+
+When one of them is a known, accepted item (a break-glass account without MFA, a repository being archived), an
+admin opens **Accept for a limited time** next to it and enters a reason (at least 30 characters; auditors read it)
+and an expiry date (at most 365 days ahead). From then on:
+
+- that finding no longer fails the test or the controls the test supports; every other finding still does;
+- a finding that appears later is never covered: it needs its own decision;
+- on the expiry date the exception ends by itself and the finding counts again;
+- an admin can revoke it earlier with a reason.
+
+Only a finding that is in the latest run can be accepted, so nothing can be waved through ahead of time.
+**Tests > Exceptions** lists every exception with its state (active, expired, revoked). Each one, and each
+revocation, is stored as write-once evidence under `portal_test_exception/`, recorded in the audit log and listed in
+`test_exceptions.csv` in the auditor export.
+
+Prefer this to an override: an override accepts a whole control whatever its tests say, an exception accepts one
+named resource and leaves the test working for everything else.
+
 ## Risk register
 
 Compliance > **Risk register** (admins change it, auditors read it, control owners do not see it). Each risk has

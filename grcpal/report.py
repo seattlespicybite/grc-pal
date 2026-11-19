@@ -42,6 +42,8 @@ def build(catalog, store, today: dt.date | None = None, portal: dict | None = No
     overrides, portal_tasks, portal_uploads = portal.get("overrides", {}), portal.get("tasks", {}), portal.get("uploads", {})
     portal_activities = portal.get("activities", {})
     skip = set(portal.get("skip_sources") or ())
+    # {evidence source: {finding key, ...}}: findings an admin accepted for a limited time (Tests > exceptions)
+    excepted = portal.get("test_exceptions") or {}
     manifests: dict[str, dict | None] = {}
     tasks_done = _task_index(store)
     controls = []
@@ -68,6 +70,9 @@ def build(catalog, store, today: dt.date | None = None, portal: dict | None = No
                     age = _age(m["finished"], today)
                     item["last"] = m["finished"][:10]
                     item["findings"] = m.get("findings_count", 0)
+                    accepted = sum(1 for f in m.get("findings") or [] if f.get("key") in excepted.get(name, ()))
+                    if accepted:
+                        item["findings"], item["excepted"] = max(0, item["findings"] - accepted), accepted
                     if m.get("status") == "error":
                         item["status"] = "error"
                     elif age is not None and age > MAX_AGE_DAYS[ctl["frequency"]]:
