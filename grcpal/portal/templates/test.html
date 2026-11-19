@@ -1,0 +1,38 @@
+{% extends "base.html" %}{% from "_macros.html" import pill, when %}{% block title %}{{ t.title }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{{ t.title }}</h1>
+<div class="sub"><span class="mono">{{ t.id }}</span> · {{ t.kind_label }}{% if not t.in_scope %} · supports no in-scope control{% endif %}</div></div>
+<a class="btn ghost small" href="/tests">All tests</a></div>
+
+<div class="grid g2">
+<section class="card"><h2>Status</h2>
+<p>{{ pill(t.status_css, t.status_label) }} <span class="sub">{{ t.status_help }}{% if t.note %} ({{ t.note }}){% endif %}.</span></p>
+<table><tbody>
+<tr><td>Last run or completion</td><td class="mono">{{ t.last or '-' }}</td></tr>
+<tr><td>Findings in the last run</td><td>{{ t.findings }}</td></tr>
+<tr><td>Evidence item</td><td class="mono">{{ t.via }}</td></tr>
+</tbody></table>
+<p class="sub mt">The status is the worst one among the controls below: a control checked every day needs a more recent run than one checked every quarter.</p></section>
+
+<section class="card"><h2>Owner</h2>
+<p>{% if t.owner %}{{ t.owner }}<span class="sub"> · set by {{ t.owner_set_by }} {{ when(t.owner_set_at) }}</span>{% else %}<span class="sub">No owner yet. The owner is the person who answers for this test when it fails.</span>{% endif %}</p>
+{% if user.is_admin %}<form method="post" action="/tests/{{ t.id }}/owner" class="mt-s">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<label>Owner<select name="owner"><option value="">No owner</option>{% for u in people %}<option value="{{ u.RowKey }}"{{ ' selected' if t.owner == u.RowKey }}>{{ u.name }} ({{ u.RowKey }})</option>{% endfor %}</select></label>
+<div class="actions"><button class="btn small" type="submit">Save owner</button></div></form>{% endif %}</section>
+</div>
+
+<section class="card mt"><h2>Controls this test supports</h2><div class="table-wrap"><table>
+<thead><tr><th>ID</th><th>Control</th><th>Frequency</th><th>In scope</th></tr></thead>
+<tbody>{% for c in t.controls %}<tr><td><a class="mono" href="/controls/{{ c.id }}">{{ c.id }}</a></td><td>{{ c.title }}</td><td>{{ c.frequency }}</td><td>{{ 'Yes' if c.in_scope else 'No' }}</td></tr>{% endfor %}</tbody></table></div></section>
+
+<section class="card mt"><h2>Run history</h2>
+{% if t.source %}<div class="table-wrap"><table>
+<thead><tr><th>Run</th><th>Finished</th><th>Result</th><th>Findings</th><th></th></tr></thead>
+<tbody>{% for r in t.history %}<tr><td class="mono">{{ r.run }}</td><td class="nowrap">{{ when(r.finished) }}</td>
+<td>{{ pill(r.status_css, r.status_label) }}{% if r.error %}<div class="sub">{{ r.error }}</div>{% endif %}</td><td>{{ r.findings }}</td>
+<td><a href="/evidence/{{ t.source }}/{{ r.run }}">Evidence</a></td></tr>
+{% else %}<tr><td colspan="5" class="sub">No runs stored yet.</td></tr>{% endfor %}</tbody></table></div>
+<p class="sub mt">The latest {{ t.history|length }} runs, read from the write-once evidence store. Each run links to its files and integrity check.</p>
+{% else %}<p class="sub">This kind of test has no stored runs: its status comes from the date the work was last completed or approved.</p>{% endif %}</section>
+{% endblock %}

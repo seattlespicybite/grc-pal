@@ -441,6 +441,31 @@ Operators: `exists`, `equals`, `not_equals`, `contains`, `matches` (regex), `lt`
   checked address (no DNS rebinding) and every redirect is checked again. On an internal-only
   self-hosted deployment, `GRCPAL_CHECKS_ALLOW_PRIVATE=1` lifts this rule.
 
+## Tests: each check once, with a status, an owner and a history
+
+**Compliance > Tests** lists every automated or recurring check in your control set once, whichever controls use it.
+The `entra_mfa` collector, for example, is one test even when three controls rely on it.
+
+| Kind | Where it comes from | Run history |
+| --- | --- | --- |
+| Automated collector | `via: collector:<name>` on a control | Yes: the stored evidence runs |
+| External tool | `via: tool:<name>` | Yes |
+| Custom check | `via: check:<id>` (HTTP, TLS or command checks) | Yes |
+| Recurring task | `via: task:<name>` | No: the status uses the date the task was last approved or recorded |
+| Document history | `via: git:<path>` | No |
+
+Statuses: **Passing** (the last run found no problems), **Failing** (it found problems), **Stale** (no run recent
+enough for the control's frequency), **Error** (the run stopped), **Not run**, **Not applicable** (the platform is
+turned off). When controls with different frequencies share a test, the test shows the worst status among them: a
+control checked daily needs a more recent run than one checked quarterly.
+
+Each test has an **owner**: the person who answers for it when it fails. An admin sets it on the test's page; the
+change is recorded in the audit log (`test.owner`). Auditors can read every test and its runs; they change nothing.
+
+A control's status is still worked out from its evidence items, and the Tests page reads the same report, so a
+control and its tests always agree. To re-perform a test, an auditor opens a run from the test's history: the run
+page shows the files, their SHA-256 hashes, the signature and the audit-log record.
+
 ## Risk register
 
 Compliance > **Risk register** (admins change it, auditors read it, control owners do not see it). Each risk has
