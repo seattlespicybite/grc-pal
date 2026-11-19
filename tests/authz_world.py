@@ -156,6 +156,17 @@ def build(tmp: Path, base: SqliteStore, tenant: str) -> SimpleNamespace:
         admin, report.build(portal.catalog, portal.evidence, portal.today, portal=portal.report_inputs()), w.test_id,
         f"no-mfa:sam@{tenant}.example", "Service account without interactive sign-in; reviewed for the authz suite.",
         w.exception_expires)["RowKey"]
+    # ---- audit requests: IDs (AR-001...) are numbered per organization, so the second organization gets two
+    # fillers first and its test requests have IDs the first organization does not have.
+    for _ in range(0 if tenant == "acme" else 2):
+        portal.create_audit_request(admin, f"Filler request {tenant}")
+    users_run = portal.evidence.new_run("entra_users", ["IAM-01"], {})
+    users_run.add("users", [{"upn": f"user{i}@{tenant}.example", "enabled": True} for i in range(12)])
+    users_run.finish([])
+    w.pbc_population = users_run.prefix
+    w.pbc_open = portal.create_audit_request(admin, f"Population of users {tenant}", "", "IAM-01")["id"]
+    w.pbc_provided = portal.create_audit_request(admin, f"Access review evidence {tenant}")["id"]
+    portal.answer_audit_request(admin, w.pbc_provided, "The signed review is in this run", w.pbc_population)
     w.section, w.step, w.framework, w.framework_off = "organization", "welcome", "soc2", "iso27001"
     w.admin_email = admin.email
     w.auto_source = next(iter(portal.automated_sources()))

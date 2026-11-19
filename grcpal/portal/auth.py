@@ -40,7 +40,8 @@ ROLE_HELP = {
     "contributor": "Sees only the controls assigned to them or owned by them; uploads evidence and comments. "
                    "No access to configuration",
     "auditor": "Read-only: controls, evidence, comments, overrides, audit log and exports, until the access "
-               "end date. No access to configuration",
+               "end date. On audit requests the auditor also asks, comments, draws samples and accepts or returns "
+               "answers. No access to configuration",
 }
 AUTH_MODES = ("local", "easyauth", "proxy", "dev")
 DEV_COOKIE = "grcpal_dev_user"

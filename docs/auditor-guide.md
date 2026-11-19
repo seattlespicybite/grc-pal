@@ -2,7 +2,8 @@
 
 ## Access
 The auditor gets the **Auditor** role in the GRC-pal portal (an Entra B2B guest account). The role is
-read-only: controls, evidence, comments, overrides, the audit log and exports. Optionally the
+read-only: controls, evidence, comments, overrides, the audit log and exports. The one exception is
+**Audit requests** (below), where the auditor asks, comments, draws samples and decides. Optionally the
 auditor also gets **Storage Blob Data Reader** on the `evidence` container and read access to the
 program repository for the audit period.
 
@@ -117,3 +118,37 @@ Daily runs exist for each day of the period. Gaps (failed runs) are visible as m
 | Reviewers are independent of submitters | In `uploads_and_reviews.csv`, `uploaded_by` never equals `reviewed_by` (enforced by the application) |
 | Exceptions are approved and time-limited | Every row in `overrides.csv` has a justification, an admin author and an expiry within 365 days |
 | Records are complete and unaltered | `audit_chain_verification.json` is ok; spot-check daily `portal_audit` copies against the export |
+
+## Audit requests and samples
+
+**Compliance > Audit requests** is the request list for the cycle. Add a request (a title, optional details,
+controls and a due date), or ask the organization to add the list you sent them. Each request moves through:
+
+| Status | Meaning | Who moves it |
+| --- | --- | --- |
+| Open | Asked, not answered | - |
+| Provided | An admin answered with a note and links to stored evidence runs | An admin |
+| Returned | You returned the answer, saying what is missing | The auditor only |
+| Accepted | You accepted the answer; the request is closed | The auditor only |
+
+Admins cannot accept or return: the organization does not accept its own evidence. Every answer, decision, comment
+and sample is appended to the request's history with the person, their role and the time; nothing can be edited or
+removed. The export holds the list (`audit_requests.csv`) and the full history (`audit_request_log.csv`).
+
+### Drawing a sample you can repeat
+
+On a request, choose the population (an evidence run and one `.csv` file in it) and a size. The portal first checks
+that the file still matches the SHA-256 in the run's manifest, then draws a random seed itself. Rows are numbered
+from 1 in file order (the header is not a row); each row is ranked by the hexadecimal SHA-256 of the text
+`<seed>:<row number>`, and the lowest N are the sample. The seed, the population file's SHA-256 and row count, and
+the chosen rows are stored as a write-once run under `audit_sample/`. To repeat a draw yourself:
+
+```python
+import hashlib
+seed, rows, size = "<seed from sample.json>", 412, 25
+ranked = sorted(range(1, rows + 1), key=lambda n: hashlib.sha256(f"{seed}:{n}".encode()).hexdigest())
+print(sorted(ranked[:size]))   # equals row_numbers in sample.json
+```
+
+Either side can draw, and every draw is kept and shown in the history with who drew it, so a sample drawn twice is
+visible. If you want to be certain nobody re-drew, draw the sample yourself.

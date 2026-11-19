@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% from "_macros.html" import pill, when %}{% block title %}Audit requests{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Audit requests</h1>
+<div class="sub">The auditor's request list for {{ cycle.name }}. {{ summary.total }} requests: {{ summary.counts.open }} open, {{ summary.counts.provided }} waiting for the auditor, {{ summary.counts.returned }} returned, {{ summary.counts.accepted }} accepted{% if summary.overdue %}, {{ summary.overdue }} past due{% endif %}.</div></div>
+<a class="btn ghost small" href="/pbc.csv">Download CSV</a></div>
+
+<div class="card"><form method="get" action="/pbc" class="filters">
+<label>Status<select name="status"><option value="">All</option>{% for k, label in statuses.items() %}<option value="{{ k }}"{{ ' selected' if f_status == k }}>{{ label }} ({{ summary.counts[k] }})</option>{% endfor %}</select></label>
+<div class="actions"><button class="btn ghost small" type="submit">Filter</button></div></form></div>
+
+<div class="card table-wrap mt"><table>
+<thead><tr><th>ID</th><th>Request</th><th>Controls</th><th>Due</th><th>Status</th><th>Asked by</th></tr></thead>
+<tbody>{% for r in rows %}<tr><td class="mono"><a href="/pbc/{{ r.id }}">{{ r.id }}</a></td><td><a href="/pbc/{{ r.id }}">{{ r.title }}</a></td>
+<td>{% for c in r.controls %}<a class="mono" href="/controls/{{ c }}">{{ c }}</a>{{ ' ' }}{% endfor %}</td>
+<td class="nowrap">{{ r.due or '-' }}{% if r.overdue %}<div>{{ pill('overdue', 'Past due') }}</div>{% endif %}</td>
+<td>{{ pill(r.status_css, r.status_label) }}</td><td>{{ r.created_by }}<div class="sub">{{ when(r.created_at) }}</div></td></tr>
+{% else %}<tr><td colspan="6" class="sub">No requests{{ ' with this status' if f_status }}.</td></tr>{% endfor %}</tbody></table></div>
+
+<section class="card mt"><details{{ ' open' if not summary.total }}><summary>Add a request</summary>
+<form method="post" action="/pbc/new" class="mt-s"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label>Request<input name="title" required minlength="5" maxlength="200" placeholder="Population of new hires in the period, with start dates"></label>
+<label>Details <span class="sub">(optional)</span><textarea name="description" rows="3" maxlength="4000"></textarea></label>
+<label>Controls <span class="sub">(optional; IDs separated by spaces)</span><input name="controls" placeholder="IAM-01 IAM-03"></label>
+<label>Due <span class="sub">(optional)</span><input type="date" name="due"></label>
+<div class="actions"><button class="btn" type="submit">Add request</button></div></form></details>
+<p class="sub mt">An admin or the auditor adds requests. An admin answers with evidence; only the auditor accepts or returns an answer.</p></section>
+{% endblock %}

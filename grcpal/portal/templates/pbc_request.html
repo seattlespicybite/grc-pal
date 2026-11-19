@@ -1,0 +1,53 @@
+{% extends "base.html" %}{% from "_macros.html" import pill, when %}{% block title %}{{ r.id }} {{ r.title }}{% endblock %}
+{% set kinds = {'created': 'Asked', 'answered': 'Answered', 'accepted': 'Accepted', 'returned': 'Returned', 'comment': 'Comment', 'sample': 'Sample drawn'} %}
+{% block content %}
+<div class="page-head"><div><h1><span class="mono">{{ r.id }}</span> {{ r.title }}</h1>
+<div class="sub">{{ pill(r.status_css, r.status_label) }} · asked by {{ r.created_by }} {{ when(r.created_at) }}{% if r.due %} · due {{ r.due }}{% endif %}{% if r.overdue %} {{ pill('overdue', 'Past due') }}{% endif %}</div></div>
+<a class="btn ghost small" href="/pbc">All requests</a></div>
+
+<div class="grid g2">
+<section class="card"><h2>Request</h2>
+{% if r.description %}<p>{{ r.description }}</p>{% else %}<p class="sub">No further details.</p>{% endif %}
+<p>{% for c in r.controls %}<a class="mono" href="/controls/{{ c }}">{{ c }}</a>{{ ' ' }}{% else %}<span class="sub">Not linked to a control.</span>{% endfor %}</p>
+{% if r.decided_by %}<p class="sub">Last decision: {{ r.status_label }} by {{ r.decided_by }} {{ when(r.decided_at) }}{% if r.decision_note %}: {{ r.decision_note }}{% endif %}</p>{% endif %}</section>
+
+<section class="card"><h2>Evidence given in answer</h2>
+<table><tbody>{% for e in r.evidence %}<tr><td class="mono"><a href="/evidence/{{ e }}">{{ e }}</a></td></tr>
+{% else %}<tr><td class="sub">Nothing linked yet.</td></tr>{% endfor %}</tbody></table>
+<p class="sub mt">Each line is a write-once evidence run: open it for the files, their hashes and the integrity check.</p></section>
+</div>
+
+<section class="card mt"><h2>History</h2><div class="table-wrap"><table>
+<thead><tr><th>When</th><th>Who</th><th>What</th><th>Note</th></tr></thead>
+<tbody>{% for e in r.log %}<tr><td class="nowrap">{{ when(e.at) }}</td><td>{{ e.by }}<div class="sub">{{ role_labels.get(e.role, e.role) }}</div></td>
+<td>{{ kinds.get(e.kind, e.kind) }}</td><td>{{ e.text }}{% for x in e.evidence or [] %}<div class="sub mono"><a href="/evidence/{{ x }}">{{ x }}</a></div>{% endfor %}{% if e.seed %}<div class="sub mono">seed {{ e.seed }}</div>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+<p class="sub mt">Nothing in this history can be edited or removed.</p></section>
+
+{% if r.status != 'accepted' %}<div class="grid g2 mt">
+{% if user.is_admin %}<section class="card"><h2>Answer</h2>
+<form method="post" action="/pbc/{{ r.id }}/answer"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label>What you are providing<textarea name="note" required minlength="10" rows="3" maxlength="4000"></textarea></label>
+<label>Evidence runs <span class="sub">(one per line, written source/run as on the Evidence store page)</span><textarea name="evidence" rows="3" class="mono" placeholder="entra_users/2026-06-30T060000Z"></textarea></label>
+<div class="actions"><button class="btn" type="submit">Send answer to the auditor</button></div></form></section>{% endif %}
+
+{% if user.is_auditor and r.status == 'provided' %}<section class="card"><h2>Decision</h2>
+<form method="post" action="/pbc/{{ r.id }}/decide"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label>Note <span class="sub">(required when returning: what is missing)</span><textarea name="note" rows="3" maxlength="4000"></textarea></label>
+<div class="actions"><button class="btn" name="decision" value="accept" type="submit">Accept</button>
+<button class="btn ghost" name="decision" value="return" type="submit">Return</button></div></form></section>
+{% elif user.is_admin and r.status == 'provided' %}<section class="card"><h2>Decision</h2><p class="sub">Waiting for the auditor. Only the auditor accepts or returns an answer: the organization does not accept its own evidence.</p></section>{% endif %}
+
+<section class="card"><h2>Draw a sample</h2>
+<form method="post" action="/pbc/{{ r.id }}/sample"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label>Population: evidence run <span class="sub">(source/run)</span><input name="population" required class="mono" placeholder="entra_users/2026-06-30T060000Z"></label>
+<label>File in that run <span class="sub">(a .csv file)</span><input name="file" required class="mono" placeholder="users.csv"></label>
+<label>Sample size <span class="sub">(up to {{ max_sample }})</span><input type="number" name="size" required min="1" max="{{ max_sample }}" value="25"></label>
+<div class="actions"><button class="btn ghost" type="submit">Draw sample</button></div></form>
+<p class="sub mt">The server picks a random seed; nobody chooses it. {{ method }} The seed, the file's SHA-256 and the chosen rows are stored as evidence, and every draw is kept.</p></section>
+
+<section class="card"><h2>Comment</h2>
+<form method="post" action="/pbc/{{ r.id }}/comment"><input type="hidden" name="csrf" value="{{ csrf }}">
+<label>Comment<textarea name="text" required minlength="2" rows="3" maxlength="4000"></textarea></label>
+<div class="actions"><button class="btn ghost" type="submit">Add comment</button></div></form></section>
+</div>{% endif %}
+{% endblock %}

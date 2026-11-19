@@ -52,6 +52,9 @@ the person who defines controls from the people who operate them, which auditors
 | Vendors: assurance level and baseline controls on a review; Entra ID sign-in check when offboarding | ✓ | own vendors |  |
 | Vendors: record a business owner's risk acceptance | ✓ |  |  |
 | Vendors: sign off a review, approve or reject a new vendor, close offboarding | ✓, never a review they submitted while another admin is active |  |  |
+| Audit requests: see the list and each request's history; add a request; comment; draw a sample | ✓ |  | ✓ |
+| Audit requests: answer a request by linking evidence runs | ✓ |  |  |
+| Audit requests: accept or return an answer |  |  | ✓ (only the auditor) |
 | People: see every person with their checks; download the population as CSV | ✓ |  | ✓ |
 | People: mark a person out of scope, or back in, with a reason | ✓ |  |  |
 | Tests: see every test, its controls, owner and run history | ✓ |  | ✓ |

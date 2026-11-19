@@ -95,6 +95,11 @@ PARAMS: dict[str, dict[str, str]] = {
     "/policies/doc/{did}/ack": {"did": "doc_pub"},
     "/policies/doc/{did}/request": {"did": "doc_pub"},
     "/policies/doc/{did}/audience": {"did": "doc_pub"},
+    "/pbc/{rid}": {"rid": "pbc_open"},
+    "/pbc/{rid}/answer": {"rid": "pbc_open"},
+    "/pbc/{rid}/comment": {"rid": "pbc_open"},
+    "/pbc/{rid}/sample": {"rid": "pbc_open"},
+    "/pbc/{rid}/decide": {"rid": "pbc_provided"},
     "/tests/{tid}": {"tid": "test_id"},
     "/tests/{tid}/owner": {"tid": "test_id"},
     "/tests/{tid}/exceptions": {"tid": "test_id"},
@@ -270,6 +275,11 @@ FORMS: dict[tuple[str, str], object] = {
     ("POST", "/policies/doc/{did}/ack"): lambda w: {"vid": w.portal.published_document(w.who["admin"], w.doc_pub)["vid"], "read": "1"},
     ("POST", "/policies/doc/{did}/request"): {},
     ("POST", "/policies/doc/{did}/audience"): {"ack": "admins"},
+    ("POST", "/pbc/new"): {"title": "Evidence of the backup restore test", "controls": "IAM-01"},
+    ("POST", "/pbc/{rid}/answer"): lambda w: {"note": "The export for the period", "evidence": w.pbc_population},
+    ("POST", "/pbc/{rid}/comment"): {"text": "A comment from the authz suite"},
+    ("POST", "/pbc/{rid}/sample"): lambda w: {"population": w.pbc_population, "file": "users.csv", "size": "2"},
+    ("POST", "/pbc/{rid}/decide"): {"decision": "return", "note": "The period is not shown in the file"},
     ("POST", "/people/scope"): lambda w: {"email": w.admin2_email, "out": "1", "reason": "Shared account, authz suite"},
     ("POST", "/tests/{tid}/owner"): lambda w: {"owner": w.admin2_email},
     ("POST", "/tests/{tid}/exceptions"): lambda w: {
@@ -350,6 +360,12 @@ FORMS: dict[tuple[str, str], object] = {
 # is enforced in service.py / features.py (hidden buttons are not authorization, CLAUDE.md rule 1).
 OWNER_OF = frozenset({"admin", "owner"})                      # the object's own owner, or an admin
 OWNER_OR_READER = frozenset({"admin", "owner", "auditor"})    # an admin, the object's owner, or an auditor (read only)
+# The only POSTs an auditor may make besides their own sign-in settings: the audit request list, where the auditor
+# asks, comments, draws samples and decides (grcpal/portal/auditrequests.py). tests/test_authz.py checks that the
+# table allows the auditor role on exactly these routes, so a new auditor write cannot slip in unnoticed.
+AUDITOR_WRITES = frozenset({("POST", "/pbc/new"), ("POST", "/pbc/{rid}/comment"), ("POST", "/pbc/{rid}/sample"),
+                            ("POST", "/pbc/{rid}/decide")})
+AUDITOR_ONLY = frozenset({"auditor"})                         # the auditor's own decision. Not even an admin.
 OWNER_ONLY = frozenset({"owner"})                             # a named person: reviewer, approver. Not even an admin.
 
 _GROUPS: list[tuple[frozenset, str]] = [
@@ -369,7 +385,7 @@ _GROUPS: list[tuple[frozenset, str]] = [
            POST /policies/doc/{did}/request | POST /policies/doc/{did}/audience
            POST /risks/new | POST /risks/{rid} | POST /risks/{rid}/review | POST /risks/approve | POST /risks/import
            POST /tests/{tid}/owner | POST /tests/{tid}/exceptions | POST /tests/exceptions/{xid}/revoke
-           POST /people/scope
+           POST /people/scope | POST /pbc/{rid}/answer
            POST /ai/audits | POST /assignments | POST /assignments/{assignment_id}/cancel
            POST /assignments/{assignment_id}/edit | POST /assignments/{assignment_id}/remind
            POST /backups/download | POST /backups/kit | POST /backups/now | POST /backups/restore
@@ -407,7 +423,12 @@ _GROUPS: list[tuple[frozenset, str]] = [
             GET /library/trash | GET /library/{did}/files/{vid} | GET /logs | GET /logs.csv | GET /matrix
             GET /matrix/data.xlsx | GET /matrix/report | GET /matrix/report.docx | GET /overrides | GET /users.csv
             GET /policies/acknowledgements.csv | GET /risks | GET /risks.csv | GET /risks/{rid}
-            GET /tests | GET /tests/{tid} | GET /tests/exceptions | GET /people | GET /people.csv"""),
+            GET /tests | GET /tests/{tid} | GET /tests/exceptions | GET /people | GET /people.csv
+            GET /pbc | GET /pbc.csv | GET /pbc/{rid}"""),
+    # --- audit requests: the one place an auditor writes. Admins and auditors ask, comment and draw samples;
+    #     only the auditor accepts or returns an answer (an admin answering is in the admin group above).
+    (AU, """POST /pbc/new | POST /pbc/{rid}/comment | POST /pbc/{rid}/sample"""),
+    (AUDITOR_ONLY, """POST /pbc/{rid}/decide"""),
     # --- everyone who is signed in and active (what they see is filtered to what is theirs)
     (EVERYONE, """GET / | GET /access-reviews | GET /access-reviews/template.csv | GET /controls | GET /kb
                   GET /kb/{crit_id} | GET /library | GET /policies | GET /policies/{policy_id} | GET /vendors

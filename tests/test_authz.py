@@ -234,10 +234,12 @@ def test_table_is_well_formed():
             f"{key}: anonymous, expired auditors and disabled admins are never allowed anywhere")
 
 
-def test_auditors_never_write():
-    """An auditor reads. No POST in the table allows the auditor role, except their own two-step sign-in."""
-    assert [k for k, roles in M.EXPECT.items()
-            if k[0] == "POST" and "auditor" in roles and k not in M.SELF_SERVICE] == []
+def test_auditors_write_only_on_audit_requests():
+    """An auditor reads. The only POSTs the table allows the auditor role are their own two-step sign-in and the
+    audit request list (asking, commenting, sampling, deciding): exactly M.AUDITOR_WRITES, nothing more."""
+    assert {k for k, roles in M.EXPECT.items()
+            if k[0] == "POST" and "auditor" in roles and k not in M.SELF_SERVICE} == set(M.AUDITOR_WRITES)
+    assert all(path.startswith("/pbc/") for _, path in M.AUDITOR_WRITES)
 
 
 # ====================================================================================== route x role
