@@ -20,10 +20,11 @@ def register(app, h) -> None:
         except Forbidden as exc:
             raise h.HTTPError(403, str(exc)) from exc
         summary = p().test_summary(rows)
-        shown = [t for t in rows if (not status or t["status"] == status) and (not kind or t["kind"] == kind)
+        shown = [t for t in rows if (not status or t["status"] == status or (status == "due_soon" and t.get("due_soon")))
+                 and (not kind or t["kind"] == kind)
                  and (not owner or (t["owner"] == owner if owner != "none" else not t["owner"]))]
         return render(request, user, "tests.html", nav_active="tests", rows=shown, summary=summary,
-                      f_status=status if status in T.STATUS_LABELS else "", f_kind=kind if kind in T.KINDS else "",
+                      f_status=status if status in T.STATUS_LABELS or status == "due_soon" else "", f_kind=kind if kind in T.KINDS else "",
                       f_owner=owner, statuses=T.STATUS_LABELS, kinds=T.KINDS,
                       owners=sorted({t["owner"] for t in rows if t["owner"]}))
 

@@ -466,6 +466,27 @@ A control's status is still worked out from its evidence items, and the Tests pa
 control and its tests always agree. To re-perform a test, an auditor opens a run from the test's history: the run
 page shows the files, their SHA-256 hashes, the signature and the audit-log record.
 
+### Manual evidence: when the work was done, how long it counts, when it is due again
+
+Evidence a person provides (a recurring task, a file uploaded on a control or a request) is judged by **the day the
+work was done**, not the day it was recorded. The upload form asks for that date; it defaults to today, cannot be in
+the future and is written into the upload's signed manifest, so an auditor sees it with the file.
+
+| Control frequency | Evidence counts for | "Due soon" starts |
+| --- | --- | --- |
+| Monthly | 35 days from the work date | 7 days before the end |
+| Quarterly | 100 days | 14 days before |
+| Annual | 380 days | 30 days before |
+| Continuous, daily, weekly, per event | no window for uploads | - |
+
+The few extra days (35, not 30) are a tolerance so that work done a little late in one period does not fail the
+control at once. **Due soon** is a warning, not a failure: the item still passes. After the window the item is
+**Stale**. An expired upload makes a control "Needs attention" only when the control has no other evidence in good
+standing; an old file next to passing automated tests is just old extra evidence.
+
+Example: an annual policy review done on 15 March 2026 and uploaded on 10 April 2026 counts from 15 March and is
+valid until 30 March 2027, whatever the upload date.
+
 ### Failing resources and exceptions for one resource
 
 For collectors, tools and custom checks, the test's page lists the **failing resources in the last run**: each

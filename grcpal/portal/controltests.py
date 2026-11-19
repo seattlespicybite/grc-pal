@@ -97,6 +97,9 @@ class ControlTestsMixin:
                 t["last"] = max(filter(None, (t["last"], item.get("last"))), default=None)
                 t["findings"] = max(t["findings"], int(item.get("findings") or 0))
                 t["excepted"] = max(t.get("excepted", 0), int(item.get("excepted") or 0))
+                if item.get("due"):  # manual work: the earliest date any control needs it done again
+                    t["due"] = min(filter(None, (t.get("due"), item["due"])))
+                    t["due_soon"] = t.get("due_soon", False) or bool(item.get("due_soon"))
         for t in tests.values():
             t["status_label"], t["status_css"] = STATUS_LABELS[t["status"]], STATUS_CSS[t["status"]]
             t["status_help"] = STATUS_HELP[t["status"]]
@@ -139,7 +142,8 @@ class ControlTestsMixin:
         counts = {s: 0 for s in STATUS_ORDER}
         for t in tests:
             counts[t["status"]] += 1
-        return {"counts": counts, "total": len(tests), "unowned": sum(1 for t in tests if not t["owner"])}
+        return {"counts": counts, "total": len(tests), "unowned": sum(1 for t in tests if not t["owner"]),
+                "due_soon": sum(1 for t in tests if t.get("due_soon"))}
 
     def set_test_owner(self, actor: User, health: dict, tid: str, email: str) -> dict:
         """Name the person answerable for a test's status (empty to clear). Admins only."""

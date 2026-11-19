@@ -56,6 +56,7 @@ RUN_ID = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{6}Z$")
 SLUG = re.compile(r"[^a-z0-9]+")
 MIN_JUSTIFICATION = 30
 MAX_OVERRIDE_DAYS = 365
+MAX_PERFORMED_AGE_DAYS = 3 * 365   # an upload cannot claim work done longer ago than this
 REMINDER_COOLDOWN_HOURS = 12
 OPEN_STATES = ("open", "returned", "submitted")
 APPROVAL_NOTE_ERROR = ("Add an approval note: who approved this evidence and when, for example "
@@ -644,13 +645,30 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Automat
         self.audit(actor, "assignment.cancel", assignment_id, {"controls": a["controls"], "reason": reason[:500]})
 
     # ================================================================ uploads and review
+    def _performed_on(self, value: str) -> str:
+        """The day the work shown in an upload was done (YYYY-MM-DD). Empty means today. Evidence is judged by this
+        date, not by when the file was uploaded, so it cannot be in the future."""
+        value = (value or "").strip()
+        if not value:
+            return self.today.isoformat()
+        try:
+            day = dt.date.fromisoformat(value)
+        except ValueError as exc:
+            raise Invalid("The date the work was done must be YYYY-MM-DD") from exc
+        if day > self.today:
+            raise Invalid("The date the work was done cannot be in the future")
+        if day < self.today - dt.timedelta(days=MAX_PERFORMED_AGE_DAYS):
+            raise Invalid(f"The date the work was done cannot be more than {MAX_PERFORMED_AGE_DAYS // 365} years ago")
+        return day.isoformat()
+
     def upload(self, actor: User, filename: str, data: bytes, note: str, *, assignment_id: str | None = None,
-               control_id: str | None = None, approval_note: str = "") -> dict:
+               control_id: str | None = None, approval_note: str = "", performed_on: str = "") -> dict:
         """Store evidence write-once. Admins own the program and upload evidence that is already approved, so
         their upload is approved on upload and must say who approved it and when; uploads from control owners
         wait for any admin to review them."""
         a = None
         approval_note = (approval_note or "").strip()
+        performed = self._performed_on(performed_on)
         if actor.is_admin and len(approval_note) < 10:
             raise Invalid(APPROVAL_NOTE_ERROR)
         if assignment_id:
@@ -677,13 +695,15 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Automat
         cycle = self.active_cycle()["RowKey"]
         run = self.evidence.new_run("portal_upload", controls, {
             "uploaded_by": actor.email, "assignment": a["RowKey"] if a else None, "cycle": cycle,
-            "target": a["target_id"] if a else control_id, "comment": (note or "")[:2000]})
+            "target": a["target_id"] if a else control_id, "comment": (note or "")[:2000],
+            "performed_on": performed})
         run.add_bytes(name, data)
         manifest = run.finish([])
         u = {"PartitionKey": "u", "RowKey": uuid.uuid4().hex, "cycle": cycle, "assignment": a["RowKey"] if a else "",
              "controls": controls, "target_id": a["target_id"] if a else control_id, "filename": name,
              "evidence_run": run.prefix, "sha256": manifest["files"][0]["sha256"], "size": len(data),
              "comment": (note or "").strip()[:2000], "uploaded_by": actor.email, "uploaded_at": _now(),
+             "performed_on": performed,
              "status": "pending", "reviewed_by": "", "reviewed_at": "", "review_note": "",
              "approved_on_upload": False}
         self.store.insert("uploads", u)
@@ -1034,9 +1054,11 @@ class Portal(FeaturesMixin, MatrixMixin, CalendarMixin, AutomationMixin, Automat
         uploads: dict[str, str] = {}
         for u in self.store.list("uploads", "u"):
             if u["status"] == "approved":
+                # the day the work was done; uploads from before that field existed count from their approval
+                done = u.get("performed_on") or u["reviewed_at"][:10]
                 for c in u["controls"]:
-                    if u["reviewed_at"] > uploads.get(c, ""):
-                        uploads[c] = u["reviewed_at"]
+                    if done > uploads.get(c, ""):
+                        uploads[c] = done
         from grcpal.collectors import disabled_sources
 
         return {"overrides": self.active_overrides(), "tasks": tasks, "uploads": uploads,

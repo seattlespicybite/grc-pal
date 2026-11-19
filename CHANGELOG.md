@@ -4,7 +4,22 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Changed
+- **Manual evidence is judged by when the work was done, and it expires.** The upload form asks "When was this
+  work done?" (today by default, never in the future, at most three years back). An approved upload now counts from
+  that date, not from the day it was uploaded or approved; the date is also written into the upload's signed
+  manifest. On a monthly, quarterly or annual control the upload is valid for the control's window (35, 100 or 380
+  days) and then shows as **Stale** with the date it expired. Before, an approved upload counted for ever.
+  An expired upload fails a control only when the control has no other evidence in good standing. Controls with
+  other frequencies are unchanged. Uploads made before this release count from their approval date.
+  **After upgrading, controls whose only evidence is an old upload will show "Needs attention" until current
+  evidence is uploaded.**
+
 ### Added
+- **Next due date and a "Due soon" warning for manual evidence.** Recurring tasks and uploads on monthly, quarterly
+  and annual controls show the date they are valid until. In the last 7, 14 or 30 days of the window (monthly,
+  quarterly, annual) they are flagged **Due soon**: still passing, renew now. The Tests page has a **Next due**
+  column and a **Due soon** filter; the control page shows "valid until" next to each item.
 - **Failing resources per test, and exceptions scoped to one resource.** A test's page now lists the findings of
   its latest run (the user, device or repository that failed, with severity). An admin can accept one finding for
   a limited time, with a reason of at least 30 characters and an expiry date at most 365 days ahead: that finding
