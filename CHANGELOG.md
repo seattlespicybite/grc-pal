@@ -16,6 +16,19 @@ All notable changes are listed here. The project follows [semantic versioning](h
   evidence is uploaded.**
 
 ### Added
+- **Audit requests: the auditor's request list, worked in GRC-pal.** **Compliance > Audit requests** holds each
+  request with a status: Open, Provided (an admin answered), Returned or Accepted (the auditor decided). An admin
+  or the auditor adds requests, comments and draws samples; only an admin answers, by linking stored evidence runs
+  with a note; **only the auditor accepts or returns an answer**, so the organization never accepts its own
+  evidence. Samples are reproducible: the population is a CSV file of a stored evidence run, the server draws the
+  seed, rows are ranked by SHA-256 of `<seed>:<row number>`, and the seed, the file's hash and the chosen rows are
+  stored as write-once evidence (`audit_sample/`); every draw is kept. Nothing in a request's history can be edited
+  or removed. The cycle export gains `audit_requests.csv` and `audit_request_log.csv`; audit actions are
+  `audit_request.create`, `.answer`, `.accept`, `.return`, `.comment`, `.sample`. **This is the first place the
+  Auditor role writes**; everywhere else auditors stay read-only, and an auditor past the access end date cannot
+  sign in. New tables `auditrequests`, `auditrequestlog` (no migration needed; included in backups). Not included:
+  email when a request changes, file upload straight onto a request (upload on the control, then link the run),
+  requests visible to control owners.
 - **People view: one row per person.** **Compliance > People** joins the latest directory, MFA, device and leaver
   evidence with GRC-pal's own users and policy acknowledgments, by sign-in name. Each person shows the account
   state, join date (with a "New joiner" flag for 90 days), last sign-in and checks: MFA registered, devices

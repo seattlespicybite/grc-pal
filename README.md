@@ -110,7 +110,7 @@ flowchart LR
 | **Admin** | Runs the program: assign and change requests, review evidence from Control owners, upload already-approved evidence with an approval note, override a control with justification and expiry, send reminders, manage users, cycles, frameworks in use and connections |
 | **Control library owner** | One admin (can be the same person) who alone changes control definitions: owners, title, description, evidence wanted, framework mappings, custom controls and custom frameworks |
 | **Control owner** | Sees only the controls assigned to them or owned by them; uploads evidence, comments, acknowledges policies |
-| **Auditor** | Read-only: controls, evidence, comments, overrides, control history, audit log, exports; access ends on a set date |
+| **Auditor** | Read-only: controls, evidence, comments, overrides, control history, audit log, exports; on audit requests also asks, comments, draws samples and accepts or returns answers; access ends on a set date |
 
 Every rule is enforced on the server and every change is in the audit log. Details:
 [docs/roles.md](docs/roles.md).
