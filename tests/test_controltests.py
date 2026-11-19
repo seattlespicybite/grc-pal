@@ -1,6 +1,12 @@
 """Tests page: each evidence item shown once as a test, with status, owner and run history."""
 from __future__ import annotations
 
+import csv
+import datetime as dt
+import io
+import json
+import zipfile
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -33,6 +39,7 @@ def collect(portal, source="entra_mfa", findings=(), status="ok", error=None):
     return run
 
 
+TID = "collector-entra_mfa"
 FINDING = {"key": "no-mfa:pat@example.com", "severity": "medium", "title": "Member without MFA: pat@example.com", "detail": {}}
 
 
@@ -162,5 +169,164 @@ def test_pages_render_filter_and_link(env):
     assert "/tests/" not in client.get("/controls").text
 
 
-def test_table_is_registered():
-    assert "testmeta" in TABLES
+# ================================================================ failing resources and scoped exceptions
+F2 = {"key": "no-mfa:sam@example.com", "severity": "high", "title": "Member without MFA: sam@example.com", "detail": {}}
+REASON = "Shared mailbox account with sign-in blocked; removal is tracked in the access review."
+
+
+def expiry(portal, days=30):
+    return (portal.today + dt.timedelta(days=days)).isoformat()
+
+
+def test_failing_resources_come_from_the_latest_run(tmp_path):
+    portal = make_portal(tmp_path)
+    collect(portal, findings=[FINDING, F2])
+    t = portal.control_test(ADMIN, health(portal), TID)
+    assert [r["key"] for r in t["resources"]] == [F2["key"], FINDING["key"]]  # high before medium
+    assert t["resources_total"] == 2 and all(r["exception"] is None for r in t["resources"])
+    collect(portal, findings=[FINDING])
+    assert [r["key"] for r in portal.control_test(ADMIN, health(portal), TID)["resources"]] == [FINDING["key"]]
+
+
+def test_exception_accepts_one_resource_and_leaves_the_rest_failing(tmp_path):
+    portal = make_portal(tmp_path)
+    collect(portal, findings=[FINDING, F2])
+    x = portal.create_test_exception(ADMIN, health(portal), TID, FINDING["key"], REASON, expiry(portal))
+    t = portal.control_test(ADMIN, health(portal), TID)
+    assert (t["status"], t["findings"], t["excepted"]) == ("failing", 1, 1)
+    assert {r["key"]: bool(r["exception"]) for r in t["resources"]} == {F2["key"]: False, FINDING["key"]: True}
+    portal.create_test_exception(ADMIN, health(portal), TID, F2["key"], REASON, expiry(portal))
+    data = health(portal)
+    t = portal.control_test(ADMIN, data, TID)
+    assert (t["status"], t["findings"], t["excepted"]) == ("passing", 0, 2)
+    for c in t["controls"]:  # the controls follow the test
+        item = next(i for i in next(k for k in data["controls"] if k["id"] == c["id"])["evidence"]
+                    if i["via"] == "collector:entra_mfa")
+        assert (item["status"], item["findings"], item["excepted"]) == ("ok", 0, 2)
+    assert x["evidence_run"].startswith("portal_test_exception/") and x["source"] == "entra_mfa"
+    rec = next(r for r in reversed(portal.log.records()) if r["action"] == "test.exception.create")
+    assert rec["target"] == TID and rec["detail"]["key"] == F2["key"] and rec["detail"]["expires"] == expiry(portal)
+
+
+def test_a_new_finding_is_not_covered_by_an_old_exception(tmp_path):
+    portal = make_portal(tmp_path)
+    collect(portal, findings=[FINDING])
+    portal.create_test_exception(ADMIN, health(portal), TID, FINDING["key"], REASON, expiry(portal))
+    assert portal.control_test(ADMIN, health(portal), TID)["status"] == "passing"
+    collect(portal, findings=[FINDING, F2])
+    t = portal.control_test(ADMIN, health(portal), TID)
+    assert (t["status"], t["findings"], t["excepted"]) == ("failing", 1, 1)
+
+
+def test_exception_ends_on_its_expiry_date_and_on_revocation(tmp_path):
+    portal = make_portal(tmp_path)
+    collect(portal, findings=[FINDING])
+    x = portal.create_test_exception(ADMIN, health(portal), TID, FINDING["key"], REASON, expiry(portal, 10))
+    assert portal.active_test_exception_keys() == {"entra_mfa": {FINDING["key"]}}
+    portal._today = portal.today + dt.timedelta(days=10)
+    assert portal.active_test_exception_keys() == {} and portal.test_exceptions()[0]["state"] == "expired"
+    assert portal.control_test(ADMIN, health(portal), TID)["status"] in ("failing", "stale")
+    portal._today = portal.today - dt.timedelta(days=10)
+    portal.revoke_test_exception(ADMIN, x["RowKey"], "Account removed")
+    row = portal.test_exceptions()[0]
+    assert (row["state"], row["revoked_by"], row["revoke_reason"]) == ("revoked", ADMIN.email, "Account removed")
+    assert portal.control_test(ADMIN, health(portal), TID)["status"] == "failing"
+    assert portal.log.records()[-1]["action"] == "test.exception.revoke"
+    with pytest.raises(Invalid):
+        portal.revoke_test_exception(ADMIN, x["RowKey"], "again")
+    portal.create_test_exception(ADMIN, health(portal), TID, FINDING["key"], REASON, expiry(portal))  # can be renewed
+
+
+def test_exception_rules(tmp_path):
+    portal = make_portal(tmp_path)
+    collect(portal, findings=[FINDING])
+    data = health(portal)
+    bad = [(FINDING["key"], "too short", expiry(portal)), (FINDING["key"], REASON, "not-a-date"),
+           (FINDING["key"], REASON, portal.today.isoformat()), (FINDING["key"], REASON, expiry(portal, 366)),
+           ("no-mfa:never-seen@example.com", REASON, expiry(portal)), ("", REASON, expiry(portal))]
+    for key, reason, exp in bad:
+        with pytest.raises(Invalid):
+            portal.create_test_exception(ADMIN, data, TID, key, reason, exp)
+    with pytest.raises(Invalid):  # tasks have no findings to accept
+        portal.create_test_exception(ADMIN, data, "task-policy-review", FINDING["key"], REASON, expiry(portal))
+    for who in (CONTRIB, AUDITOR):
+        with pytest.raises(Forbidden):
+            portal.create_test_exception(who, data, TID, FINDING["key"], REASON, expiry(portal))
+    assert portal.test_exceptions() == []
+    x = portal.create_test_exception(ADMIN, data, TID, FINDING["key"], REASON, expiry(portal))
+    with pytest.raises(Invalid):  # one active exception per finding
+        portal.create_test_exception(ADMIN, health(portal), TID, FINDING["key"], REASON, expiry(portal))
+    for who in (CONTRIB, AUDITOR):
+        with pytest.raises(Forbidden):
+            portal.revoke_test_exception(who, x["RowKey"], "not mine to revoke")
+    with pytest.raises(Forbidden):
+        portal.list_test_exceptions(CONTRIB)
+    for xid, reason in ((x["RowKey"], "no"), ("nope", "a good reason"), ("0" * 32, "a good reason")):
+        with pytest.raises(Invalid):
+            portal.revoke_test_exception(ADMIN, xid, reason)
+    assert portal.list_test_exceptions(AUDITOR)[0]["active"]
+
+
+def test_exceptions_are_per_organization(tmp_path):
+    from grcpal.portal.store import SqliteStore
+
+    base = SqliteStore()
+    acme, beta = make_portal(tmp_path, "acme", base), make_portal(tmp_path, "beta", base)
+    for portal in (acme, beta):
+        collect(portal, findings=[FINDING])
+    x = acme.create_test_exception(ADMIN, health(acme), TID, FINDING["key"], REASON, expiry(acme))
+    assert beta.test_exceptions() == [] and beta.active_test_exception_keys() == {}
+    assert beta.control_test(ADMIN, health(beta), TID)["status"] == "failing"
+    with pytest.raises(Invalid):
+        beta.revoke_test_exception(ADMIN, x["RowKey"], "other organization")
+    assert acme.test_exceptions()[0]["active"]
+
+
+def test_exception_is_evidence_and_in_the_auditor_export(tmp_path):
+    portal = make_portal(tmp_path)
+    collect(portal, findings=[FINDING])
+    x = portal.create_test_exception(ADMIN, health(portal), TID, FINDING["key"], REASON, expiry(portal))
+    source, run = x["evidence_run"].split("/")
+    stored = json.loads(portal.evidence_file(source, run, "exception.json"))
+    assert stored["key"] == FINDING["key"] and stored["reason"] == REASON and stored["created_by"] == ADMIN.email
+    z = zipfile.ZipFile(io.BytesIO(portal.export_cycle(AUDITOR, portal.active_cycle()["RowKey"])))
+    rows = list(csv.DictReader(io.StringIO(z.read("test_exceptions.csv").decode())))
+    assert len(rows) == 1 and rows[0]["test"] == TID and rows[0]["key"] == FINDING["key"] and rows[0]["expires"] == x["expires"]
+    assert "test_exceptions.csv" in z.read("README.txt").decode()
+
+
+def test_exception_pages(env):
+    portal, client = env
+    collect(portal, findings=[FINDING, F2])
+    as_(client, ADMIN)
+    page = client.get(f"/tests/{TID}")
+    assert FINDING["key"] in page.text and "Accept for a limited time" in page.text
+    token = csrf(client, "/tests")
+    r = client.post(f"/tests/{TID}/exceptions", follow_redirects=False,
+                    data={"csrf": token, "key": FINDING["key"], "reason": REASON, "expires": expiry(portal)})
+    assert r.status_code == 303 and "err=" not in r.headers["location"]
+    xid = portal.test_exceptions()[0]["RowKey"]
+    assert "1 accepted by exception" in client.get("/tests").text
+    assert "accepted by exception" in client.get("/controls/IAM-02").text
+    listing = client.get("/tests/exceptions")
+    assert FINDING["key"] in listing.text and REASON in listing.text and "Revoke" in listing.text
+    r = client.post(f"/tests/{TID}/exceptions", follow_redirects=False,
+                    data={"csrf": token, "key": F2["key"], "reason": "short", "expires": expiry(portal)})
+    assert "err=" in r.headers["location"] and len(portal.test_exceptions()) == 1
+    assert client.post(f"/tests/{TID}/exceptions", data={"key": F2["key"]}, follow_redirects=False).status_code == 403
+    as_(client, AUDITOR)
+    assert "Revoke exception" not in client.get("/tests/exceptions").text
+    assert "Accept for a limited time" not in client.get(f"/tests/{TID}").text
+    token = csrf(client, "/tests")
+    assert client.post(f"/tests/exceptions/{xid}/revoke", data={"csrf": token, "reason": "auditor tries"},
+                       follow_redirects=False).status_code == 403
+    as_(client, CONTRIB)
+    assert client.get("/tests/exceptions").status_code == 403
+    as_(client, ADMIN)
+    token = csrf(client, "/tests")
+    r = client.post(f"/tests/exceptions/{xid}/revoke", data={"csrf": token, "reason": "Account removed"}, follow_redirects=False)
+    assert r.status_code == 303 and portal.test_exceptions()[0]["state"] == "revoked"
+
+
+def test_tables_are_registered():
+    assert {"testmeta", "testexceptions"} <= set(TABLES)

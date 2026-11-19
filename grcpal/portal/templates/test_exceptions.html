@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% from "_macros.html" import pill, when %}{% block title %}Test exceptions{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Test exceptions</h1>
+<div class="sub">Findings an admin accepted for a limited time ({{ rows|selectattr('active')|list|length }} active, {{ rows|length }} in total). An exception covers one resource of one test, ends by itself on its expiry date, and is kept here with its reason after that.</div></div>
+<a class="btn ghost small" href="/tests">All tests</a></div>
+
+<div class="card table-wrap"><table>
+<thead><tr><th>Test</th><th>Resource</th><th>Reason</th><th>State</th><th>Expires</th><th>Recorded</th><th></th></tr></thead>
+<tbody>{% for x in rows %}<tr><td><a class="mono" href="/tests/{{ x.test }}">{{ x.test }}</a><div class="sub">{% for c in x.controls %}{{ c }} {% endfor %}</div></td>
+<td class="mono">{{ x.key }}<div class="sub">{{ x.title }}</div></td><td>{{ x.reason }}</td>
+<td>{{ pill('accepted' if x.active else 'na', x.state|capitalize) }}{% if x.revoked %}<div class="sub">{{ x.revoked_by }} {{ when(x.revoked_at) }}: {{ x.revoke_reason }}</div>{% endif %}</td>
+<td class="nowrap">{{ x.expires }}</td><td>{{ x.created_by }}<div class="sub">{{ when(x.created_at) }}</div></td>
+<td>{% if x.active and user.is_admin %}<details><summary>Revoke</summary><form method="post" action="/tests/exceptions/{{ x.RowKey }}/revoke" class="mt-s">
+<input type="hidden" name="csrf" value="{{ csrf }}"><label>Reason<input name="reason" required minlength="5"></label>
+<div class="actions"><button class="btn ghost small" type="submit">Revoke exception</button></div></form></details>{% endif %}</td></tr>
+{% else %}<tr><td colspan="7" class="sub">No exceptions recorded.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

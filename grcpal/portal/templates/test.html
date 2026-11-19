@@ -9,7 +9,7 @@
 <p>{{ pill(t.status_css, t.status_label) }} <span class="sub">{{ t.status_help }}{% if t.note %} ({{ t.note }}){% endif %}.</span></p>
 <table><tbody>
 <tr><td>Last run or completion</td><td class="mono">{{ t.last or '-' }}</td></tr>
-<tr><td>Findings in the last run</td><td>{{ t.findings }}</td></tr>
+<tr><td>Open findings in the last run</td><td>{{ t.findings }}{% if t.excepted %} <span class="sub">(+ {{ t.excepted }} accepted by exception)</span>{% endif %}</td></tr>
 <tr><td>Evidence item</td><td class="mono">{{ t.via }}</td></tr>
 </tbody></table>
 <p class="sub mt">The status is the worst one among the controls below: a control checked every day needs a more recent run than one checked every quarter.</p></section>
@@ -26,6 +26,21 @@
 <thead><tr><th>ID</th><th>Control</th><th>Frequency</th><th>In scope</th></tr></thead>
 <tbody>{% for c in t.controls %}<tr><td><a class="mono" href="/controls/{{ c.id }}">{{ c.id }}</a></td><td>{{ c.title }}</td><td>{{ c.frequency }}</td><td>{{ 'Yes' if c.in_scope else 'No' }}</td></tr>{% endfor %}</tbody></table></div></section>
 
+{% if t.source %}<section class="card mt"><h2>Failing resources in the last run</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Resource</th><th>Problem</th><th>Severity</th><th>Exception</th></tr></thead>
+<tbody>{% for r in t.resources %}<tr><td class="mono">{{ r.key }}</td><td>{{ r.title }}</td><td>{{ r.severity or '-' }}</td>
+<td>{% if r.exception %}{{ pill('accepted', 'Accepted') }}<div class="sub">until {{ r.exception.expires }} · {{ r.exception.created_by }}</div><div class="sub">{{ r.exception.reason }}</div>
+{% elif user.is_admin %}<details><summary>Accept for a limited time</summary><form method="post" action="/tests/{{ t.id }}/exceptions" class="mt-s">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="key" value="{{ r.key }}">
+<label>Reason (auditors will read it)<textarea name="reason" required minlength="30" rows="2"></textarea></label>
+<label>Expires<input type="date" name="expires" required min="{{ today }}"></label>
+<div class="actions"><button class="btn ghost small" type="submit">Record exception</button></div></form></details>
+{% else %}-{% endif %}</td></tr>
+{% else %}<tr><td colspan="4" class="sub">The last run reported no failing resources.</td></tr>{% endfor %}</tbody></table></div>
+{% if t.resources_total > t.resources|length %}<p class="sub mt">Showing {{ t.resources|length }} of {{ t.resources_total }}. The full list is in the run's evidence files.</p>{% endif %}
+<p class="sub mt">An exception accepts one resource until its expiry date: it stops failing this test and its controls, everything else still does. Passing resources are not listed here; the run's evidence files hold the full population. <a href="/tests/exceptions">All exceptions</a></p></section>{% endif %}
+
 <section class="card mt"><h2>Run history</h2>
 {% if t.source %}<div class="table-wrap"><table>
 <thead><tr><th>Run</th><th>Finished</th><th>Result</th><th>Findings</th><th></th></tr></thead>
@@ -33,6 +48,6 @@
 <td>{{ pill(r.status_css, r.status_label) }}{% if r.error %}<div class="sub">{{ r.error }}</div>{% endif %}</td><td>{{ r.findings }}</td>
 <td><a href="/evidence/{{ t.source }}/{{ r.run }}">Evidence</a></td></tr>
 {% else %}<tr><td colspan="5" class="sub">No runs stored yet.</td></tr>{% endfor %}</tbody></table></div>
-<p class="sub mt">The latest {{ t.history|length }} runs, read from the write-once evidence store. Each run links to its files and integrity check.</p>
+<p class="sub mt">Up to 20 of the latest runs, read from the write-once evidence store. Each run links to its files and integrity check.</p>
 {% else %}<p class="sub">This kind of test has no stored runs: its status comes from the date the work was last completed or approved.</p>{% endif %}</section>
 {% endblock %}

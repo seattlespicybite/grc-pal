@@ -53,7 +53,8 @@ the person who defines controls from the people who operate them, which auditors
 | Vendors: record a business owner's risk acceptance | ✓ |  |  |
 | Vendors: sign off a review, approve or reject a new vendor, close offboarding | ✓, never a review they submitted while another admin is active |  |  |
 | Tests: see every test, its controls, owner and run history | ✓ |  | ✓ |
-| Tests: set a test's owner | ✓ |  |  |
+| Tests: set a test's owner; accept one failing resource for a limited time; revoke an exception | ✓ |  |  |
+| Tests: see every exception (active, expired, revoked) | ✓ |  | ✓ |
 | Risk register: see risks, history, heat map, CSV | ✓ |  | ✓ |
 | Risk register: add, change (reason required), record a review, import the starter risks, approve the assessment | ✓ |  |  |
 | Security questionnaire: view and download | ✓ | ✓ | ✓ (every version) |

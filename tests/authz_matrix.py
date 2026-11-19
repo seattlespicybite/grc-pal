@@ -97,6 +97,8 @@ PARAMS: dict[str, dict[str, str]] = {
     "/policies/doc/{did}/audience": {"did": "doc_pub"},
     "/tests/{tid}": {"tid": "test_id"},
     "/tests/{tid}/owner": {"tid": "test_id"},
+    "/tests/{tid}/exceptions": {"tid": "test_id"},
+    "/tests/exceptions/{xid}/revoke": {"xid": "test_exception"},
     "/risks/{rid}": {"rid": "risk"},
     "/risks/{rid}/review": {"rid": "risk"},
     "/library/{did}/edit": {"did": "doc"},
@@ -269,6 +271,10 @@ FORMS: dict[tuple[str, str], object] = {
     ("POST", "/policies/doc/{did}/request"): {},
     ("POST", "/policies/doc/{did}/audience"): {"ack": "admins"},
     ("POST", "/tests/{tid}/owner"): lambda w: {"owner": w.admin2_email},
+    ("POST", "/tests/{tid}/exceptions"): lambda w: {
+        "key": w.finding_open, "reason": "Accepted for the authz suite: account is being removed.",
+        "expires": w.exception_expires},
+    ("POST", "/tests/exceptions/{xid}/revoke"): {"reason": "No longer needed"},
     ("POST", "/risks/new"): RISK_FORM,
     ("POST", "/risks/{rid}"): {**RISK_FORM, "impact": "5", "reason": "re-rated after an incident"},
     ("POST", "/risks/{rid}/review"): {"note": "controls still effective"},
@@ -361,7 +367,7 @@ _GROUPS: list[tuple[frozenset, str]] = [
            POST /access-reviews/{cid}/confirm-checked | POST /access-reviews/schedule
            POST /policies/doc/{did}/request | POST /policies/doc/{did}/audience
            POST /risks/new | POST /risks/{rid} | POST /risks/{rid}/review | POST /risks/approve | POST /risks/import
-           POST /tests/{tid}/owner
+           POST /tests/{tid}/owner | POST /tests/{tid}/exceptions | POST /tests/exceptions/{xid}/revoke
            POST /ai/audits | POST /assignments | POST /assignments/{assignment_id}/cancel
            POST /assignments/{assignment_id}/edit | POST /assignments/{assignment_id}/remind
            POST /backups/download | POST /backups/kit | POST /backups/now | POST /backups/restore
@@ -399,7 +405,7 @@ _GROUPS: list[tuple[frozenset, str]] = [
             GET /library/trash | GET /library/{did}/files/{vid} | GET /logs | GET /logs.csv | GET /matrix
             GET /matrix/data.xlsx | GET /matrix/report | GET /matrix/report.docx | GET /overrides | GET /users.csv
             GET /policies/acknowledgements.csv | GET /risks | GET /risks.csv | GET /risks/{rid}
-            GET /tests | GET /tests/{tid}"""),
+            GET /tests | GET /tests/{tid} | GET /tests/exceptions"""),
     # --- everyone who is signed in and active (what they see is filtered to what is theirs)
     (EVERYONE, """GET / | GET /access-reviews | GET /access-reviews/template.csv | GET /controls | GET /kb
                   GET /kb/{crit_id} | GET /library | GET /policies | GET /policies/{policy_id} | GET /vendors

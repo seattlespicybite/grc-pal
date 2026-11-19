@@ -1,7 +1,8 @@
 {% extends "base.html" %}{% from "_macros.html" import pill %}{% block title %}Tests{% endblock %}
 {% block content %}
 <div class="page-head"><div><h1>Tests</h1>
-<div class="sub">Every automated or recurring check, listed once, with the controls it supports. A control is healthy only when its tests are. {{ summary.total }} tests{% if summary.unowned %}, {{ summary.unowned }} without an owner{% endif %}.</div></div></div>
+<div class="sub">Every automated or recurring check, listed once, with the controls it supports. A control is healthy only when its tests are. {{ summary.total }} tests{% if summary.unowned %}, {{ summary.unowned }} without an owner{% endif %}.</div></div>
+<a class="btn ghost small" href="/tests/exceptions">Exceptions</a></div>
 
 <div class="card"><form method="get" action="/tests" class="filters">
 <label>Status<select name="status"><option value="">All</option>{% for k, label in statuses.items() %}<option value="{{ k }}"{{ ' selected' if f_status == k }}>{{ label }} ({{ summary.counts[k] }})</option>{% endfor %}</select></label>
@@ -13,7 +14,7 @@
 <thead><tr><th>Test</th><th>Kind</th><th>Status</th><th>Last run or completion</th><th>Controls</th><th>Owner</th></tr></thead>
 <tbody>{% for t in rows %}<tr><td><a href="/tests/{{ t.id }}">{{ t.title }}</a><div class="sub mono">{{ t.id }}</div></td>
 <td>{{ t.kind_label }}</td>
-<td>{{ pill(t.status_css, t.status_label) }}{% if t.findings %}<div class="sub">{{ t.findings }} findings</div>{% endif %}</td>
+<td>{{ pill(t.status_css, t.status_label) }}{% if t.findings %}<div class="sub">{{ t.findings }} findings</div>{% endif %}{% if t.excepted %}<div class="sub">{{ t.excepted }} accepted by exception</div>{% endif %}</td>
 <td class="nowrap">{{ t.last or '-' }}</td>
 <td>{% for c in t.controls %}<a class="mono" href="/controls/{{ c.id }}">{{ c.id }}</a>{{ ' ' }}{% endfor %}</td>
 <td>{{ t.owner or '-' }}</td></tr>
