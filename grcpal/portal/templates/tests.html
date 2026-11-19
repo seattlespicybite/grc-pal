@@ -5,18 +5,19 @@
 <a class="btn ghost small" href="/tests/exceptions">Exceptions</a></div>
 
 <div class="card"><form method="get" action="/tests" class="filters">
-<label>Status<select name="status"><option value="">All</option>{% for k, label in statuses.items() %}<option value="{{ k }}"{{ ' selected' if f_status == k }}>{{ label }} ({{ summary.counts[k] }})</option>{% endfor %}</select></label>
+<label>Status<select name="status"><option value="">All</option>{% for k, label in statuses.items() %}<option value="{{ k }}"{{ ' selected' if f_status == k }}>{{ label }} ({{ summary.counts[k] }})</option>{% endfor %}<option value="due_soon"{{ ' selected' if f_status == 'due_soon' }}>Due soon ({{ summary.due_soon }})</option></select></label>
 <label>Kind<select name="kind"><option value="">All</option>{% for k, label in kinds.items() %}<option value="{{ k }}"{{ ' selected' if f_kind == k }}>{{ label }}</option>{% endfor %}</select></label>
 <label>Owner<select name="owner"><option value="">All</option><option value="none"{{ ' selected' if f_owner == 'none' }}>No owner</option>{% for o in owners %}<option value="{{ o }}"{{ ' selected' if f_owner == o }}>{{ o }}</option>{% endfor %}</select></label>
 <div class="actions"><button class="btn ghost small" type="submit">Filter</button></div></form></div>
 
 <div class="card table-wrap mt"><table>
-<thead><tr><th>Test</th><th>Kind</th><th>Status</th><th>Last run or completion</th><th>Controls</th><th>Owner</th></tr></thead>
+<thead><tr><th>Test</th><th>Kind</th><th>Status</th><th>Last run or completion</th><th>Next due</th><th>Controls</th><th>Owner</th></tr></thead>
 <tbody>{% for t in rows %}<tr><td><a href="/tests/{{ t.id }}">{{ t.title }}</a><div class="sub mono">{{ t.id }}</div></td>
 <td>{{ t.kind_label }}</td>
 <td>{{ pill(t.status_css, t.status_label) }}{% if t.findings %}<div class="sub">{{ t.findings }} findings</div>{% endif %}{% if t.excepted %}<div class="sub">{{ t.excepted }} accepted by exception</div>{% endif %}</td>
 <td class="nowrap">{{ t.last or '-' }}</td>
+<td class="nowrap">{{ t.due or '-' }}{% if t.due_soon %}<div>{{ pill('pending', 'Due soon') }}</div>{% endif %}</td>
 <td>{% for c in t.controls %}<a class="mono" href="/controls/{{ c.id }}">{{ c.id }}</a>{{ ' ' }}{% endfor %}</td>
 <td>{{ t.owner or '-' }}</td></tr>
-{% else %}<tr><td colspan="6" class="sub">No tests match.</td></tr>{% endfor %}</tbody></table></div>
+{% else %}<tr><td colspan="7" class="sub">No tests match.</td></tr>{% endfor %}</tbody></table></div>
 {% endblock %}

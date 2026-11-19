@@ -72,13 +72,14 @@
 </form>
 {%- endmacro %}
 
-{% macro upload_form(action, csrf, max_mb, admin=False) -%}
+{% macro upload_form(action, csrf, max_mb, admin=False, today='') -%}
 <form method="post" action="{{ action }}" enctype="multipart/form-data">
 <input type="hidden" name="csrf" value="{{ csrf }}">
 <div class="drop" data-drop><input type="file" name="file" required accept="{{ accept }}" aria-label="Evidence file">
 <div data-file-label>Drop a file here or choose one · up to {{ max_mb }} MB</div>
 <div class="hint">PDF, screenshots (PNG, JPG), Office files, CSV, text, JSON, email. Stored write-once with a checksum.</div></div>
 <label>What does this file show?<textarea name="comment" placeholder="System, date range, how it was produced"></textarea></label>
+<label>When was this work done? <span class="sub">(the evidence counts from this date, not from today)</span><input type="date" name="performed_on" value="{{ today }}" max="{{ today }}"></label>
 {% if admin %}<label>Approval note <span class="sub">(required)</span><textarea name="approval_note" required minlength="10" placeholder="Who approved this and when, for example: Approved by the CEO on 2026-09-30, signed copy"></textarea></label>
 <p class="hint">As an admin you upload evidence that is already approved. It is recorded as approved on upload with this note, and shown to the auditor that way.</p>
 <div class="actions"><button class="btn" type="submit">Upload approved evidence</button></div></form>
@@ -88,7 +89,7 @@
 {% macro uploads_table(uploads, user, csrf, return_to, review=False) -%}
 {% if uploads %}<div class="table-wrap"><table><thead><tr><th>File</th><th>What it shows</th><th>Uploaded</th><th>Review</th></tr></thead><tbody>
 {% for u in uploads %}<tr id="u-{{ u.RowKey }}"><td>{{ file_link(u, user) }}<div class="sub mono">sha256 {{ u.sha256[:16] }}…</div></td>
-<td>{{ u.comment }}</td><td>{{ u.uploaded_by }}<div class="sub">{{ when(u.uploaded_at) }}</div></td>
+<td>{{ u.comment }}{% if u.performed_on %}<div class="sub">Work done on {{ u.performed_on }}</div>{% endif %}</td><td>{{ u.uploaded_by }}<div class="sub">{{ when(u.uploaded_at) }}</div></td>
 <td>{{ pill(u.status) }}{% if u.reviewed_by %}<div class="sub">{{ u.reviewed_by }}{% if u.review_note %}: {{ u.review_note }}{% endif %}</div>{% endif %}
 {% if u.approved_on_upload %}<div class="sub">Approved on upload by the program owner</div>{% endif %}
 {% if review and user.is_admin and u.status == 'pending' and u.uploaded_by == user.email %}

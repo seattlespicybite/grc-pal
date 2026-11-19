@@ -484,12 +484,13 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     @app.post("/controls/{control_id}/upload")
     async def control_upload(request: Request, control_id: str, file: UploadFile = File(...), comment: str = Form(""),
-                             approval_note: str = Form(""), csrf: str = Form(""), user: User = Depends(current_user)):
+                             approval_note: str = Form(""), performed_on: str = Form(""), csrf: str = Form(""),
+                             user: User = Depends(current_user)):
         check_csrf(request, user.email, csrf)
         data = await file.read(MAX_UPLOAD_BYTES + 1)
         try:
             u = p().upload(user, file.filename or "upload", data, comment, control_id=control_id,
-                             approval_note=approval_note)
+                             approval_note=approval_note, performed_on=performed_on)
         except (Invalid, Forbidden) as exc:
             return back(f"/controls/{control_id}#upload", err=str(exc))
         invalidate()
@@ -664,12 +665,13 @@ def create_app(portal: Portal | None = None) -> FastAPI:
 
     @app.post("/assignments/{assignment_id}/upload")
     async def upload(request: Request, assignment_id: str, file: UploadFile = File(...), comment: str = Form(""),
-                     approval_note: str = Form(""), csrf: str = Form(""), user: User = Depends(current_user)):
+                     approval_note: str = Form(""), performed_on: str = Form(""), csrf: str = Form(""),
+                             user: User = Depends(current_user)):
         check_csrf(request, user.email, csrf)
         data = await file.read(MAX_UPLOAD_BYTES + 1)
         try:
             u = p().upload(user, file.filename or "upload", data, comment, assignment_id=assignment_id,
-                             approval_note=approval_note)
+                             approval_note=approval_note, performed_on=performed_on)
         except (Invalid, Forbidden) as exc:
             return back(f"/assignments/{assignment_id}", err=str(exc))
         invalidate()

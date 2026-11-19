@@ -12,6 +12,20 @@ import json
 MAX_AGE_DAYS = {"continuous": 2, "daily": 2, "weekly": 8, "monthly": 35,
                 "quarterly": 100, "annual": 380, "event": 35}
 CADENCE_AGE = {"monthly": 35, "quarterly": 100, "annual": 380}
+# Manual evidence (a recurring task, a file uploaded in the portal) is valid for CADENCE_AGE days from the day the
+# work was done. In the last WARN_DAYS of that window the item is flagged "due soon": still good, renew it now.
+WARN_DAYS = {"monthly": 7, "quarterly": 14, "annual": 30}
+
+
+def validity(done: str, cadence: str, today: dt.date) -> dict:
+    """For work done on `done` (ISO date or timestamp) with a monthly, quarterly or annual cadence: the date it
+    stops counting (`due`), whether that has passed (`expired`) and whether it is close (`due_soon`).
+    Other cadences have no window: {}."""
+    if cadence not in CADENCE_AGE or not done:
+        return {}
+    due = dt.date.fromisoformat(done[:10]) + dt.timedelta(days=CADENCE_AGE[cadence])
+    left = (due - today).days
+    return {"due": due.isoformat(), "expired": left < 0, "due_soon": 0 <= left <= WARN_DAYS[cadence]}
 
 
 def _age(ts: str | None, today: dt.date) -> int | None:
@@ -87,17 +101,30 @@ def build(catalog, store, today: dt.date | None = None, portal: dict | None = No
                 else:
                     last = max(dates)
                     item["last"] = last[:10]
-                    item["status"] = "ok" if _age(last, today) <= CADENCE_AGE[cadence] else "stale"
+                    v = validity(last, cadence, today)
+                    item["status"] = "stale" if v["expired"] else "ok"
+                    item["due"], item["due_soon"] = v["due"], v["due_soon"]
             elif kind == "git":
                 item["status"] = "ok" if (catalog.base / name).exists() else "not_started"
             items.append(item)
         if ctl["id"] in portal_uploads:
-            items.append({"artifact": "Evidence uploaded in the portal and approved", "via": "portal",
-                          "status": "ok", "last": portal_uploads[ctl["id"]][:10], "findings": 0})
+            # Dated by when the work was done, not when the file was uploaded. On a monthly, quarterly or annual
+            # control the file stops counting after the control's window; other frequencies have no window.
+            done = portal_uploads[ctl["id"]][:10]
+            v = validity(done, ctl["frequency"], today)
+            item = {"artifact": "Evidence uploaded in the portal and approved", "via": "portal",
+                    "status": "stale" if v.get("expired") else "ok", "last": done, "findings": 0}
+            if v:
+                item["due"], item["due_soon"] = v["due"], v["due_soon"]
+            items.append(item)
         if ctl["id"] in portal_activities:
             items.append({"artifact": "Security calendar activity recorded as performed", "via": "calendar",
                           "status": "ok", "last": portal_activities[ctl["id"]][:10], "findings": 0})
-        statuses = {i["status"] for i in items}
+        # An expired upload does not fail a control that has other evidence in good standing: it is old extra
+        # evidence. It does count when it is all the control has.
+        live = [i for i in items if not (i["via"] == "portal" and i["status"] == "stale")]
+        counted = live if any(i["status"] in ("ok", "findings") for i in live) else items
+        statuses = {i["status"] for i in counted}
         if statuses <= {"not_started", "n/a"}:
             overall = "not_started"
         elif statuses & {"stale", "error", "not_started"}:
@@ -112,7 +139,8 @@ def build(catalog, store, today: dt.date | None = None, portal: dict | None = No
                          "custom": bool(ctl.get("custom")), "mappings": ctl.get("mappings") or {},
                          "iso27001": ctl.get("iso27001") or [],
                          "in_scope": in_scope, "status": "accepted" if override else overall,
-                         "computed_status": overall, "override": override, "evidence": items})
+                         "computed_status": overall, "override": override, "evidence": items,
+                         "due_soon": any(i.get("due_soon") for i in items)})
 
     counts: dict[str, int] = {}
     for c in controls:

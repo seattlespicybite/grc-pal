@@ -9,6 +9,7 @@
 <p>{{ pill(t.status_css, t.status_label) }} <span class="sub">{{ t.status_help }}{% if t.note %} ({{ t.note }}){% endif %}.</span></p>
 <table><tbody>
 <tr><td>Last run or completion</td><td class="mono">{{ t.last or '-' }}</td></tr>
+{% if t.due %}<tr><td>Next due</td><td><span class="mono">{{ t.due }}</span>{% if t.due_soon %} {{ pill('pending', 'Due soon') }}{% endif %}</td></tr>{% endif %}
 <tr><td>Open findings in the last run</td><td>{{ t.findings }}{% if t.excepted %} <span class="sub">(+ {{ t.excepted }} accepted by exception)</span>{% endif %}</td></tr>
 <tr><td>Evidence item</td><td class="mono">{{ t.via }}</td></tr>
 </tbody></table>
