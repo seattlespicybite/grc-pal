@@ -104,6 +104,34 @@ def test_rollback_returns_traffic_and_jobs_to_the_previous_revision(azure):
     assert job_args(st)[-1].startswith("update record update.rolled_back")
 
 
+def test_every_job_step_keeps_the_jobs_settings(azure):
+    """Azure replaces a job's whole template when an execution overrides it. Each step must start from the job's own
+    template (tables URL, organization, secrets) and change only the image and the command, or it runs against an
+    empty database inside the container: the trial then passes on nothing and the pre-update backup is empty."""
+    r, st, calls = azure("--auto")
+    assert r.returncode == 0, r.stderr + r.stdout
+    assert len(st["executions"]) == 4
+    for ex in st["executions"]:
+        assert ex["env"]["GRCPAL_TABLES_URL"] == "https://st.table.core.windows.net/", ex
+        assert ex["env"]["GRCPAL_TENANT"] == "acme" and ex["env"]["GRCPAL_SETTINGS_KEY"] == "settings-key"
+    assert not any(c[:3] == ["containerapp", "job", "start"] and "--image" in c for c in calls)
+
+
+def test_current_version_is_what_serves_users_not_the_app_template(azure, tmp_path):
+    """After a failed update the app's template names the new image while users stay on the old revision. The next
+    run must treat the serving revision as current: back it up with the old image and report the old version."""
+    state = tmp_path / "state.json"
+    s = json.loads(state.read_text())
+    s["template_image"], s["tags"] = NEW, {}
+    s["revisions"]["grcpal-acme--old"]["image"] = "ghcr.io/seattlespicybite/grc-pal:0.2.0"
+    state.write_text(json.dumps(s))
+    r, _, _ = azure("--status")
+    assert "running:       0.2.0 (ghcr.io/seattlespicybite/grc-pal:0.2.0)" in r.stdout, r.stdout
+    r, st, _ = azure("--auto")
+    assert r.returncode == 0, r.stderr + r.stdout
+    assert st["executions"][0]["image"] == "ghcr.io/seattlespicybite/grc-pal:0.2.0"  # backup by the serving version
+
+
 def test_job_arguments_never_look_like_azure_cli_options():
     for line in SCRIPT.read_text().splitlines():
         if "run_job " in line and not line.strip().startswith(("#", "run_job()")):

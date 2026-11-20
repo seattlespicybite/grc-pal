@@ -64,13 +64,11 @@ py() { python3 -c "$@"; }
 APP_ID=$(az containerapp show -g "$RG" -n "$APP" --query id -o tsv 2>/dev/null) || die "no container app $APP in $RG"
 tag() { az tag list --resource-id "$APP_ID" --query "properties.tags.\"$1\"" -o tsv 2>/dev/null || true; }
 set_tags() { az tag update --resource-id "$APP_ID" --operation Merge --tags "$@" -o none; }
-CUR_IMAGE=$(az containerapp show -g "$RG" -n "$APP" --query "properties.template.containers[0].image" -o tsv)
 CUR_MODE=$(az containerapp show -g "$RG" -n "$APP" --query "properties.template.containers[0].env[?name=='GRCPAL_AUTH_MODE'].value | [0]" -o tsv)
 if [ "$CUR_MODE" = "local" ] && [ -z "$STATUS" ]; then  # a new revision would copy the break-glass settings
   die "break-glass password sign-in is open on this instance. Run ./deploy/azure/breakglass.sh --name $NAME disarm first"
 fi
 CUR_VERSION=$(tag grcpal-version)
-if [ -z "$CUR_VERSION" ] && [[ "$CUR_IMAGE" =~ :([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then CUR_VERSION="${BASH_REMATCH[1]}"; fi
 traffic_rev() {  # the revision that serves users now
   az containerapp ingress traffic show -g "$RG" -n "$APP" -o json | py '
 import json, sys
@@ -78,6 +76,15 @@ rows = json.load(sys.stdin)
 named = [r for r in rows if r.get("weight", 0) > 0 and r.get("revisionName")]
 print(named[0]["revisionName"] if named else "")'
 }
+# What users run now: the image of the revision that serves traffic. The app's template is not enough: after an
+# update that stopped at the health gate it already names the new image while users stay on the old revision.
+SERVING_REV=$(traffic_rev)
+if [ -n "$SERVING_REV" ]; then
+  CUR_IMAGE=$(az containerapp revision show -g "$RG" -n "$APP" --revision "$SERVING_REV" --query "properties.template.containers[0].image" -o tsv)
+else
+  CUR_IMAGE=$(az containerapp show -g "$RG" -n "$APP" --query "properties.template.containers[0].image" -o tsv)
+fi
+if [ -z "$CUR_VERSION" ] && [[ "$CUR_IMAGE" =~ :([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then CUR_VERSION="${BASH_REMATCH[1]}"; fi
 label_rev() {
   az containerapp ingress traffic show -g "$RG" -n "$APP" -o json | py '
 import json, sys
@@ -116,9 +123,26 @@ print("same" if n == c else "older" if n < c else "major" if n[0] != c[0] else "
 run_job() {  # run_job IMAGE ARGS... ; prints the execution name; returns non-zero if it did not succeed
   local img="$1"; shift
   local j; j=$(job_name backup)
-  local ex st
-  ex=$(az containerapp job start -g "$RG" -n "$j" --image "$img" --container-name backup \
-       --command grcpal --args "$@" --query name -o tsv)
+  local ex st tpl
+  # Azure replaces the job's WHOLE template when an execution overrides it: --image/--command/--args alone drop the
+  # job's environment (tables URL, organization, secrets) and the step runs on an empty database in the container.
+  # So start from the job's own template and change only the backup container's image, command and arguments.
+  tpl=$(mktemp)
+  if ! az containerapp job show -g "$RG" -n "$j" --query properties.template -o json | py '
+import json, sys
+image, args = sys.argv[1], sys.argv[2:]
+t = json.load(sys.stdin)
+c = next((c for c in t.get("containers") or [] if c.get("name") == "backup"), None)
+if c is None:
+    sys.exit("the job has no container named backup")
+if not any(e.get("name") == "GRCPAL_TABLES_URL" for e in c.get("env") or []):
+    sys.exit("the job has no GRCPAL_TABLES_URL, so it would not reach this instance data")
+c["image"], c["command"], c["args"] = image, ["grcpal"], args
+json.dump(t, sys.stdout)' "$img" "$@" > "$tpl"; then
+    rm -f "$tpl"; echo "could not prepare the job template of $j" >&2; return 1
+  fi
+  ex=$(az containerapp job start -g "$RG" -n "$j" --yaml "$tpl" --query name -o tsv); rm -f "$tpl"
+  [ -n "$ex" ] || { echo "could not start $j" >&2; return 1; }
   for _ in $(seq 1 240); do
     st=$(az containerapp job execution show -g "$RG" -n "$j" --job-execution-name "$ex" --query properties.status -o tsv)
     case "$st" in

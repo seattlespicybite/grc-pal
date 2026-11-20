@@ -357,6 +357,12 @@ def trial_copy(base, tenant: str | None = None) -> dict:
     from grcpal.backup import BACKUP_TABLES
     from grcpal.portal.store import SqliteStore
 
+    if not base.list_prefix("users", ""):
+        # Every instance has at least one user. None means this run is not reading the instance's tables (on Azure,
+        # a job started without its settings falls back to an empty local database): passing would prove nothing.
+        return {"ok": False, "problems": ["the tables hold no users: this run is not connected to the instance's "
+                                          "data (check GRCPAL_TABLES_URL and GRCPAL_TENANT on the job)"],
+                "checked": {}, "at": _now()}
     scratch = SqliteStore(":memory:")
     for table in BACKUP_TABLES:
         for row in base.list_prefix(table, ""):
