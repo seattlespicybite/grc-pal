@@ -20,11 +20,17 @@ def values(flag):  # the words after a flag, up to the next flag
     rest = a[a.index(flag) + 1:]
     return rest[:next((i for i, x in enumerate(rest) if x.startswith("-")), len(rest))]
 env = st.setdefault("env", {"GRCPAL_AUTH_MODE": "easyauth"})
+JOB_TEMPLATE = {"containers": [{"name": "backup", "image": "old", "command": ["grcpal"], "args": ["backup", "scheduled"],
+                               "resources": {"cpu": 0.5, "memory": "1Gi"},
+                               "env": [{"name": "GRCPAL_TABLES_URL", "value": "https://st.table.core.windows.net/"},
+                                       {"name": "GRCPAL_TENANT", "value": "acme"},
+                                       {"name": "GRCPAL_SETTINGS_KEY", "secretRef": "settings-key"}]}]}
 if a[:2] == ["containerapp", "show"]:
     if "GRCPAL_AUTH_MODE" in q: out(env.get("GRCPAL_AUTH_MODE", ""))
     elif "ingress.fqdn" in q: out("app.example.com")
     elif q == "id": out("/subscriptions/s/resourceGroups/rg/providers/Microsoft.App/containerApps/app")
-    elif "image" in q: out(st["revisions"][st["serving"]]["image"])
+    # the app's template: after a failed update it names the new image while traffic stays on the old revision
+    elif "image" in q: out(st.get("template_image") or st["revisions"][st["serving"]]["image"])
     elif "latestReadyRevisionName" in q: out(st["serving"])
 elif a[:2] == ["tag", "list"]:
     key = q.split('"')[1]
@@ -67,9 +73,15 @@ elif a[:3] == ["containerapp", "revision", "deactivate"]:
     st["revisions"][opt("--revision")]["active"] = False; save()
 elif a[:3] == ["containerapp", "revision", "activate"]:
     st["revisions"][opt("--revision")]["active"] = True; save()
+elif a[:3] == ["containerapp", "job", "show"]:
+    out(json.dumps(JOB_TEMPLATE))
 elif a[:3] == ["containerapp", "job", "start"]:
-    args = a[a.index("--args") + 1:a.index("--query")]
-    st["executions"].append({"image": opt("--image"), "args": args}); save()
+    if "--yaml" in a:   # the whole execution template, as Azure takes it
+        c = next(c for c in json.load(open(opt("--yaml")))["containers"] if c["name"] == "backup")
+        image, args, job_env = c["image"], c["args"], {e["name"]: e.get("value", e.get("secretRef")) for e in c.get("env", [])}
+    else:               # Azure replaces the WHOLE template: --image/--command/--args alone drop the job's env vars
+        image, args, job_env = opt("--image"), a[a.index("--args") + 1:a.index("--query")], {}
+    st["executions"].append({"image": image, "args": args, "env": job_env}); save()
     out(f"exec-{len(st['executions'])}")
 elif a[:4] == ["containerapp", "job", "execution", "show"]:
     ex = st["executions"][int(opt("--job-execution-name").split("-")[1]) - 1]

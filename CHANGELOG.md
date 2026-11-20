@@ -4,6 +4,19 @@ All notable changes are listed here. The project follows [semantic versioning](h
 
 ## [Unreleased]
 
+### Fixed
+- **Azure updates: every step now runs against the instance's own data.** `deploy/azure/update.sh` started its
+  backup, trial, self-test and audit-record steps with `az containerapp job start --image --command --args`. Azure
+  then replaces the job's whole template, so those steps ran without the job's settings (tables address,
+  organization, secrets) on an empty database inside the container: the trial passed on nothing, the pre-update
+  backup was empty, and the self-test after the switch found no saved row counts, so every Azure update stopped at
+  the health gate and rolled back (users stayed on the old version; no data was changed). Each step now starts from
+  the job's own template and changes only the image and the command, and refuses to start when the job has no
+  `GRCPAL_TABLES_URL`. The trial also fails when it finds no users, so an unconnected run can never pass again.
+  `update.sh --status` and the update now take the running version from the revision that serves users, not from
+  the app's template, which a stopped update had already pointed at the new image. Your regular scheduled backups
+  were not affected. Run the update again from this version of `update.sh`.
+
 ## [0.8.0] - 2026-11-18 - Tests and exceptions, evidence validity, People view, audit requests
 
 No data model change (new tables only, no migration): upgrade in place from 0.7.3 or any earlier 0.6/0.7 release,

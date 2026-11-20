@@ -162,6 +162,16 @@ def test_azure_trial_stops_on_a_crashing_migration(tmp_path, monkeypatch):
     assert not result["ok"] and "bad migration" in result["problems"][0]
 
 
+def test_azure_trial_refuses_an_empty_database(tmp_path):
+    """An instance always has users. A trial that finds no users is not connected to the instance's tables (on
+    Azure: a job started without its settings falls back to an empty local database) and must not pass."""
+    from grcpal.portal.store import SqliteStore
+
+    empty = SqliteStore(str(tmp_path / "empty.db"))
+    result = update.trial_copy(empty, "acme")
+    assert not result["ok"] and "no users" in result["problems"][0]
+
+
 def test_saved_counts_catch_lost_rows_after_the_switch(tmp_path):
     inst = make_instance(tmp_path)
     update.save_expected(inst.base, "acme")
